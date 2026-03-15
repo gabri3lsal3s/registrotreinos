@@ -12,6 +12,7 @@ import {
   addExercise,
   type Protocol 
 } from '../services/workoutDB';
+import { syncData } from '../services/syncService';
 import {
   DndContext,
   closestCenter,
@@ -188,6 +189,7 @@ export default function ProtocolsPage() {
     if (window.confirm('Tem certeza que deseja excluir este protocolo? Todos os exercícios e treinos associados serão perdidos.')) {
       try {
         await deleteProtocol(protocolId);
+        await syncData();
         loadProtocols();
         toast.success('Protocolo removido.');
       } catch (err) {
@@ -255,6 +257,7 @@ export default function ProtocolsPage() {
         }
       }
 
+      await syncData();
       toast.success(editingProtocolId ? 'Protocolo atualizado!' : 'Protocolo salvo!');
       setShowBuilder(false);
       resetBuilder();

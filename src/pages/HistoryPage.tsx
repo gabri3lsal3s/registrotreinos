@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import Layout from '../components/Layout';
 import { getWorkoutHistory, db, getWorkoutSets, deleteWorkout } from '../services/workoutDB';
+import { syncData } from '../services/syncService';
 import { Card, CardContent } from "@/components/ui/card"
 import { ClipboardList, Clock, Zap, ChevronRight, Activity, ChevronDown, Dumbbell, Trash2 } from "lucide-react"
 import { toast } from 'sonner';
@@ -78,6 +79,7 @@ export default function HistoryPage() {
     
     try {
       await deleteWorkout(workoutId);
+      await syncData();
       setHistory(prev => prev.filter(w => w.id !== workoutId));
       toast.success('Treino removido com sucesso.');
     } catch (err) {

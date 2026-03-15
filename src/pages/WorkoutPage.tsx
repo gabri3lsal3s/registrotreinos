@@ -9,6 +9,7 @@ import {
   startWorkout, 
   addWorkoutSet 
 } from '../services/workoutDB';
+import { syncData } from '../services/syncService';
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { 
@@ -42,6 +43,7 @@ export default function WorkoutPage() {
   const [loading, setLoading] = useState(true);
   const [expandedExercise, setExpandedExercise] = useState<string | null>(null);
 
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   useEffect(() => {
     async function loadWorkoutData() {
       if (!user || !protocolId) return;
@@ -55,11 +57,14 @@ export default function WorkoutPage() {
         setProtocolName(protocol.name);
 
         const allExercises = await getExercisesByProtocol(protocolId);
-        const todayLabel = WEEK_DAYS[new Date().getDay()];
-        
-        // Filter exercises for today and initialize set state
-        const todayExercises = allExercises
-          .filter(ex => ex.name.includes(`(${todayLabel})`))
+        let dayLabel = selectedDay;
+        if (!dayLabel) {
+          dayLabel = WEEK_DAYS[new Date().getDay()];
+        }
+
+        // Filter exercises for selected day and initialize set state
+        const dayExercises = allExercises
+          .filter(ex => ex.name.includes(`(${dayLabel})`))
           .map(ex => {
             const setNum = (ex as any).sets || 3;
             return {
@@ -73,9 +78,9 @@ export default function WorkoutPage() {
             };
           });
 
-        setExercises(todayExercises);
-        if (todayExercises.length > 0) {
-          setExpandedExercise(todayExercises[0].id);
+        setExercises(dayExercises);
+        if (dayExercises.length > 0) {
+          setExpandedExercise(dayExercises[0].id);
         }
       } catch (err) {
         console.error(err);
@@ -85,7 +90,8 @@ export default function WorkoutPage() {
       }
     }
     loadWorkoutData();
-  }, [user, protocolId, navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, protocolId, selectedDay, navigate]);
 
   const handleSetToggle = (exIdx: number, setIdx: number) => {
     const newExercises = [...exercises];
@@ -136,6 +142,7 @@ export default function WorkoutPage() {
         }
       }
 
+      await syncData();
       toast.success('Treino finalizado e salvo!');
       navigate('/history');
     } catch (err) {
@@ -157,13 +164,37 @@ export default function WorkoutPage() {
   return (
     <Layout>
       <div className="space-y-8 pb-40">
-        <header className="flex items-center justify-between">
-          <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="gap-2 text-muted-foreground">
-            <ArrowLeft className="w-4 h-4" /> Voltar
-          </Button>
-          <div className="text-right">
-            <h2 className="text-xl font-black uppercase text-foreground leading-none">{protocolName}</h2>
-            <p className="text-[10px] text-primary font-mono uppercase tracking-wider mt-1">Sessão Ativa</p>
+        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="gap-2 text-muted-foreground">
+              <ArrowLeft className="w-4 h-4" /> Voltar
+            </Button>
+            <div>
+              <h2 className="text-xl font-black uppercase text-foreground leading-none">{protocolName}</h2>
+              <p className="text-[10px] text-primary font-mono uppercase tracking-wider mt-1">Sessão Ativa</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-xs font-bold text-muted-foreground">Dia:</span>
+            {WEEK_DAYS.map((d) => (
+              <Button
+                key={d}
+                size="sm"
+                variant={selectedDay === d ? 'default' : 'outline'}
+                className="px-2 py-1 text-xs"
+                onClick={() => setSelectedDay(d)}
+              >
+                {d}
+              </Button>
+            ))}
+            <Button
+              size="sm"
+              variant={!selectedDay ? 'default' : 'outline'}
+              className="px-2 py-1 text-xs"
+              onClick={() => setSelectedDay(null)}
+            >
+              Hoje
+            </Button>
           </div>
         </header>
 
