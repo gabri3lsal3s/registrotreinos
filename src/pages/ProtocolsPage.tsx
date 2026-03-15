@@ -121,6 +121,14 @@ function DraggableExercise({
           />
           <span className="text-[10px] font-black opacity-60">KG</span>
         </div>
+        <button
+          type="button"
+          className="ml-2 p-1 rounded hover:bg-destructive/10 text-destructive transition-colors"
+          title="Excluir exercício"
+          onClick={() => onUpdate(day, idx, 'delete', true)}
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
       </div>
     </div>
   );
@@ -317,12 +325,19 @@ export default function ProtocolsPage() {
   }
 
   function handleExerciseChange(day: string, idx: number, field: string, value: any) {
-    setWorkouts((prev) => ({
-      ...prev,
-      [day]: prev[day].map((ex, i) =>
-        i === idx ? { ...ex, [field]: value } : ex
-      ),
-    }));
+    if (field === 'delete') {
+      setWorkouts((prev) => ({
+        ...prev,
+        [day]: prev[day].filter((_, i) => i !== idx),
+      }));
+    } else {
+      setWorkouts((prev) => ({
+        ...prev,
+        [day]: prev[day].map((ex, i) =>
+          i === idx ? { ...ex, [field]: value } : ex
+        ),
+      }));
+    }
   }
 
 
