@@ -1,0 +1,1 @@
+Pasta para ícones SVG customizados, imagens e outros assets visuais.

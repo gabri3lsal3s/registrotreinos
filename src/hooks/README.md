@@ -1,0 +1,1 @@
+Custom React hooks para lógica de negócio e integração com storage, IA, etc.

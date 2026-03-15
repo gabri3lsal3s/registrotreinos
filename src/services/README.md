@@ -1,0 +1,1 @@
+Serviços para integração com IndexedDB (Dexie), IA, notificações, autenticação, etc.

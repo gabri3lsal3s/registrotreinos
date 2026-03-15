@@ -1,0 +1,1 @@
+Páginas principais do app: Home, Execução, Dashboard, Diário, etc.

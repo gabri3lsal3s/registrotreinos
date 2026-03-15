@@ -1,0 +1,10 @@
+
+C:\Users\gabri\OneDrive\Documentos\meusapps\registro_treinos\src\App.tsx
+  118:0  error  Parsing error: ')' expected
+
+C:\Users\gabri\OneDrive\Documentos\meusapps\registro_treinos\src\pages\AuthPage.tsx
+  20:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  29:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+Ô£û 3 problems (3 errors, 0 warnings)
+
