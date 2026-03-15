@@ -1,0 +1,2 @@
+src/pages/ExercisesPage.tsx(13,9): error TS6133: 'user' is declared but its value is never read.
+src/pages/WorkoutExecutionPage.tsx(8,1): error TS6192: All imports in import declaration are unused.

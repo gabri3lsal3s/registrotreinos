@@ -1,17 +1,19 @@
 
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Toaster } from 'sonner';
 import AuthPage from './pages/AuthPage';
 import Dashboard from './pages/Dashboard';
 import ProtocolsPage from './pages/ProtocolsPage';
-import ExercisesPage from './pages/ExercisesPage';
-import WorkoutExecutionPage from './pages/WorkoutExecutionPage';
+import WorkoutPage from './pages/WorkoutPage';
 import HistoryPage from './pages/HistoryPage';
 import AnalysisPage from './pages/AnalysisPage';
+import SettingsPage from './pages/SettingsPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
 function App() {
   return (
     <BrowserRouter>
+      <Toaster position="top-center" richColors />
       <Routes>
         <Route path="/auth" element={<AuthPage />} />
         <Route
@@ -31,18 +33,10 @@ function App() {
           }
         />
         <Route
-          path="/protocols/:protocolId"
-          element={
-            <ProtectedRoute>
-              <ExercisesPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/workout/:protocolId"
           element={
             <ProtectedRoute>
-              <WorkoutExecutionPage />
+              <WorkoutPage />
             </ProtectedRoute>
           }
         />
@@ -59,6 +53,14 @@ function App() {
           element={
             <ProtectedRoute>
               <AnalysisPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <SettingsPage />
             </ProtectedRoute>
           }
         />
