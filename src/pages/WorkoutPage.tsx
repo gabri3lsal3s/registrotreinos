@@ -278,23 +278,25 @@ export default function WorkoutPage() {
               <ArrowLeft className="w-4 h-4" /> Voltar
             </Button>
             <div>
-              <h2 className="text-xl font-black uppercase text-foreground leading-none">{protocolName}</h2>
-              <p className="text-[10px] text-primary font-mono uppercase tracking-wider mt-1">Sessão Ativa</p>
+              <h2 className="text-[clamp(18px,4vw,22px)] font-black uppercase text-foreground leading-tight">{protocolName}</h2>
+              <p className="text-[clamp(9px,2vw,10px)] text-primary font-mono uppercase tracking-wider mt-0.5">Sessão Ativa</p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-xs font-bold text-muted-foreground">Dia:</span>
-            {availableDays.map((d) => (
-              <Button
-                key={d}
-                size="sm"
-                variant={selectedDay === d ? 'default' : 'outline'}
-                className="px-2 py-1 text-xs"
-                onClick={() => setSelectedDay(d)}
-              >
-                {d}
-              </Button>
-            ))}
+          <div className="flex flex-wrap gap-1.5 items-center">
+            <span className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase mr-1">Dia:</span>
+            <div className="flex flex-wrap gap-1.5">
+              {availableDays.map((d) => (
+                <Button
+                  key={d}
+                  size="sm"
+                  variant={selectedDay === d ? 'default' : 'outline'}
+                  className="px-2.5 py-1 text-[10px] h-8 font-black uppercase tracking-tight"
+                  onClick={() => setSelectedDay(d)}
+                >
+                  {d}
+                </Button>
+              ))}
+            </div>
           </div>
         </header>
 
@@ -316,8 +318,8 @@ export default function WorkoutPage() {
                   }`}>
                     {exIdx + 1}
                   </div>
-                  <div className="min-w-0">
-                    <h3 className="font-black text-sm uppercase tracking-tight truncate pr-4">{ex.name.split(' (')[0]}</h3>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-black text-[clamp(12px,3.5vw,14px)] uppercase tracking-tight truncate pr-2">{ex.name.split(' (')[0]}</h3>
                     <div className="flex items-center gap-2 mt-0.5">
                       <p className="text-[10px] font-mono text-muted-foreground uppercase opacity-90">
                         {ex.completedSets.filter(Boolean).length} / {ex.sets} séries
@@ -336,40 +338,42 @@ export default function WorkoutPage() {
 
               {expandedExercise === ex.id && (
                 <CardContent className="p-4 pt-0 space-y-3">
-                  <div className="grid grid-cols-[1fr_2fr_2fr_1fr] gap-2 px-2 text-[8px] font-black text-muted-foreground uppercase tracking-wider opacity-70">
-                    <span>Série</span>
+                  <div className="grid grid-cols-[3.5rem_1fr_1fr_3.5rem] gap-2 px-2 text-[9px] font-black text-muted-foreground uppercase tracking-wider opacity-70">
+                    <span className="pl-1">Série</span>
                     <span className="text-center">Carga (kg)</span>
                     <span className="text-center">Reps</span>
-                    <span className="text-right">Ok</span>
+                    <span className="text-right pr-2">Ok</span>
                   </div>
                   {ex.completedSets.map((isDone, setIdx) => (
                     <div 
                       key={setIdx} 
-                      className={`grid grid-cols-[1fr_2fr_2fr_1fr] items-center gap-2 p-2 rounded-xl transition-colors ${
-                        isDone ? 'bg-primary/10' : 'bg-muted'
+                      className={`grid grid-cols-[3.5rem_1fr_1fr_3.5rem] items-center gap-2 p-1.5 rounded-xl transition-colors ${
+                        isDone ? 'bg-primary/10' : 'bg-muted/50'
                       }`}
                     >
-                       <span className="text-sm font-black text-muted-foreground/80 tabular-nums">#{setIdx + 1}</span>
+                       <span className="text-xs font-black text-muted-foreground/60 tabular-nums pl-2">#{setIdx + 1}</span>
                       <input 
                         type="number"
-                        className="bg-background border border-border/50 rounded-lg h-9 text-center font-black text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary/40"
+                        inputMode="decimal"
+                        className="bg-background border border-border/50 rounded-xl h-11 text-center font-black text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 w-full transition-all"
                         value={ex.setsData[setIdx].weight}
                         onChange={(e) => updateSetData(exIdx, setIdx, 'weight', e.target.value)}
                       />
                       <input 
                         type="number"
-                        className="bg-background border border-border/50 rounded-lg h-9 text-center font-black text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary/40"
+                        inputMode="numeric"
+                        className="bg-background border border-border/50 rounded-xl h-11 text-center font-black text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 w-full transition-all"
                         value={ex.setsData[setIdx].reps}
                         onChange={(e) => updateSetData(exIdx, setIdx, 'reps', e.target.value)}
                       />
                       <div className="flex justify-end">
                         <button 
                           onClick={() => handleSetToggle(exIdx, setIdx)}
-                          className={`w-9 h-9 flex items-center justify-center rounded-lg transition-all ${
-                            isDone ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-110' : 'bg-background border border-border text-muted-foreground hover:border-primary/40'
+                          className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all ${
+                            isDone ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-105' : 'bg-background border border-border/60 text-muted-foreground hover:border-primary/40'
                           }`}
                         >
-                          {isDone ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5 opacity-20" />}
+                          {isDone ? <CheckCircle2 className="w-5 h-5 shadow-inner" /> : <Circle className="w-5 h-5 opacity-10" />}
                         </button>
                       </div>
                     </div>

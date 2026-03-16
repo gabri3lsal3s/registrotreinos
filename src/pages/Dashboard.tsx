@@ -204,9 +204,9 @@ export default function Dashboard() {
                   <span className="text-[clamp(9px,1.2vw,11px)] text-primary font-mono font-bold">FEITO</span>
                 </div>
                 <p className="text-3xl md:text-4xl font-black text-foreground leading-tight tracking-tight">{stats.weeklyWorkouts} <span className="text-[12px] font-mono opacity-60 tracking-normal ml-1 uppercase">Treinos</span></p>
-                <div className="flex gap-1 mt-3">
+                <div className="flex gap-1.5 mt-3 overflow-hidden">
                   {[...Array(7)].map((_, i) => (
-                    <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${i < stats.weeklyWorkouts ? 'bg-primary/80 shadow-[0_0_4px_rgba(16,185,129,0.3)]' : 'bg-muted/50'}`} />
+                    <div key={i} className={`h-1.5 flex-1 min-w-[4px] rounded-full transition-all duration-500 ${i < stats.weeklyWorkouts ? 'bg-primary/80 shadow-[0_0_4px_rgba(16,185,129,0.3)]' : 'bg-muted/50'}`} />
                   ))}
                 </div>
               </CardContent>

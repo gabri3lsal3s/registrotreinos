@@ -85,7 +85,7 @@ export default function AnalysisPage() {
 
   return (
     <Layout>
-      <div className="space-y-8 pb-32">
+      <div className="space-y-8">
         <PageHeader 
           title="Análise" 
           description="Performance e Progressão"
@@ -111,7 +111,7 @@ export default function AnalysisPage() {
           </div>
         ) : (
           <>
-            <section className="grid grid-cols-2 gap-4">
+            <section className="grid grid-cols-2 gap-3 sm:gap-4">
               <Card className="bg-card border border-border/50 rounded-2xl shadow-sm p-4 md:p-5 flex flex-col items-center text-center group hover:border-primary/20 transition-all">
                 <div className="p-2.5 rounded-xl bg-primary/10 text-primary mb-3 group-hover:scale-110 transition-transform">
                   <BarChart3 className="w-5 h-5" />
