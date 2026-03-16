@@ -18,6 +18,9 @@ export interface Exercise {
   name: string;
   muscleGroup?: string;
   order: number;
+  sets?: number;
+  reps?: number;
+  dayOfWeek?: string;
   lastWeight?: number;
   lastReps?: number;
   isSynced?: boolean;

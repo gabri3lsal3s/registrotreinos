@@ -4,14 +4,15 @@ import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
 import Layout from '../components/Layout';
 import { db, getProtocolsByUser, getExercisesByProtocol, createProtocol, deleteProtocol, addExercise, type Protocol } from '../services/workoutDB';
-import { fullSync, deleteRemoteItem } from '../services/syncService';
+import { fullSync, deleteRemoteItem, deleteExercisesByProtocol } from '../services/syncService';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   DndContext,
-  closestCenter,
   PointerSensor,
   useSensor,
-  useSensors
+  useSensors,
+  rectIntersection,
+  type DragOverEvent
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -49,7 +50,14 @@ function DraggableExercise({
   day: string; 
   onUpdate: (day: string, idx: number, field: string, value: any) => void 
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: ex.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ 
+    id: ex.id,
+    data: {
+      type: 'Exercise',
+      day,
+      exercise: ex
+    }
+  });
   
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -234,101 +242,148 @@ export default function ProtocolsPage() {
   }
 
   async function handleSave() {
-    if (!validateProtocol() || !user) return;
+    console.log('[ProtocolsPage] Iniciando handleSave...');
+    if (!validateProtocol() || !user) {
+      console.warn('[ProtocolsPage] Falha na validação ou usuário ausente');
+      return;
+    }
     setSaving(true);
     try {
       let protocolId = editingProtocolId;
+      const now = Date.now();
       
+      console.log(`[ProtocolsPage] Salvando protocolo: ${protocolId ? 'EDIÇÃO (' + protocolId + ')' : 'NOVO'}`);
+      console.log(`[ProtocolsPage] activeDays: ${JSON.stringify(activeDays)}`);
+      console.log(`[ProtocolsPage] workouts count: ${Object.keys(workouts).length} dias com exercícios`);
+
       if (protocolId) {
         // Update existing protocol
-        await db.protocols.update(protocolId, { name: protocolName.trim() });
-        // Delete old exercises to recreate them (simpler than syncing)
+        console.log('[ProtocolsPage] Atualizando protocolo local...');
+        await db.protocols.update(protocolId, { 
+          name: protocolName.trim(), 
+          daysOfWeek: activeDays,
+          updatedAt: now,
+          isSynced: false 
+        });
+        
+        // Fix Duplication: Delete remote and local exercises before recreating
+        console.log('[ProtocolsPage] Limpando exercícios antigos (Remoto + Local)...');
+        await deleteExercisesByProtocol(protocolId);
         await db.exercises.where('protocolId').equals(protocolId).delete();
       } else {
         // Create new protocol
+        console.log('[ProtocolsPage] Criando novo protocolo local...');
         protocolId = await createProtocol({
           name: protocolName.trim(),
           userId: user.id,
           isEnabled: false,
           daysOfWeek: activeDays,
         });
-
-        // Add exercises for the new protocol
-        for (const day of activeDays) {
-          const dayLabel = WEEK_DAYS.find(d => d.key === day)?.label;
-          const dayExercises = workouts[day] || [];
-          
-          for (let i = 0; i < dayExercises.length; i++) {
-            const ex = dayExercises[i];
-            await addExercise({
-              protocolId,
-              name: `${ex.name} (${dayLabel})`,
-              order: i,
-              lastWeight: Number(ex.baseline) || 0,
-            });
-          }
-        }
       }
 
-      if (editingProtocolId) {
-        const now = Date.now();
-        await db.protocols.update(editingProtocolId, { name: protocolName.trim(), daysOfWeek: activeDays, updatedAt: now, isSynced: false });
-
-        // Also recreate exercises for edited protocol
-        for (const day of activeDays) {
-          const dayLabel = WEEK_DAYS.find(d => d.key === day)?.label;
-          const dayExercises = workouts[day] || [];
-          
-          for (let i = 0; i < dayExercises.length; i++) {
-            const ex = dayExercises[i];
-            await addExercise({
-              protocolId: editingProtocolId,
-              name: `${ex.name} (${dayLabel})`,
-              order: i,
-              lastWeight: Number(ex.baseline) || 0,
-            });
-          }
+      // Add/Recreate exercises (Unified for both new and edit)
+      console.log(`[ProtocolsPage] Recriando exercícios para protocolId: ${protocolId}`);
+      let totalExercisesCreated = 0;
+      for (const day of activeDays) {
+        const dayLabel = WEEK_DAYS.find(d => d.key === day)?.label;
+        const dayExercises = workouts[day] || [];
+        console.log(`[ProtocolsPage] Dia ${day}: ${dayExercises.length} exercícios para salvar`);
+        
+        for (let i = 0; i < dayExercises.length; i++) {
+          const ex = dayExercises[i];
+          await addExercise({
+            protocolId,
+            name: `${ex.name} (${dayLabel})`,
+            order: i,
+            dayOfWeek: day,
+            sets: Number(ex.sets) || 3,
+            reps: Number(ex.reps) || 10,
+            lastWeight: Number(ex.baseline) || 0,
+            lastReps: Number(ex.reps) || 0,
+          });
+          totalExercisesCreated++;
         }
       }
+      console.log(`[ProtocolsPage] Total de exercícios criados: ${totalExercisesCreated}`);
 
+      console.log('[ProtocolsPage] Iniciando sincronismo (fullSync)...');
       await fullSync();
+      console.log('[ProtocolsPage] Sincronismo concluído.');
+      
       toast.success(editingProtocolId ? 'Protocolo atualizado!' : 'Protocolo salvo!');
       setShowBuilder(false);
       resetBuilder();
       loadProtocols();
-    } catch (error) {
-      console.error('Erro ao salvar protocolo:', error);
-      toast.error('Erro ao salvar protocolo.');
+    } catch (error: any) {
+      console.error('[ProtocolsPage] Erro fatal no handleSave:', error);
+      toast.error(`Erro ao salvar protocolo: ${error.message || 'Erro desconhecido'}`);
     } finally {
       setSaving(false);
     }
   }
 
   async function handleEditProtocol(id: string) {
+    console.log(`[ProtocolsPage] handleEditProtocol: carregando ID ${id}`);
     const p = await db.protocols.get(id);
-    if (!p) return;
+    if (!p) {
+      console.error(`[ProtocolsPage] Protocolo ${id} não encontrado no Dexie!`);
+      return;
+    }
 
     const allExs = await getExercisesByProtocol(id);
+    console.log(`[ProtocolsPage] Total de exercícios encontrados no DB: ${allExs.length}`);
+    
     const organizedWorkouts: Record<string, any[]> = {};
     const activeDayKeys: string[] = [];
 
     WEEK_DAYS.forEach(day => {
       const label = day.label;
+      
+      // Step 1: Filter by dayOfWeek column (Robust)
+      // Step 2: Fallback to name suffix (Legacy recovery)
       const dayExs = allExs
-        .filter((ex: any) => ex.name.endsWith(`(${label})`))
+        .filter((ex: any) => {
+          if (ex.dayOfWeek === day.key) return true;
+          if (!ex.dayOfWeek && ex.name.endsWith(`(${label})`)) return true;
+          return false;
+        })
         .map((ex: any) => ({
           id: ex.id,
           name: ex.name.replace(` (${label})`, ''),
-          sets: 3, // Defaulting to 3 as our current exercise model doesn't store this per exercise yet
+          sets: ex.sets || 3,
+          reps: ex.reps || 10,
           baseline: ex.lastWeight || '',
         }));
       
       if (dayExs.length > 0) {
+        console.log(`[ProtocolsPage] Dia ${day.key}: ${dayExs.length} exercícios mapeados`);
         organizedWorkouts[day.key] = dayExs;
         activeDayKeys.push(day.key);
       }
     });
 
+    // Step 3: Handle orphan exercises (safety net)
+    const assignedIds = new Set(Object.values(organizedWorkouts).flat().map((ex: any) => ex.id));
+    const orphans = allExs.filter((ex: any) => !assignedIds.has(ex.id));
+    
+    if (orphans.length > 0) {
+      console.log(`[ProtocolsPage] Órfãos encontrados (${orphans.length}). Movendo para o primeiro dia.`);
+      const firstDay = p.daysOfWeek?.[0] || activeDayKeys[0] || 'mon';
+      const existing = organizedWorkouts[firstDay] || [];
+      organizedWorkouts[firstDay] = [
+        ...existing,
+        ...orphans.map((ex: any) => ({
+          id: ex.id,
+          name: ex.name,
+          sets: ex.sets || 3,
+          reps: ex.reps || 10,
+          baseline: ex.lastWeight || '',
+        }))
+      ];
+      if (!activeDayKeys.includes(firstDay)) activeDayKeys.push(firstDay);
+    }
+
+    console.log(`[ProtocolsPage] Builder pronto: ${activeDayKeys.length} dias ativos`);
     setProtocolName(p.name);
     setActiveDays(p.daysOfWeek || activeDayKeys);
     setWorkouts(organizedWorkouts);
@@ -350,7 +405,7 @@ export default function ProtocolsPage() {
         const exs = await getExercisesByProtocol(protocolId);
         const inferredDays: string[] = [];
         WEEK_DAYS.forEach(day => {
-          if (exs.some(e => e.name.includes(`(${day.label})`))) {
+          if (exs.some(e => e.dayOfWeek === day.key || e.name.includes(`(${day.label})`))) {
             inferredDays.push(day.key);
           }
         });
@@ -425,11 +480,17 @@ export default function ProtocolsPage() {
   }
 
   function toggleDay(day: string) {
-    setActiveDays((prev) =>
-      prev.includes(day)
+    setActiveDays((prev) => {
+      const next = prev.includes(day)
         ? prev.filter((d) => d !== day)
-        : [...prev, day]
-    );
+        : [...prev, day];
+      
+      return next.sort((a, b) => {
+        const idxA = WEEK_DAYS.findIndex(d => d.key === a);
+        const idxB = WEEK_DAYS.findIndex(d => d.key === b);
+        return idxA - idxB;
+      });
+    });
   }
 
   function handleAddExercise(day: string) {
@@ -514,17 +575,75 @@ export default function ProtocolsPage() {
 
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCenter}
+            collisionDetection={rectIntersection}
+            onDragOver={({ active, over }: DragOverEvent) => {
+              const overId = over?.id;
+              if (!overId || active.id === overId) return;
+
+              const findContainer = (id: any) => {
+                if (workouts[id]) return id;
+                return activeDays.find((day) => 
+                  workouts[day]?.some((ex) => ex.id === id)
+                );
+              };
+
+              const activeContainer = findContainer(active.id);
+              const overContainer = findContainer(overId);
+
+              if (!activeContainer || !overContainer || activeContainer === overContainer) {
+                return;
+              }
+
+              setWorkouts((prev) => {
+                const activeItems = prev[activeContainer];
+                const overItems = prev[overContainer] || [];
+                const activeIndex = activeItems.findIndex((ex) => ex.id === active.id);
+                const overIndex = overItems.findIndex((ex) => ex.id === overId);
+
+                let newIndex;
+                if (workouts[overId]) {
+                  newIndex = overItems.length;
+                } else {
+                  newIndex = overIndex >= 0 ? overIndex : overItems.length;
+                }
+
+                return {
+                  ...prev,
+                  [activeContainer]: activeItems.filter((ex) => ex.id !== active.id),
+                  [overContainer]: [
+                    ...overItems.slice(0, newIndex),
+                    activeItems[activeIndex],
+                    ...overItems.slice(newIndex)
+                  ]
+                };
+              });
+            }}
             onDragEnd={({ active, over }) => {
-              if (!over || active.id === over.id) return;
-              const day = active.data?.current?.day;
-              if (!day) return;
-              const oldIndex = workouts[day].findIndex((ex) => ex.id === active.id);
-              const newIndex = workouts[day].findIndex((ex) => ex.id === over.id);
-              setWorkouts((prev) => ({
-                ...prev,
-                [day]: arrayMove(prev[day], oldIndex, newIndex),
-              }));
+              if (!over) return;
+              
+              const findContainer = (id: any) => {
+                if (workouts[id]) return id;
+                return activeDays.find((day) => 
+                  workouts[day]?.some((ex) => ex.id === id)
+                );
+              };
+
+              const activeContainer = findContainer(active.id);
+              const overContainer = findContainer(over.id);
+
+              if (!activeContainer || !overContainer) return;
+
+              if (activeContainer === overContainer) {
+                const oldIndex = workouts[activeContainer].findIndex((ex) => ex.id === active.id);
+                const newIndex = workouts[activeContainer].findIndex((ex) => ex.id === over.id);
+
+                if (oldIndex !== newIndex) {
+                  setWorkouts((prev) => ({
+                    ...prev,
+                    [activeContainer]: arrayMove(prev[activeContainer], oldIndex, newIndex),
+                  }));
+                }
+              }
             }}
           >
             <div className="space-y-6">

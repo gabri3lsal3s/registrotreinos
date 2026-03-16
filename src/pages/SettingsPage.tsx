@@ -108,6 +108,82 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleImportPPLProtocol() {
+    if (!user) return;
+    try {
+      const protocolId = await createProtocol({
+        name: "Protocolo PPL 3 Dias",
+        userId: user.id,
+        isEnabled: false,
+        daysOfWeek: ['mon', 'tue', 'wed']
+      });
+
+      const schedule = [
+        { 
+          key: 'mon', 
+          day: 'Segunda', 
+          exs: [
+            { name: 'Supino reto (barra/halteres)', sets: 4, reps: 8, weight: 20 },
+            { name: 'Supino inclinado halteres', sets: 3, reps: 10, weight: 20 },
+            { name: 'Voador (Peck Deck)', sets: 3, reps: 12, weight: 45 },
+            { name: 'Desenvolvimento halteres', sets: 3, reps: 10, weight: 14 },
+            { name: 'Elevação lateral', sets: 4, reps: 15, weight: 0 },
+            { name: 'Tríceps pulley', sets: 3, reps: 12, weight: 20 },
+            { name: 'Tríceps francês', sets: 3, reps: 12, weight: 12 }
+          ]
+        },
+        { 
+          key: 'tue', 
+          day: 'Terça', 
+          exs: [
+            { name: 'Puxada frontal', sets: 4, reps: 10, weight: 40 },
+            { name: 'Remada curvada barra', sets: 3, reps: 10, weight: 10 },
+            { name: 'Remada unilateral (serrote)', sets: 3, reps: 12, weight: 14 },
+            { name: 'Face pull (Polia)', sets: 3, reps: 15, weight: 0 },
+            { name: 'Rosca direta barra', sets: 3, reps: 10, weight: 10 },
+            { name: 'Rosca alternada', sets: 3, reps: 12, weight: 12 },
+            { name: 'Abdominal prancha', sets: 3, reps: 1, weight: 0 }
+          ]
+        },
+        { 
+          key: 'wed', 
+          day: 'Quarta', 
+          exs: [
+            { name: 'Agachamento (livre/guiado)', sets: 4, reps: 10, weight: 40 },
+            { name: 'Leg press', sets: 3, reps: 12, weight: 80 },
+            { name: 'Elevação pélvica', sets: 3, reps: 12, weight: 25 },
+            { name: 'Stiff', sets: 4, reps: 10, weight: 12 },
+            { name: 'Mesa flexora', sets: 3, reps: 12, weight: 35 },
+            { name: 'Panturrilha em pé', sets: 4, reps: 15, weight: 12 },
+            { name: 'Abdominal cabo', sets: 3, reps: 15, weight: 0 }
+          ]
+        }
+      ];
+
+      for (const dayData of schedule) {
+        for (let i = 0; i < dayData.exs.length; i++) {
+          const ex = dayData.exs[i];
+          await addExercise({
+            protocolId,
+            name: `${ex.name} (${dayData.day})`,
+            order: i,
+            dayOfWeek: dayData.key,
+            sets: ex.sets,
+            reps: ex.reps,
+            lastWeight: ex.weight,
+            lastReps: ex.reps
+          });
+        }
+      }
+
+      await fullSync();
+      toast.success('Protocolo PPL importado com sucesso!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao importar protocolo PPL.');
+    }
+  }
+
 
   return (
     <Layout>
@@ -188,28 +264,53 @@ export default function SettingsPage() {
               Ferramentas Temporárias
             </h3>
           </header>
-          <Card className="bg-card border border-border/50 rounded-2xl shadow-sm overflow-hidden outline outline-1 outline-primary/5">
-            <CardContent className="p-5">
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-xl bg-primary/10 text-primary">
-                    <Database className="w-5 h-5" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="bg-card border border-border/50 rounded-2xl shadow-sm overflow-hidden outline outline-1 outline-primary/5">
+              <CardContent className="p-5">
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-xl bg-primary/10 text-primary">
+                      <Database className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="font-black text-[clamp(11px,1.4vw,14px)] uppercase tracking-tight text-foreground">Importar Gabriel A-E</span>
+                      <p className="text-[clamp(9px,1.2vw,11px)] text-muted-foreground font-mono uppercase tracking-widest opacity-60 mt-0.5">Protocolo 5 dias completo</p>
+                    </div>
                   </div>
-                  <div>
-                    <span className="font-black text-[clamp(11px,1.4vw,14px)] uppercase tracking-tight text-foreground">Importar Protocolo</span>
-                    <p className="text-[clamp(9px,1.2vw,11px)] text-muted-foreground font-mono uppercase tracking-widest opacity-60 mt-0.5">Adiciona o protocolo Gabriel de 5 dias</p>
-                  </div>
+                  <Button 
+                    variant="outline" 
+                    onClick={handleImportProtocol}
+                    className="w-full rounded-xl h-12 font-black uppercase tracking-widest text-[10px] border-primary/20 hover:bg-primary/5 hover:text-primary transition-all"
+                  >
+                    Importar 5 Dias
+                  </Button>
                 </div>
-                <Button 
-                  variant="outline" 
-                  onClick={handleImportProtocol}
-                  className="w-full rounded-xl h-12 font-black uppercase tracking-widest text-[10px] border-primary/20 hover:bg-primary/5 hover:text-primary transition-all"
-                >
-                  Confirmar Importação
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-card border border-border/50 rounded-2xl shadow-sm overflow-hidden outline outline-1 outline-primary/5">
+              <CardContent className="p-5">
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-xl bg-primary/10 text-primary">
+                      <Zap className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="font-black text-[clamp(11px,1.4vw,14px)] uppercase tracking-tight text-foreground">Importar PPL 3 Dias</span>
+                      <p className="text-[clamp(9px,1.2vw,11px)] text-muted-foreground font-mono uppercase tracking-widest opacity-60 mt-0.5">Push, Pull e Legs</p>
+                    </div>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    onClick={handleImportPPLProtocol}
+                    className="w-full rounded-xl h-12 font-black uppercase tracking-widest text-[10px] border-primary/20 hover:bg-primary/5 hover:text-primary transition-all"
+                  >
+                    Importar PPL
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </section>
 
 

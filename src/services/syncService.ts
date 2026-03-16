@@ -19,7 +19,8 @@ const toSnake = (obj: any) => {
     date: 'date',
     isEnabled: 'is_enabled',
     daysOfWeek: 'days_of_week',
-    updatedAt: 'updated_at'
+    updatedAt: 'updated_at',
+    dayOfWeek: 'day_of_week'
   };
   const newObj: any = {};
   for (const key in obj) {
@@ -51,8 +52,9 @@ const toCamel = (obj: any) => {
     timestamp: 'timestamp',
     date: 'date',
     is_enabled: 'isEnabled',
-    days_of_week: 'days_of_week',
-    updated_at: 'updatedAt'
+    days_of_week: 'daysOfWeek',
+    updated_at: 'updatedAt',
+    day_of_week: 'dayOfWeek'
   };
   const newObj: any = {};
   for (const key in obj) {
@@ -94,17 +96,41 @@ export async function syncData() {
     const exercises = exercisesLocal.map(ex => ({ ...ex, userId: user.id })).map(toSnake);
     const workoutSets = workoutSetsLocal.map(set => ({ ...set, userId: user.id })).map(toSnake);
 
-    if (protocols.length > 0) await supabase.from('protocols').upsert(protocols);
-    if (exercises.length > 0) await supabase.from('exercises').upsert(exercises);
-    if (workouts.length > 0) await supabase.from('workouts').upsert(workouts);
-    if (workoutSets.length > 0) await supabase.from('workout_sets').upsert(workoutSets);
+    // Enviar para o Supabase e CHECAR ERROS
+    if (protocols.length > 0) {
+      const { error } = await supabase.from('protocols').upsert(protocols);
+      if (error) throw new Error(`Erro ao subir protocolos: ${error.message}`);
+    }
+    
+    if (exercises.length > 0) {
+      const { error } = await supabase.from('exercises').upsert(exercises);
+      if (error) throw new Error(`Erro ao subir exercícios: ${error.message}`);
+    }
+    
+    if (workouts.length > 0) {
+      const { error } = await supabase.from('workouts').upsert(workouts);
+      if (error) throw new Error(`Erro ao subir treinos: ${error.message}`);
+    }
+    
+    if (workoutSets.length > 0) {
+      const { error } = await supabase.from('workout_sets').upsert(workoutSets);
+      if (error) throw new Error(`Erro ao subir séries: ${error.message}`);
+    }
 
-    // Marcar como sincronizado localmente
+    // Marcar como sincronizado localmente APENAS se o PUSH funcionou
     await db.transaction('rw', [db.protocols, db.exercises, db.workouts, db.workoutSets], async () => {
-      await db.protocols.where('id').anyOf(protocolsLocal.map(p => p.id)).modify({ isSynced: true });
-      await db.exercises.where('id').anyOf(exercisesLocal.map(e => e.id)).modify({ isSynced: true });
-      await db.workouts.where('id').anyOf(workoutsLocal.map(w => w.id)).modify({ isSynced: true });
-      await db.workoutSets.where('id').anyOf(workoutSetsLocal.map(s => s.id)).modify({ isSynced: true });
+      if (protocolsLocal.length > 0) {
+        await db.protocols.where('id').anyOf(protocolsLocal.map(p => p.id)).modify({ isSynced: true });
+      }
+      if (exercisesLocal.length > 0) {
+        await db.exercises.where('id').anyOf(exercisesLocal.map(e => e.id)).modify({ isSynced: true });
+      }
+      if (workoutsLocal.length > 0) {
+        await db.workouts.where('id').anyOf(workoutsLocal.map(w => w.id)).modify({ isSynced: true });
+      }
+      if (workoutSetsLocal.length > 0) {
+        await db.workoutSets.where('id').anyOf(workoutSetsLocal.map(s => s.id)).modify({ isSynced: true });
+      }
     });
 
     console.log('[Sync] PUSH finalizado com sucesso.');
@@ -221,6 +247,25 @@ export async function deleteRemoteItem(table: string, id: string) {
     if (error) throw error;
   } catch (err: any) {
     console.error(`[Sync] Erro ao deletar no Supabase (${table}):`, err.message || err);
+    throw err;
+  }
+}
+
+export async function deleteExercisesByProtocol(protocolId: string) {
+  const { user } = useAuthStore.getState();
+  if (!user) return;
+
+  try {
+    console.log(`[Sync] DELETE Exercises - Protocol: ${protocolId}`);
+    const { error } = await supabase
+      .from('exercises')
+      .delete()
+      .eq('protocol_id', protocolId)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+  } catch (err: any) {
+    console.error(`[Sync] Erro ao deletar exercícios do protocolo (${protocolId}):`, err.message || err);
     throw err;
   }
 }
