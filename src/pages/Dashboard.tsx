@@ -36,22 +36,60 @@ export default function Dashboard() {
         const today = now.getDay(); // 0-6
         
         // 1. Get Today's Workout
-        const protocols = await db.protocols.where('userId').equals(user.id).reverse().toArray();
-        if (protocols.length > 0) {
-          const mainProtocol = protocols[0];
-          const exercises = await getExercisesByProtocol(mainProtocol.id);
-          const dayLabel = WEEK_DAYS[today].label;
+        const allProtocols = await db.protocols
+          .where('userId')
+          .equals(user.id)
+          .toArray();
+
+        console.log(`[Dashboard] Total protocolos local: ${allProtocols.length}`);
+
+        const enabledProtocols = allProtocols.filter(p => p.isEnabled);
+        console.log(`[Dashboard] Protocolos habilitados: ${enabledProtocols.length}`);
+
+        const dayKey = WEEK_DAYS[today].key;
+        const dayLabel = WEEK_DAYS[today].label;
+        console.log(`[Dashboard] Hoje é ${dayKey} (${dayLabel})`);
+
+        // Find protocol scheduled for today (or fallback to checking exercises if daysOfWeek is missing)
+        let activeProtocol = null;
+        for (const p of enabledProtocols) {
+          const isScheduled = (p.daysOfWeek || []).includes(dayKey);
+          
+          if (isScheduled) {
+            activeProtocol = p;
+            break;
+          }
+
+          // Fallback: If daysOfWeek is missing, check exercises if any match today's label
+          if (!p.daysOfWeek || p.daysOfWeek.length === 0) {
+            const exercises = await getExercisesByProtocol(p.id);
+            const hasToday = exercises.some(ex => ex.name.includes(`(${dayLabel})`));
+            if (hasToday) {
+              console.log(`[Dashboard] Fallback: Protocolo "${p.name}" identificado como ativo por exercício.`);
+              activeProtocol = p;
+              break;
+            }
+          }
+        }
+
+        if (activeProtocol) {
+          const exercises = await getExercisesByProtocol(activeProtocol.id);
           const filtered = exercises.filter(ex => ex.name.includes(`(${dayLabel})`));
+          console.log(`[Dashboard] Protocolo ativo: ${activeProtocol.name}, Exercícios para hoje: ${filtered.length}`);
           
           if (filtered.length > 0) {
             setTodayWorkout({
-              protocolName: mainProtocol.name,
-              protocolId: mainProtocol.id,
+              protocolName: activeProtocol.name,
+              protocolId: activeProtocol.id,
               exercises: filtered
             });
           } else {
+            console.log(`[Dashboard] Nenhum exercício encontrado para o dia ${dayLabel} no protocolo ${activeProtocol.name}`);
             setTodayWorkout(null);
           }
+        } else {
+          console.log(`[Dashboard] Nenhum protocolo habilitado para ${dayKey}`);
+          setTodayWorkout(null);
         }
 
         // 2. Check for Active Workout
@@ -60,6 +98,7 @@ export default function Dashboard() {
           .first();
         
         if (active) {
+          console.log(`[Dashboard] Existe um treino em andamento: ${active.id}`);
           const protocol = await db.protocols.get(active.protocolId);
           const sets = await db.workoutSets.where('workoutId').equals(active.id).toArray();
           setActiveWorkout({

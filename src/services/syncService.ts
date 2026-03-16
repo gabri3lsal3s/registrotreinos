@@ -16,13 +16,18 @@ const toSnake = (obj: any) => {
     sleepQuality: 'sleep_quality',
     stressLevel: 'stress_level',
     timestamp: 'timestamp',
-    date: 'date'
+    date: 'date',
+    isEnabled: 'is_enabled',
+    daysOfWeek: 'days_of_week',
+    updatedAt: 'updated_at'
   };
   const newObj: any = {};
   for (const key in obj) {
+    if (key === 'isSynced') continue;
+    
     let value = obj[key];
     // Converter timestamps de número (Dexie) para ISO String (Supabase timestamptz)
-    if (['createdAt', 'finishedAt', 'timestamp', 'date'].includes(key) && typeof value === 'number') {
+    if (['createdAt', 'finishedAt', 'timestamp', 'date', 'updatedAt'].includes(key) && typeof value === 'number') {
       value = new Date(value).toISOString();
     }
     newObj[mapping[key] || key] = value;
@@ -44,12 +49,15 @@ const toCamel = (obj: any) => {
     sleep_quality: 'sleepQuality',
     stress_level: 'stressLevel',
     timestamp: 'timestamp',
-    date: 'date'
+    date: 'date',
+    is_enabled: 'isEnabled',
+    days_of_week: 'days_of_week',
+    updated_at: 'updatedAt'
   };
   const newObj: any = {};
   for (const key in obj) {
     let value = obj[key];
-    if (['created_at', 'finished_at', 'timestamp', 'date'].includes(key) && value && typeof value === 'string') {
+    if (['created_at', 'finished_at', 'timestamp', 'date', 'updated_at'].includes(key) && value && typeof value === 'string') {
       const parsed = Date.parse(value);
       if (!isNaN(parsed)) value = parsed;
     }
@@ -67,14 +75,17 @@ export async function syncData() {
   setSyncStatus('syncing');
 
   try {
-    const protocolsLocal = await db.protocols.where('userId').equals(user.id).toArray();
-    const workoutsLocal = await db.workouts.where('userId').equals(user.id).toArray();
-    
-    const protocolIds = protocolsLocal.map(p => p.id);
-    const exercisesLocal = await db.exercises.where('protocolId').anyOf(protocolIds).toArray();
-    
-    const workoutIds = workoutsLocal.map(w => w.id);
-    const workoutSetsLocal = await db.workoutSets.where('workoutId').anyOf(workoutIds).toArray();
+    // Pegar apenas itens NÃO sincronizados (dirty)
+    const protocolsLocal = await db.protocols.where('userId').equals(user.id).and(p => !p.isSynced).toArray();
+    const workoutsLocal = await db.workouts.where('userId').equals(user.id).and(w => !w.isSynced).toArray();
+    const exercisesLocal = await db.exercises.toCollection().filter(e => !e.isSynced).toArray();
+    const workoutSetsLocal = await db.workoutSets.toCollection().filter(s => !s.isSynced).toArray();
+
+    if (protocolsLocal.length === 0 && workoutsLocal.length === 0 && exercisesLocal.length === 0 && workoutSetsLocal.length === 0) {
+      console.log('[Sync] Nada para subir (PUSH).');
+      setSyncStatus('synced');
+      return { success: true };
+    }
 
     console.log(`[Sync] PUSH - User: ${user.id}, Encontrados no Local: Protocols(${protocolsLocal.length}), Exercises(${exercisesLocal.length})`);
 
@@ -87,6 +98,14 @@ export async function syncData() {
     if (exercises.length > 0) await supabase.from('exercises').upsert(exercises);
     if (workouts.length > 0) await supabase.from('workouts').upsert(workouts);
     if (workoutSets.length > 0) await supabase.from('workout_sets').upsert(workoutSets);
+
+    // Marcar como sincronizado localmente
+    await db.transaction('rw', [db.protocols, db.exercises, db.workouts, db.workoutSets], async () => {
+      await db.protocols.where('id').anyOf(protocolsLocal.map(p => p.id)).modify({ isSynced: true });
+      await db.exercises.where('id').anyOf(exercisesLocal.map(e => e.id)).modify({ isSynced: true });
+      await db.workouts.where('id').anyOf(workoutsLocal.map(w => w.id)).modify({ isSynced: true });
+      await db.workoutSets.where('id').anyOf(workoutSetsLocal.map(s => s.id)).modify({ isSynced: true });
+    });
 
     console.log('[Sync] PUSH finalizado com sucesso.');
     setSyncStatus('synced');
@@ -126,28 +145,56 @@ export async function pullData() {
     console.log(`[Sync] PULL - Recebidos do Supabase: P(${remoteP.length}), E(${remoteE.length}), W(${remoteW.length}), S(${remoteS.length})`);
 
     await db.transaction('rw', [db.protocols, db.exercises, db.workouts, db.workoutSets], async () => {
-      // 1. Limpeza Radical
-      // Deletamos TUDO que pertence a este usuário no local antes de persistir o que veio da nuvem
-      const localP = await db.protocols.where('userId').equals(user.id).toArray();
-      const localW = await db.workouts.where('userId').equals(user.id).toArray();
-      const pIds = localP.map(p => p.id);
-      const wIds = localW.map(w => w.id);
+      // 1. Limpeza Inteligente
+      // Deletamos apenas o que já FOI sincronizado anteriormente mas não está mais na nuvem
+      const remotePIds = remoteP.map(p => p.id);
+      const remoteWIds = remoteW.map(w => w.id);
+      const remoteEIds = remoteE.map(e => e.id);
+      const remoteSIds = remoteS.map(s => s.id);
 
-      if (pIds.length > 0) await db.exercises.where('protocolId').anyOf(pIds).delete();
-      if (wIds.length > 0) await db.workoutSets.where('workoutId').anyOf(wIds).delete();
-      await db.protocols.where('userId').equals(user.id).delete();
-      await db.workouts.where('userId').equals(user.id).delete();
+      // Remover locais que eram "synced" mas sumiram da nuvem (foi deletado em outro device)
+      await db.protocols.where('userId').equals(user.id).and(p => p.isSynced === true && !remotePIds.includes(p.id)).delete();
+      await db.workouts.where('userId').equals(user.id).and(w => w.isSynced === true && !remoteWIds.includes(w.id)).delete();
+      
+      // Para exercises e sets, usamos filter() pois eles não têm userId indexado no Dexie
+      await db.exercises.toCollection().filter(e => e.isSynced === true && !remoteEIds.includes(e.id)).delete();
+      await db.workoutSets.toCollection().filter(s => s.isSynced === true && !remoteSIds.includes(s.id)).delete();
 
       // 2. Mapeamento e Persistência
-      // FORÇAMOS o userId igual ao logado para garantir que as queries locais funcionem
-      const format = (item: any) => ({ ...toCamel(item), userId: user.id });
+      // Importante: NÃO sobrescrevemos itens que estão locais e "sujos" (isSynced: false)
+      for (const item of remoteP) {
+        const camel = toCamel(item);
+        const local = await db.protocols.get(camel.id);
+        if (!local || local.isSynced) {
+          await db.protocols.put({ ...camel, userId: user.id, isSynced: true });
+        }
+      }
 
-      if (remoteP.length > 0) await db.protocols.bulkPut(remoteP.map(format));
-      if (remoteE.length > 0) await db.exercises.bulkPut(remoteE.map(format));
-      if (remoteW.length > 0) await db.workouts.bulkPut(remoteW.map(format));
-      if (remoteS.length > 0) await db.workoutSets.bulkPut(remoteS.map(format));
+      for (const item of remoteE) {
+        const camel = toCamel(item);
+        const local = await db.exercises.get(camel.id);
+        if (!local || local.isSynced) {
+          await db.exercises.put({ ...camel, userId: user.id, isSynced: true });
+        }
+      }
+
+      for (const item of remoteW) {
+        const camel = toCamel(item);
+        const local = await db.workouts.get(camel.id);
+        if (!local || local.isSynced) {
+          await db.workouts.put({ ...camel, userId: user.id, isSynced: true });
+        }
+      }
+
+      for (const item of remoteS) {
+        const camel = toCamel(item);
+        const local = await db.workoutSets.get(camel.id);
+        if (!local || local.isSynced) {
+          await db.workoutSets.put({ ...camel, userId: user.id, isSynced: true });
+        }
+      }
       
-      console.log('[Sync] PULL - Mirror local atualizado com sucesso.');
+      console.log('[Sync] PULL - Mirror local atualizado (Merge Inteligente).');
     });
 
     setSyncStatus('synced');
@@ -182,7 +229,7 @@ export async function fullSync() {
   if (isSyncing) return;
   isSyncing = true;
   try {
-    console.log('[Sync] Ciclo Completo: Início');
+    console.log('[Sync] Ciclo Completo: Início (PUSH -> PULL)');
     await syncData();
     await pullData();
     console.log('[Sync] Ciclo Completo: Sucesso');

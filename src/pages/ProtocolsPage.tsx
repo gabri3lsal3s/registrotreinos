@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth';
 import Layout from '../components/Layout';
 import { db, getProtocolsByUser, getExercisesByProtocol, createProtocol, deleteProtocol, addExercise, type Protocol } from '../services/workoutDB';
 import { fullSync, deleteRemoteItem } from '../services/syncService';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   DndContext,
   closestCenter,
@@ -23,6 +24,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Plus, ClipboardList, Zap, Dumbbell, ListTodo, Play, Trash2, GripVertical, RefreshCw } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
 
 import { PageHeader } from '../components/PageHeader';
 
@@ -183,6 +185,15 @@ export default function ProtocolsPage() {
     }
   }
 
+  const sortedProtocols = [...protocols].sort((a, b) => {
+    if (a.isEnabled && !b.isEnabled) return -1;
+    if (!a.isEnabled && b.isEnabled) return 1;
+    // Fallback para createdAt caso updatedAt ainda não exista nos dados legados
+    const timeA = a.updatedAt || a.createdAt || 0;
+    const timeB = b.updatedAt || b.createdAt || 0;
+    return timeB - timeA;
+  });
+
   async function handleDeleteProtocol(protocolId: string) {
     if (!user) return;
     if (window.confirm('Tem certeza que deseja excluir este protocolo? Todos os exercícios e treinos associados serão perdidos.')) {
@@ -238,21 +249,45 @@ export default function ProtocolsPage() {
         protocolId = await createProtocol({
           name: protocolName.trim(),
           userId: user.id,
+          isEnabled: false,
+          daysOfWeek: activeDays,
         });
+
+        // Add exercises for the new protocol
+        for (const day of activeDays) {
+          const dayLabel = WEEK_DAYS.find(d => d.key === day)?.label;
+          const dayExercises = workouts[day] || [];
+          
+          for (let i = 0; i < dayExercises.length; i++) {
+            const ex = dayExercises[i];
+            await addExercise({
+              protocolId,
+              name: `${ex.name} (${dayLabel})`,
+              order: i,
+              lastWeight: Number(ex.baseline) || 0,
+            });
+          }
+        }
       }
 
-      for (const day of activeDays) {
-        const dayLabel = WEEK_DAYS.find(d => d.key === day)?.label;
-        const dayExercises = workouts[day] || [];
-        
-        for (let i = 0; i < dayExercises.length; i++) {
-          const ex = dayExercises[i];
-          await addExercise({
-            protocolId,
-            name: `${ex.name} (${dayLabel})`,
-            order: i,
-            lastWeight: Number(ex.baseline) || 0,
-          });
+      if (editingProtocolId) {
+        const now = Date.now();
+        await db.protocols.update(editingProtocolId, { name: protocolName.trim(), daysOfWeek: activeDays, updatedAt: now, isSynced: false });
+
+        // Also recreate exercises for edited protocol
+        for (const day of activeDays) {
+          const dayLabel = WEEK_DAYS.find(d => d.key === day)?.label;
+          const dayExercises = workouts[day] || [];
+          
+          for (let i = 0; i < dayExercises.length; i++) {
+            const ex = dayExercises[i];
+            await addExercise({
+              protocolId: editingProtocolId,
+              name: `${ex.name} (${dayLabel})`,
+              order: i,
+              lastWeight: Number(ex.baseline) || 0,
+            });
+          }
         }
       }
 
@@ -295,10 +330,91 @@ export default function ProtocolsPage() {
     });
 
     setProtocolName(p.name);
-    setActiveDays(activeDayKeys);
+    setActiveDays(p.daysOfWeek || activeDayKeys);
     setWorkouts(organizedWorkouts);
     setEditingProtocolId(id);
     setShowBuilder(true);
+  }
+
+  async function handleToggleEnabled(protocolId: string) {
+    if (!user) return;
+    const protocol = protocols.find(p => p.id === protocolId);
+    if (!protocol) return;
+
+    const newState = !protocol.isEnabled;
+
+    // Fix legacy protocols: if daysOfWeek is missing, try to infer it from exercises
+    let currentDays = protocol.daysOfWeek || [];
+    if (newState && currentDays.length === 0) {
+      try {
+        const exs = await getExercisesByProtocol(protocolId);
+        const inferredDays: string[] = [];
+        WEEK_DAYS.forEach(day => {
+          if (exs.some(e => e.name.includes(`(${day.label})`))) {
+            inferredDays.push(day.key);
+          }
+        });
+        if (inferredDays.length > 0) {
+          console.log(`[ProtocolsPage] Corrigindo dias para protocolo legado: ${inferredDays}`);
+          currentDays = inferredDays;
+        }
+      } catch (e) {
+        console.error('Erro ao inferir dias do protocolo:', e);
+      }
+    }
+
+    if (newState) {
+      // Check for overlaps
+      const otherEnabled = protocols.filter(p => p.isEnabled && p.id !== protocolId);
+      const conflictDays: string[] = [];
+
+      for (const day of currentDays) {
+        let hasConflict = false;
+        
+        for (const p of otherEnabled) {
+          let pDays = p.daysOfWeek || [];
+          
+          // If other enabled protocol is legacy (no daysOfWeek), infer it on the fly for validation
+          if (pDays.length === 0) {
+            const pExs = await getExercisesByProtocol(p.id);
+            const label = WEEK_DAYS.find(d => d.key === day)?.label;
+            if (label && pExs.some(e => e.name.includes(`(${label})`))) {
+              hasConflict = true;
+            }
+          } else if (pDays.includes(day)) {
+            hasConflict = true;
+          }
+
+          if (hasConflict) break;
+        }
+
+        if (hasConflict) {
+          const label = WEEK_DAYS.find(d => d.key === day)?.label;
+          if (label) conflictDays.push(label);
+        }
+      }
+
+      if (conflictDays.length > 0) {
+        toast.error(`Conflito: Já existe um protocolo ativo para (${conflictDays.join(', ')}).`);
+        return;
+      }
+    }
+
+    try {
+      const now = Date.now();
+      await db.protocols.update(protocolId, { isEnabled: newState, daysOfWeek: currentDays, updatedAt: now, isSynced: false });
+      setProtocols(prev => prev.map(p => p.id === protocolId ? { ...p, isEnabled: newState, daysOfWeek: currentDays, updatedAt: now, isSynced: false } : p));
+      toast.success(newState ? 'Protocolo habilitado!' : 'Protocolo desabilitado.');
+      
+      // Sync in background, don't block UI
+      fullSync().catch(err => {
+        console.error('[Sync] Erro após toggle:', err);
+        toast.error('Erro ao sincronizar com nuvem. Tente novamente mais tarde.');
+      });
+    } catch (err) {
+      console.error('[Toggle] Erro local:', err);
+      toast.error('Erro ao salvar alteração no banco local.');
+    }
   }
 
   function resetBuilder() {
@@ -503,30 +619,44 @@ export default function ProtocolsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {protocols.map((p, index) => (
-                <Card 
-                  key={p.id} 
-                  className="bg-card border-border hover:border-primary/20 transition-all group overflow-hidden rounded-2xl shadow-sm hover:scale-[1.01] active:scale-[0.99] duration-300"
-                  style={{ animationDelay: `${index * 50}ms` }}
+            <AnimatePresence mode="popLayout">
+              {sortedProtocols.map((p) => (
+                <motion.div
+                  key={p.id}
+                  layout
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ 
+                    type: "spring", 
+                    stiffness: 300, 
+                    damping: 30,
+                    opacity: { duration: 0.2 }
+                  }}
                 >
-                  <CardContent className="p-0 flex flex-col divide-y divide-border/20">
-                    <div className="flex items-center gap-3 p-4 md:p-5 min-w-0">
-                      <div className="w-10 h-10 md:w-11 md:h-11 border border-border/40 flex items-center justify-center rounded-xl bg-muted/20 group-hover:bg-primary/5 transition-all">
-                        <Dumbbell className={`w-4 h-4 md:w-5 md:h-5 transition-colors ${index === 0 ? 'text-primary' : 'text-muted-foreground group-hover:text-primary/70'}`} />
+                  <Card 
+                    className="bg-card border-border hover:border-primary/20 transition-all group overflow-hidden rounded-2xl shadow-sm hover:scale-[1.01] active:scale-[0.99] h-full"
+                  >
+                    <CardContent className="p-0 flex flex-col divide-y divide-border/20">
+                      <div className="flex items-center gap-3 p-4 md:p-5 min-w-0">
+                      <div className={`w-10 h-10 md:w-11 md:h-11 border flex items-center justify-center rounded-xl transition-all ${p.isEnabled ? 'bg-primary/5 border-primary/20 shadow-[0_0_15px_rgba(52,211,153,0.1)]' : 'bg-muted/20 border-border/40'}`}>
+                        <Dumbbell className={`w-4 h-4 md:w-5 md:h-5 transition-colors ${p.isEnabled ? 'text-primary' : 'text-muted-foreground group-hover:text-primary/70'}`} />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between">
-                          <h4 className="font-black text-sm md:text-base uppercase tracking-tight text-foreground truncate group-hover:text-primary transition-colors leading-tight">{p.name}</h4>
-                          {activeWorkoutIds.has(p.id) && (
-                            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary text-[8px] font-black uppercase tracking-widest animate-pulse">
-                              Andamento
-                            </div>
-                          )}
+                          <h4 className={`font-black text-sm md:text-base uppercase tracking-tight truncate transition-colors leading-tight ${p.isEnabled ? 'text-foreground group-hover:text-primary' : 'text-muted-foreground group-hover:text-foreground'}`}>{p.name}</h4>
+                          <div className="flex items-center gap-2">
+                             <Switch 
+                                checked={p.isEnabled}
+                                onCheckedChange={() => handleToggleEnabled(p.id)}
+                                className="scale-75 origin-right"
+                             />
+                          </div>
                         </div>
                         <div className="flex items-center gap-1.5 mt-1">
-                          <span className="w-1 h-1 rounded-full bg-primary/60" />
+                          <span className={`w-1 h-1 rounded-full ${p.isEnabled ? 'bg-primary animate-pulse' : 'bg-muted-foreground/30'}`} />
                           <span className="text-[clamp(9px,1vw,11px)] text-muted-foreground font-mono tracking-widest uppercase opacity-80">
-                            {activeWorkoutIds.has(p.id) ? 'Sessão Ativa' : 'Disponível'}
+                            {p.isEnabled ? 'Habilitado' : 'Desativado'}
                           </span>
                         </div>
                       </div>
@@ -571,8 +701,10 @@ export default function ProtocolsPage() {
                     </div>
                   </CardContent>
                 </Card>
+              </motion.div>
             ))}
-          </div>
+          </AnimatePresence>
+        </div>
         )}
         </section>
       </div>

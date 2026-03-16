@@ -5,7 +5,11 @@ export interface Protocol {
   userId: string;
   name: string;
   description?: string;
+  isEnabled: boolean;
+  daysOfWeek: string[];
+  isSynced?: boolean;
   createdAt: number;
+  updatedAt: number;
 }
 
 export interface Exercise {
@@ -16,6 +20,7 @@ export interface Exercise {
   order: number;
   lastWeight?: number;
   lastReps?: number;
+  isSynced?: boolean;
 }
 
 export interface Workout {
@@ -30,6 +35,7 @@ export interface Workout {
   stressLevel?: number; // 1-5
   recovery?: string;
   notes?: string;
+  isSynced?: boolean;
 }
 
 export interface WorkoutSet {
@@ -41,6 +47,7 @@ export interface WorkoutSet {
   rpe?: number;
   completed: boolean;
   timestamp: number;
+  isSynced?: boolean;
 }
 
 class WorkoutDB extends Dexie {
@@ -58,7 +65,8 @@ class WorkoutDB extends Dexie {
       workoutSets: 'id, workoutId, exerciseId',
     });
     
-    this.version(3).stores({
+    this.version(4).stores({
+      protocols: 'id, userId, name, isEnabled, [userId+isEnabled]',
       workouts: 'id, userId, protocolId, date, status, [userId+protocolId+status], [userId+status]',
       workoutSets: 'id, workoutId, exerciseId, [workoutId+exerciseId]',
     });
@@ -68,10 +76,10 @@ class WorkoutDB extends Dexie {
 export const db = new WorkoutDB();
 
 // Protocol Services
-export async function createProtocol(protocol: Omit<Protocol, 'id' | 'createdAt'>) {
+export async function createProtocol(protocol: Omit<Protocol, 'id' | 'createdAt' | 'updatedAt'>) {
   const id = crypto.randomUUID();
-  const createdAt = Date.now();
-  await db.protocols.add({ ...protocol, id, createdAt });
+  const now = Date.now();
+  await db.protocols.add({ ...protocol, id, createdAt: now, updatedAt: now, isSynced: false });
   return id;
 }
 
@@ -88,7 +96,7 @@ export async function deleteProtocol(id: string) {
 // Exercise Services
 export async function addExercise(exercise: Omit<Exercise, 'id'>) {
   const id = crypto.randomUUID();
-  await db.exercises.add({ ...exercise, id });
+  await db.exercises.add({ ...exercise, id, isSynced: false });
   return id;
 }
 
@@ -104,13 +112,13 @@ export async function deleteExercise(id: string) {
 export async function startWorkout(workout: Omit<Workout, 'id' | 'date' | 'status'>) {
   const id = crypto.randomUUID();
   const date = Date.now();
-  await db.workouts.add({ ...workout, id, date, status: 'active' });
+  await db.workouts.add({ ...workout, id, date, status: 'active', isSynced: false });
   return id;
 }
 
 export async function finishActiveWorkout(id: string, updates: Partial<Workout> = {}) {
   const finishedAt = Date.now();
-  await db.workouts.update(id, { ...updates, status: 'completed', finishedAt });
+  await db.workouts.update(id, { ...updates, status: 'completed', finishedAt, isSynced: false });
 }
 
 export async function cancelActiveWorkout(id: string) {
@@ -118,7 +126,7 @@ export async function cancelActiveWorkout(id: string) {
   // Option B: Mark as cancelled to keep record but ignore in stats
   // User asked for "considered as cancelled workout". Mark as cancelled is better.
   const finishedAt = Date.now();
-  await db.workouts.update(id, { status: 'cancelled', finishedAt });
+  await db.workouts.update(id, { status: 'cancelled', finishedAt, isSynced: false });
 }
 
 export async function getActiveWorkout(userId: string, protocolId?: string) {
@@ -135,7 +143,7 @@ export async function getActiveWorkout(userId: string, protocolId?: string) {
 export async function addWorkoutSet(set: Omit<WorkoutSet, 'id' | 'timestamp'>) {
   const id = crypto.randomUUID();
   const timestamp = Date.now();
-  await db.workoutSets.add({ ...set, id, timestamp });
+  await db.workoutSets.add({ ...set, id, timestamp, isSynced: false });
   return id;
 }
 
