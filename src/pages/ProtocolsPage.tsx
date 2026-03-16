@@ -3,15 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
 import Layout from '../components/Layout';
-import { 
-  db,
-  getProtocolsByUser,
-  getExercisesByProtocol,
-  createProtocol, 
-  deleteProtocol, 
-  addExercise,
-  type Protocol 
-} from '../services/workoutDB';
+import { db, getProtocolsByUser, getExercisesByProtocol, createProtocol, deleteProtocol, addExercise, type Protocol } from '../services/workoutDB';
 import { syncData } from '../services/syncService';
 import {
   DndContext,
@@ -30,16 +22,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { 
-  Plus, 
-  ClipboardList, 
-  Zap, 
-  Dumbbell, 
-  ListTodo, 
-  Play, 
-  Trash2,
-  GripVertical
-} from "lucide-react"
+import { Plus, ClipboardList, Zap, Dumbbell, ListTodo, Play, Trash2, GripVertical, RefreshCw } from "lucide-react"
 
 import { PageHeader } from '../components/PageHeader';
 
@@ -140,6 +123,7 @@ export default function ProtocolsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [protocols, setProtocols] = useState<Protocol[]>([]);
+  const [activeWorkoutIds, setActiveWorkoutIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
   // Builder State
@@ -177,6 +161,13 @@ export default function ProtocolsPage() {
     try {
       const data = await getProtocolsByUser(user.id);
       setProtocols(data || []);
+
+      // Check for active workouts
+      const activeWorkouts = await db.workouts
+        .where({ userId: user.id, status: 'active' })
+        .toArray();
+      setActiveWorkoutIds(new Set(activeWorkouts.map((aw: any) => aw.protocolId)));
+
     } catch (err) {
       console.error(err);
     } finally {
@@ -281,8 +272,8 @@ export default function ProtocolsPage() {
     WEEK_DAYS.forEach(day => {
       const label = day.label;
       const dayExs = allExs
-        .filter(ex => ex.name.endsWith(`(${label})`))
-        .map(ex => ({
+        .filter((ex: any) => ex.name.endsWith(`(${label})`))
+        .map((ex: any) => ({
           id: ex.id,
           name: ex.name.replace(` (${label})`, ''),
           sets: 3, // Defaulting to 3 as our current exercise model doesn't store this per exercise yet
@@ -512,10 +503,19 @@ export default function ProtocolsPage() {
                         <Dumbbell className={`w-4 h-4 md:w-5 md:h-5 transition-colors ${index === 0 ? 'text-primary' : 'text-muted-foreground group-hover:text-primary/70'}`} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h4 className="font-black text-sm md:text-base uppercase tracking-tight text-foreground truncate group-hover:text-primary transition-colors leading-tight">{p.name}</h4>
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-black text-sm md:text-base uppercase tracking-tight text-foreground truncate group-hover:text-primary transition-colors leading-tight">{p.name}</h4>
+                          {activeWorkoutIds.has(p.id) && (
+                            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary text-[8px] font-black uppercase tracking-widest animate-pulse">
+                              Andamento
+                            </div>
+                          )}
+                        </div>
                         <div className="flex items-center gap-1.5 mt-1">
                           <span className="w-1 h-1 rounded-full bg-primary/60" />
-                          <span className="text-[clamp(9px,1vw,11px)] text-muted-foreground font-mono tracking-widest uppercase opacity-80">Ativo</span>
+                          <span className="text-[clamp(9px,1vw,11px)] text-muted-foreground font-mono tracking-widest uppercase opacity-80">
+                            {activeWorkoutIds.has(p.id) ? 'Sessão Ativa' : 'Disponível'}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -544,8 +544,17 @@ export default function ProtocolsPage() {
                         className="text-primary hover:bg-primary/10"
                         onClick={() => navigate(`/workout/${p.id}`)}
                       >
-                        <Play className="w-3 h-3 fill-current" />
-                        Iniciar
+                        {activeWorkoutIds.has(p.id) ? (
+                          <>
+                            <RefreshCw className="w-3 h-3 animate-spin-slow" />
+                            Continuar
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-3 h-3 fill-current" />
+                            Iniciar
+                          </>
+                        )}
                       </Button>
                     </div>
                   </CardContent>

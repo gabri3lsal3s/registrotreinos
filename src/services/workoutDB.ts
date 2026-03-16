@@ -23,6 +23,8 @@ export interface Workout {
   userId: string;
   protocolId: string;
   date: number;
+  status: 'active' | 'completed' | 'cancelled';
+  finishedAt?: number;
   mood?: number; // 1-5
   sleepQuality?: number; // 1-5
   stressLevel?: number; // 1-5
@@ -54,6 +56,11 @@ class WorkoutDB extends Dexie {
       exercises: 'id, protocolId, name, order',
       workouts: 'id, userId, protocolId, date',
       workoutSets: 'id, workoutId, exerciseId',
+    });
+    
+    this.version(3).stores({
+      workouts: 'id, userId, protocolId, date, status, [userId+protocolId+status], [userId+status]',
+      workoutSets: 'id, workoutId, exerciseId, [workoutId+exerciseId]',
     });
   }
 }
@@ -94,11 +101,35 @@ export async function deleteExercise(id: string) {
 }
 
 // Workout Services
-export async function startWorkout(workout: Omit<Workout, 'id' | 'date'>) {
+export async function startWorkout(workout: Omit<Workout, 'id' | 'date' | 'status'>) {
   const id = crypto.randomUUID();
   const date = Date.now();
-  await db.workouts.add({ ...workout, id, date });
+  await db.workouts.add({ ...workout, id, date, status: 'active' });
   return id;
+}
+
+export async function finishActiveWorkout(id: string, updates: Partial<Workout> = {}) {
+  const finishedAt = Date.now();
+  await db.workouts.update(id, { ...updates, status: 'completed', finishedAt });
+}
+
+export async function cancelActiveWorkout(id: string) {
+  // Option A: Delete entirely
+  // Option B: Mark as cancelled to keep record but ignore in stats
+  // User asked for "considered as cancelled workout". Mark as cancelled is better.
+  const finishedAt = Date.now();
+  await db.workouts.update(id, { status: 'cancelled', finishedAt });
+}
+
+export async function getActiveWorkout(userId: string, protocolId?: string) {
+  if (protocolId) {
+    return db.workouts
+      .where({ userId, protocolId, status: 'active' })
+      .first();
+  }
+  return db.workouts
+    .where({ userId, status: 'active' })
+    .first();
 }
 
 export async function addWorkoutSet(set: Omit<WorkoutSet, 'id' | 'timestamp'>) {
@@ -113,7 +144,11 @@ export async function getWorkoutSets(workoutId: string) {
 }
 
 export async function getWorkoutHistory(userId: string) {
-  return db.workouts.where('userId').equals(userId).reverse().sortBy('date');
+  return db.workouts
+    .where('userId').equals(userId)
+    .filter(w => w.status === 'completed')
+    .reverse()
+    .sortBy('date');
 }
 
 export async function deleteWorkout(workoutId: string) {

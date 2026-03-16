@@ -19,13 +19,17 @@ import {
   type ChartConfig
 } from "@/components/ui/chart";
 import { 
-  Bar, 
-  BarChart, 
-  CartesianGrid, 
-  XAxis, 
+  Bar,
+  BarChart,
+  CartesianGrid,
+  XAxis,
   YAxis,
   Line,
-  LineChart 
+  LineChart,
+  Pie,
+  PieChart,
+  Cell,
+  ResponsiveContainer
 } from "recharts";
 
 const chartConfig: ChartConfig = {
@@ -40,8 +44,14 @@ const chartConfig: ChartConfig = {
   e1rm: {
     label: "1RM Est.",
     color: "#34d399", // emerald-400 for better dark mode visibility
+  },
+  muscle: {
+    label: "Grupo Muscular",
+    color: "var(--primary)",
   }
 };
+
+const COLORS = ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0', '#059669', '#047857'];
 
 export default function AnalysisPage() {
   const { user } = useAuth();
@@ -124,8 +134,58 @@ export default function AnalysisPage() {
               </Card>
             </section>
 
+            {/* Muscle Breakdown */}
+            {data && data.muscleBreakdown.length > 0 && (
+              <section className="space-y-4">
+                <header className="px-1 flex items-center justify-between group">
+                  <h3 className="text-[11px] font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-wider flex items-center gap-2 group-hover:text-foreground transition-colors">
+                    <Activity className="w-4 h-4 text-primary" />
+                    Distribuição Muscular (Volume)
+                  </h3>
+                </header>
+                <Card className="bg-card border border-border/50 rounded-2xl shadow-sm overflow-hidden">
+                  <CardContent className="p-6">
+                    <div className="flex flex-col md:flex-row items-center gap-8">
+                      <div className="w-full md:w-1/2 h-[200px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={data.muscleBreakdown}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={60}
+                              outerRadius={80}
+                              paddingAngle={5}
+                              dataKey="value"
+                              stroke="none"
+                            >
+                              {data.muscleBreakdown.map((_, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="w-full md:w-1/2 grid grid-cols-1 gap-2">
+                        {data.muscleBreakdown.map((item, index) => (
+                          <div key={item.name} className="flex items-center justify-between group">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                              <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground group-hover:text-foreground transition-colors">{item.name}</span>
+                            </div>
+                            <span className="text-[10px] font-mono font-bold">{formatVolume(item.value)} kg</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </section>
+            )}
+
             {/* Evolução por Exercício */}
-            {data?.exerciseProgression.length && (
+            {data && data.exerciseProgression.length > 0 && (
               <section className="space-y-6">
                 <header className="px-1 flex items-center justify-between group">
                    <h3 className="text-[11px] font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-wider flex items-center gap-2 group-hover:text-foreground transition-colors">
@@ -144,37 +204,39 @@ export default function AnalysisPage() {
                           <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-800/30 px-2.5 py-1 rounded-lg">MAX: {Math.max(...ex.data.map(d => d.weight))}kg</span>
                         </header>
                         <ChartContainer config={chartConfig} className="h-[140px] w-full">
-                          <LineChart data={ex.data}>
-                            <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.1} />
-                            <XAxis 
-                              dataKey="date" 
-                              fontSize={8} 
-                              tickLine={false} 
-                              axisLine={false}
-                              tick={{ fontWeight: 800, fill: 'currentColor', opacity: 0.5 }}
-                            />
-                            <YAxis hide domain={['dataMin - 10', 'dataMax + 10']} />
-                            <ChartTooltip content={<ChartTooltipContent />} />
-                            <Line 
-                              type="monotone" 
-                              dataKey="weight" 
-                              stroke="var(--primary)" 
-                              strokeWidth={3}
-                              dot={{ fill: 'var(--primary)', r: 3 }}
-                              activeDot={{ r: 5, strokeWidth: 0 }}
-                              name="Carga Máxima"
-                            />
-                            <Line 
-                              type="monotone" 
-                              dataKey="e1rm" 
-                              stroke="#34d399" 
-                              strokeWidth={1}
-                              strokeDasharray="4 4"
-                              dot={false}
-                              opacity={0.6}
-                              name="1RM Estimado"
-                            />
-                          </LineChart>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={ex.data}>
+                              <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.1} />
+                              <XAxis 
+                                dataKey="date" 
+                                fontSize={8} 
+                                tickLine={false} 
+                                axisLine={false}
+                                tick={{ fontWeight: 800, fill: 'currentColor', opacity: 0.5 }}
+                              />
+                              <YAxis hide domain={['dataMin - 10', 'dataMax + 10']} />
+                              <ChartTooltip content={<ChartTooltipContent />} />
+                              <Line 
+                                type="monotone" 
+                                dataKey="weight" 
+                                stroke="var(--primary)" 
+                                strokeWidth={3}
+                                dot={{ fill: 'var(--primary)', r: 3 }}
+                                activeDot={{ r: 5, strokeWidth: 0 }}
+                                name="Carga Máxima"
+                              />
+                              <Line 
+                                type="monotone" 
+                                dataKey="e1rm" 
+                                stroke="#34d399" 
+                                strokeWidth={1}
+                                strokeDasharray="4 4"
+                                dot={false}
+                                opacity={0.6}
+                                name="1RM Estimado"
+                              />
+                            </LineChart>
+                          </ResponsiveContainer>
                         </ChartContainer>
                       </CardContent>
                     </Card>
@@ -195,25 +257,27 @@ export default function AnalysisPage() {
                 <Card className="bg-card border border-border/50 rounded-2xl shadow-sm overflow-hidden">
                   <CardContent className="p-6">
                     <ChartContainer config={chartConfig} className="h-[220px] w-full">
-                      <BarChart data={data?.progressData}>
-                        <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.1} />
-                        <XAxis 
-                          dataKey="date" 
-                          stroke="currentColor" 
-                          fontSize={10} 
-                          tickLine={false} 
-                          axisLine={false}
-                          tick={{ fontWeight: 900, fontSize: 9, opacity: 0.6 }}
-                        />
-                        <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-                        <Bar 
-                          dataKey="volume" 
-                          fill="var(--primary)" 
-                          radius={[4, 4, 0, 0]} 
-                          opacity={0.8}
-                          activeBar={{ opacity: 1, scale: 1.05 }}
-                        />
-                      </BarChart>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={data?.progressData}>
+                            <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.1} />
+                            <XAxis 
+                              dataKey="date" 
+                              stroke="currentColor" 
+                              fontSize={10} 
+                              tickLine={false} 
+                              axisLine={false}
+                              tick={{ fontWeight: 900, fontSize: 9, opacity: 0.6 }}
+                            />
+                            <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                            <Bar 
+                              dataKey="volume" 
+                              fill="var(--primary)" 
+                              radius={[4, 4, 0, 0]} 
+                              opacity={0.8}
+                              activeBar={{ opacity: 1, scale: 1.05 }}
+                            />
+                          </BarChart>
+                        </ResponsiveContainer>
                     </ChartContainer>
                   </CardContent>
                 </Card>

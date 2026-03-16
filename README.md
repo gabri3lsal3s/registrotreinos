@@ -1,73 +1,45 @@
-# React + TypeScript + Vite
+# Registro de Treinos – PWA de Performance
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Uma aplicação web progressiva (PWA) de alto desempenho focada no registro ágil de treinos de musculação, acompanhamento de carga progressiva e métricas de hipertrofia.
 
-Currently, two official plugins are available:
+## 🚀 Principais Funcionalidades
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Offline First**: Funcionamento 100% sem internet via Service Workers e IndexedDB (Dexie).
+- **Mobile-First Design**: Interface minimalista premium otimizada para uso rápido durante o treino.
+- **Progressão de Carga**: Gráficos automáticos de Volume Total e 1RM Estimado.
+- **Temas**: Suporte completo a Modo Claro e Escuro com paleta Zinc & Emerald.
+- **Gestão de Protocolos**: Monte seus planos de treinamento e acompanhe a consistência semanal.
 
-## React Compiler
+## 🛠️ Tecnologias
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Framework**: React 19 + Vite
+- **Linguagem**: TypeScript
+- **Estilização**: Tailwind CSS 4
+- **Banco de Dados**: Dexie.js (IndexedDB)
+- **Nuvem/Sincronização**: Supabase (PostgreSQL & Auth)
+- **Componentes**: Radix UI / Shadcn
+- **Ícones**: Lucide React
+- **Gráficos**: Recharts
 
-## Expanding the ESLint configuration
+## 📦 Instalação
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+```bash
+# Instalar dependências
+npm install
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+# Rodar em desenvolvimento
+npm run dev
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# Gerar build de produção
+npm run build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 📱 Configuração PWA
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Para instalar no celular:
+1. Acesse a URL do app via Chrome (Android) ou Safari (iOS).
+2. Vá em opções e selecione "Adicionar à tela de início" ou "Instalar Aplicativo".
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+---
+
+Desenvolvido com foco em agilidade e precisão para entusiastas da musculação.

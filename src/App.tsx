@@ -10,7 +10,19 @@ import AnalysisPage from './pages/AnalysisPage';
 import SettingsPage from './pages/SettingsPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
+import { useEffect } from 'react';
+import { useAuthStore } from './services/authStore';
+import { pullData } from './services/syncService';
+
 function App() {
+  const { isAuthenticated } = useAuthStore();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      pullData().catch(console.error);
+    }
+  }, [isAuthenticated]);
+
   return (
     <BrowserRouter>
       <Toaster position="top-center" richColors />

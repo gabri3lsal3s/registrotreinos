@@ -11,6 +11,7 @@ export interface AnalysisSummary {
     name: string;
     data: { date: string; weight: number; volume: number; e1rm: number }[];
   }[];
+  muscleBreakdown: { name: string; value: number }[];
 }
 
 /**
@@ -134,12 +135,27 @@ export async function getAnalysisSummary(
       })
   }));
 
+  // 9. Muscle Breakdown
+  const muscleGroupsVolume: Record<string, number> = {};
+  
+  allSets.forEach(set => {
+    const exercise = allExercises.find(e => e.id === set.exerciseId);
+    if (exercise?.muscleGroup) {
+      muscleGroupsVolume[exercise.muscleGroup] = (muscleGroupsVolume[exercise.muscleGroup] || 0) + (set.weight * set.reps);
+    }
+  });
+
+  const muscleBreakdown = Object.entries(muscleGroupsVolume)
+    .map(([name, value]) => ({ name: name.toUpperCase(), value }))
+    .sort((a, b) => b.value - a.value);
+
   return {
     totalVolume,
     frequency,
     progressData,
     protocolBreakdown,
     exerciseProgression,
+    muscleBreakdown,
     protocols: userProtocols.map(p => ({ id: p.id, name: p.name }))
   };
 }

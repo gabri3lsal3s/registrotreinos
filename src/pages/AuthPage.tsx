@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from "sonner";
-import { registerUser, loginUser, registerBiometry } from '../services/authService';
+import { 
+  registerUser, 
+  loginUser, 
+  registerBiometry 
+} from '../services/authService';
+import { pullData } from '../services/syncService';
 import { useAuth } from '../hooks/useAuth';
 import { Button } from "@/components/ui/button"
 import {
@@ -43,6 +48,14 @@ export default function AuthPage() {
       } else {
         const { user: loggedUser, token } = await loginUser(email, password);
         login(loggedUser, token);
+        
+        // Pull data after login
+        toast.promise(pullData(), {
+          loading: 'Sincronizando seus dados...',
+          success: 'Dados sincronizados!',
+          error: 'Erro ao baixar dados da nuvem.'
+        });
+        
         setShowBioPrompt(false);
       }
     } catch (err: unknown) {

@@ -4,7 +4,8 @@ import Layout from '../components/Layout';
 import { db, getExercisesByProtocol } from '../services/workoutDB';
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from "@/components/ui/card"
-import { Dumbbell, ArrowRight, Calendar, TrendingUp, Zap } from "lucide-react"
+import { Dumbbell, ArrowRight, Calendar, TrendingUp, Zap, RefreshCw } from "lucide-react"
+import { useAuthStore } from '../services/authStore';
 
 const WEEK_DAYS = [
   { key: 'sun', label: 'Dom' },
@@ -22,6 +23,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [todayWorkout, setTodayWorkout] = useState<any>(null);
+  const [activeWorkout, setActiveWorkout] = useState<any>(null);
   const [stats, setStats] = useState({ weeklyWorkouts: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -52,12 +54,29 @@ export default function Dashboard() {
           }
         }
 
-        // 2. Get Stats (last 7 days)
+        // 2. Check for Active Workout
+        const active = await db.workouts
+          .where({ userId: user.id, status: 'active' })
+          .first();
+        
+        if (active) {
+          const protocol = await db.protocols.get(active.protocolId);
+          const sets = await db.workoutSets.where('workoutId').equals(active.id).toArray();
+          setActiveWorkout({
+            ...active,
+            protocolName: protocol?.name || 'Protocolo Desconhecido',
+            completedSets: sets.length
+          });
+        } else {
+          setActiveWorkout(null);
+        }
+
+        // 3. Get Stats (last 7 days)
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
         const history = await db.workouts
           .where('userId').equals(user.id)
-          .and(w => w.date >= sevenDaysAgo.getTime())
+          .and(w => w.date >= sevenDaysAgo.getTime() && w.status === 'completed')
           .toArray();
         
         setStats({
@@ -95,6 +114,28 @@ export default function Dashboard() {
           
           {loading ? (
             <Card className="rounded-2xl border border-border bg-card/50 animate-pulse h-24 shadow-sm"></Card>
+          ) : activeWorkout ? (
+            <Card className="rounded-2xl border-2 border-primary bg-primary/5 overflow-hidden shadow-lg group hover:bg-primary/10 transition-all cursor-pointer active:scale-[0.98] relative"
+                  onClick={() => navigate(`/workout/${activeWorkout.protocolId}`)}>
+              <div className="absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1 rounded-full bg-primary text-primary-foreground text-[8px] font-black uppercase tracking-widest animate-pulse">
+                <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                Em Andamento
+              </div>
+              <CardContent className="p-4 md:p-6 flex flex-col gap-3">
+                <div className="flex justify-between items-center">
+                  <div className="space-y-0.5">
+                    <h4 className="text-lg md:text-xl font-black uppercase tracking-tight text-foreground">{activeWorkout.protocolName}</h4>
+                    <p className="text-[clamp(10px,1.2vw,12px)] text-primary font-mono uppercase tracking-widest">{activeWorkout.completedSets} séries enviadas para nuvem</p>
+                  </div>
+                  <div className="bg-primary p-2.5 rounded-xl text-primary-foreground shadow-lg shadow-primary/20">
+                    <RefreshCw className="w-5 h-5 animate-spin-slow" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-primary font-black text-[clamp(10px,1.2vw,12px)] uppercase tracking-[0.2em] group-hover:translate-x-1 transition-transform">
+                  Continuar Treino <ArrowRight className="w-3.5 h-3.5" />
+                </div>
+              </CardContent>
+            </Card>
           ) : todayWorkout ? (
             <Card className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm group hover:border-primary/40 transition-all cursor-pointer active:scale-[0.98]"
                   onClick={() => navigate(`/workout/${todayWorkout.protocolId}`)}>
@@ -109,7 +150,7 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-primary font-black text-[clamp(10px,1.2vw,12px)] uppercase tracking-[0.2em] group-hover:translate-x-1 transition-transform">
-                  Ativar Sessão <ArrowRight className="w-3.5 h-3.5" />
+                  Iniciar Sessão <ArrowRight className="w-3.5 h-3.5" />
                 </div>
               </CardContent>
             </Card>
@@ -146,13 +187,13 @@ export default function Dashboard() {
               <CardContent className="p-5 md:p-6 flex flex-col gap-2 justify-center h-full">
                 <span className="text-[clamp(10px,1.2vw,12px)] font-black text-muted-foreground uppercase tracking-widest">Consistência</span>
                 <h2 className="text-3xl md:text-4xl font-black text-foreground uppercase tracking-tight leading-none">
-                  {Math.round((stats.weeklyWorkouts / 5) * 100)}%
+                  {Math.round((stats.weeklyWorkouts / (user ? (useAuthStore.getState().weeklyGoal) : 5)) * 100)}%
                 </h2>
                 <div className="flex items-center gap-2 mt-2">
                   <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden flex-1">
-                    <div className="h-full bg-primary rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)] dark:shadow-[0_0_8px_rgba(52,211,153,0.5)] transition-all duration-1000" style={{ width: `${Math.min(100, (stats.weeklyWorkouts / 5) * 100)}%` }} />
+                    <div className="h-full bg-primary rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)] dark:shadow-[0_0_8px_rgba(52,211,153,0.5)] transition-all duration-1000" style={{ width: `${Math.min(100, (stats.weeklyWorkouts / (useAuthStore.getState().weeklyGoal)) * 100)}%` }} />
                   </div>
-                  <span className="text-[clamp(9px,1vw,11px)] text-muted-foreground uppercase font-mono">{stats.weeklyWorkouts}/5</span>
+                  <span className="text-[clamp(9px,1vw,11px)] text-muted-foreground uppercase font-mono">{stats.weeklyWorkouts}/{useAuthStore.getState().weeklyGoal}</span>
                 </div>
               </CardContent>
             </Card>

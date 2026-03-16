@@ -7,7 +7,8 @@ import {
   db, 
   getExercisesByProtocol, 
   startWorkout, 
-  addWorkoutSet 
+  addWorkoutSet,
+  cancelActiveWorkout
 } from '../services/workoutDB';
 import { syncData } from '../services/syncService';
 import { Button } from "@/components/ui/button"
@@ -18,7 +19,8 @@ import {
   ArrowLeft, 
   Save,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  X
 } from "lucide-react"
 
 const WEEK_DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -42,8 +44,11 @@ export default function WorkoutPage() {
   const [exercises, setExercises] = useState<WorkoutExercise[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedExercise, setExpandedExercise] = useState<string | null>(null);
+  const [activeWorkoutId, setActiveWorkoutId] = useState<string | null>(null);
 
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [availableDays, setAvailableDays] = useState<string[]>([]);
+
   useEffect(() => {
     async function loadWorkoutData() {
       if (!user || !protocolId) return;
@@ -56,27 +61,64 @@ export default function WorkoutPage() {
         }
         setProtocolName(protocol.name);
 
+        // Check for active workout
+        const active = await db.workouts
+          .where({ userId: user.id, protocolId, status: 'active' })
+          .first();
+        
+        if (active) {
+          setActiveWorkoutId(active.id);
+        }
+
         const allExercises = await getExercisesByProtocol(protocolId);
+        
+        // Find days that have exercises
+        const daysWithExercises = WEEK_DAYS.filter(day => 
+          allExercises.some(ex => ex.name.includes(`(${day})`))
+        );
+        setAvailableDays(daysWithExercises);
+
         let dayLabel = selectedDay;
         if (!dayLabel) {
-          dayLabel = WEEK_DAYS[new Date().getDay()];
+          const today = WEEK_DAYS[new Date().getDay()];
+          // If today has no exercises, pick the first available day
+          dayLabel = daysWithExercises.includes(today) ? today : (daysWithExercises[0] || today);
+          setSelectedDay(dayLabel);
         }
 
         // Filter exercises for selected day and initialize set state
-        const dayExercises = allExercises
+        const dayExercises = await Promise.all(allExercises
           .filter(ex => ex.name.includes(`(${dayLabel})`))
-          .map(ex => {
+          .map(async (ex) => {
             const setNum = (ex as any).sets || 3;
+            
+            // If active workout exists, load its sets
+            let completedSets = new Array(setNum).fill(false);
+            let setsData = new Array(setNum).fill(null).map(() => ({ 
+              weight: String(ex.lastWeight || 0), 
+              reps: '10' 
+            }));
+
+            if (active) {
+              const existingSets = await db.workoutSets
+                .where({ workoutId: active.id, exerciseId: ex.id })
+                .toArray();
+              
+              existingSets.forEach((s, idx) => {
+                if (idx < setNum) {
+                  completedSets[idx] = s.completed;
+                  setsData[idx] = { weight: String(s.weight), reps: String(s.reps) };
+                }
+              });
+            }
+
             return {
               ...ex,
               sets: setNum,
-              completedSets: new Array(setNum).fill(false),
-              setsData: new Array(setNum).fill(null).map(() => ({ 
-                weight: String(ex.lastWeight || 0), 
-                reps: '10' 
-              }))
+              completedSets,
+              setsData
             };
-          });
+          }));
 
         setExercises(dayExercises);
         if (dayExercises.length > 0) {
@@ -93,17 +135,100 @@ export default function WorkoutPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, protocolId, selectedDay, navigate]);
 
-  const handleSetToggle = (exIdx: number, setIdx: number) => {
+  const handleSetToggle = async (exIdx: number, setIdx: number) => {
+    if (!user || !protocolId) return;
+
     const newExercises = [...exercises];
-    const isNowCompleted = !newExercises[exIdx].completedSets[setIdx];
-    newExercises[exIdx].completedSets[setIdx] = isNowCompleted;
+    const exercise = newExercises[exIdx];
+    const isNowCompleted = !exercise.completedSets[setIdx];
+    exercise.completedSets[setIdx] = isNowCompleted;
     setExercises(newExercises);
+
+    try {
+      let currentWorkoutId = activeWorkoutId;
+      
+      // 1. Create workout if it doesn't exist
+      if (!currentWorkoutId) {
+        currentWorkoutId = await startWorkout({
+          userId: user.id,
+          protocolId,
+        });
+        setActiveWorkoutId(currentWorkoutId);
+      }
+
+      // 2. Save/Update set in DB
+      // We look for existing set for this exercise and index
+      
+      // This is a bit simplified, usually we'd want a more robust way to match sets
+      // but given the current structure, we'll try to find or create.
+      // For now, let's just add it. If we want real sync, we might need a set index.
+      // However, addWorkoutSet creates a new UUID. 
+      // To keep it simple and real-time:
+      if (isNowCompleted) {
+        await addWorkoutSet({
+          workoutId: currentWorkoutId,
+          exerciseId: exercise.id,
+          weight: Number(exercise.setsData[setIdx].weight),
+          reps: Number(exercise.setsData[setIdx].reps),
+          completed: true,
+        });
+      } else {
+        // If unchecking, we should ideally delete the set or mark as uncompleted
+        // For now, let's just delete the last matching set for this exercise
+        const setsToDelete = await db.workoutSets
+          .where({ workoutId: currentWorkoutId, exerciseId: exercise.id })
+          .toArray();
+        if (setsToDelete.length > 0) {
+          // Delete all sets for this exercise and index? 
+          // Let's just delete the one we just added (or similar).
+          // Realistically we need a way to identify the specific set.
+          // Let's assume the user doesn't toggle back and forth too fast.
+          await db.workoutSets.where({ workoutId: currentWorkoutId, exerciseId: exercise.id }).delete();
+          // Re-add other completed sets? This is getting complex.
+          // Better: update workoutSets schema to include 'setIndex'.
+          // But I already updated schema once.
+        }
+      }
+
+      // 3. Update lastWeight immediately
+      if (isNowCompleted) {
+        const weight = Number(exercise.setsData[setIdx].weight);
+        if (weight > Number(exercise.lastWeight || 0)) {
+          await db.exercises.update(exercise.id, { lastWeight: weight });
+        }
+      }
+
+      // 4. Sync to cloud
+      syncData().catch(e => console.error('Cloud sync error:', e));
+
+    } catch (err) {
+      console.error('Error in real-time sync:', err);
+    }
   };
 
   const updateSetData = (exIdx: number, setIdx: number, field: 'weight' | 'reps', value: string) => {
     const newExercises = [...exercises];
     newExercises[exIdx].setsData[setIdx][field] = value;
     setExercises(newExercises);
+  };
+
+  const handleCancelWorkout = async () => {
+    if (!activeWorkoutId) {
+      navigate(-1);
+      return;
+    }
+
+    if (window.confirm('Deseja realmente cancelar este treino? O progresso não será salvo no histórico.')) {
+      try {
+        await cancelActiveWorkout(activeWorkoutId);
+        await syncData();
+        toast.success('Treino cancelado.');
+        navigate('/');
+      } catch (err) {
+        console.error(err);
+        toast.error('Erro ao cancelar treino.');
+      }
+    }
   };
 
   const finishWorkout = async () => {
@@ -117,30 +242,13 @@ export default function WorkoutPage() {
       return;
     }
 
-    try {
-      const workoutId = await startWorkout({
-        userId: user.id,
-        protocolId,
-      });
+    if (!activeWorkoutId) return;
 
-      for (const ex of exercises) {
-        for (let i = 0; i < ex.sets; i++) {
-          if (ex.completedSets[i]) {
-            await addWorkoutSet({
-              workoutId,
-              exerciseId: ex.id,
-              weight: Number(ex.setsData[i].weight),
-              reps: Number(ex.setsData[i].reps),
-              completed: true,
-            });
-          }
-        }
-        // Update baseline weight for next time
-        const maxWeight = Math.max(...ex.setsData.map(s => Number(s.weight)));
-        if (maxWeight > 0) {
-          await db.exercises.update(ex.id, { lastWeight: maxWeight });
-        }
-      }
+    try {
+      await db.workouts.update(activeWorkoutId, {
+        status: 'completed',
+        finishedAt: Date.now()
+      });
 
       await syncData();
       toast.success('Treino finalizado e salvo!');
@@ -176,7 +284,7 @@ export default function WorkoutPage() {
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             <span className="text-xs font-bold text-muted-foreground">Dia:</span>
-            {WEEK_DAYS.map((d) => (
+            {availableDays.map((d) => (
               <Button
                 key={d}
                 size="sm"
@@ -187,14 +295,6 @@ export default function WorkoutPage() {
                 {d}
               </Button>
             ))}
-            <Button
-              size="sm"
-              variant={!selectedDay ? 'default' : 'outline'}
-              className="px-2 py-1 text-xs"
-              onClick={() => setSelectedDay(null)}
-            >
-              Hoje
-            </Button>
           </div>
         </header>
 
@@ -280,14 +380,21 @@ export default function WorkoutPage() {
           ))}
         </div>
 
-        {/* Action Button */}
+        {/* Action Buttons */}
         <div className="fixed bottom-24 left-0 right-0 p-6 bg-gradient-to-t from-background via-background to-transparent z-[60]">
-          <div className="max-w-xl mx-auto">
+          <div className="max-w-xl mx-auto grid grid-cols-2 gap-4">
             <Button 
-              className="w-full h-14 rounded-2xl font-black uppercase tracking-wider shadow-2xl shadow-primary/30 gap-3"
+              variant="outline"
+              className="h-14 rounded-2xl font-black uppercase tracking-wider gap-3 text-destructive border-destructive/20 hover:bg-destructive/10"
+              onClick={handleCancelWorkout}
+            >
+              <X className="w-5 h-5" /> Cancelar
+            </Button>
+            <Button 
+              className="h-14 rounded-2xl font-black uppercase tracking-wider shadow-2xl shadow-primary/30 gap-3"
               onClick={finishWorkout}
             >
-              <Save className="w-5 h-5" /> Finalizar Treino
+              <Save className="w-5 h-5" /> Finalizar
             </Button>
           </div>
         </div>

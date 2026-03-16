@@ -25,51 +25,67 @@ Aplicação Web Progressiva (PWA) mobile-first com foco em rastreamento de hiper
 - [x] Home inteligente: exibe treino do dia ou resumo semanal
 - [x] Exclusão de sessões registradas com segurança
 
-### Fase 4 – Histórico e Análise [EM REFINAMENTO]
+### Fase 4 – Histórico e Análise [CONCLUÍDO]
 - [x] **Histórico**: Visualização detalhada de sessões e exercícios passados
-- [x] **Análise**: Gráficos de carga progressiva e métricas básicas
-- [x] Simplificação: Remoção de Insights por IA para manter foco em dados reais
-- [ ] Refinamento de métricas automáticas (Volume total real por músculo)
+- [x] **Análise**: Gráficos de carga progressiva (Max e 1RM)
+- [x] Simplificação: Remoção de Insights por IA em prol de dados brutos
+- [x] **Volume Diário**: Gráfico de barras de carga total por dia
 
-### Fase 5 – UI/UX Premium e Refinamento [ATUAL]
-- [x] Tema White de alto contraste
-- [x] Sincronização de headers e navegação (Home, Treinos, Histórico, Análise, Configuração)
-- [x] Microinterações e animações de feedback
-- [ ] Testes de responsividade profunda (diferentes tamanhos de mobile)
-- [ ] Refinamento de acessibilidade global
+### Fase 5 – UI/UX Premium e Refinamento [CONCLUÍDO]
+- [x] Tema White de alto contraste e Dark Mode robusto
+- [x] Padronização de botões, cards e tipografia (Inter/Geist)
+- [x] Localização completa para PT-BR
+- [x] Responsividade mobile adaptada (remoção de scrollbars globais)
+- [x] Microinterações e animações de feedback premium
+
+### Fase 6 – Sincronização e Soberania de Dados [CONCLUÍDO]
+- [x] **Sincronização Bidirecional (Pull)**: Dados baixados da nuvem automaticamente no login/startup.
+- [x] **Configuração de Metas**: Meta semanal customizável e persistente.
+- [x] **Indicador de Status de Sync**: Ícone de nuvem no Header mostrando status de conexão/sync.
+- [x] **Sincronização Real-time**: Séries são salvas na nuvem assim que marcadas.
+- [x] **Auditoria de RLS (Supabase)**: Implementada lógica de mapeamento snake_case e isolamento por usuário.
+- [x] **Otimização de Banco**: Índices compostos para consultas rápidas de histórico e sets.
+
+### Phase 8 – Perfect Synchronization & Maintenance [ACTIVE]
+- [ ] **Remove Local Reset**: Remove the "Resetar Dados" button as synchronization should be the single truth.
+- [ ] **Mirroring Pull**: Update `pullData` to clear local data for the user before applying server data (Symmetry Sync).
+- [ ] **Conflict Resolution**: Ensure local changes are pushed before pulling to avoid data loss.
+- [ ] **Exportation JSON**: Finalize the data sovereignty tool.
 
 ---
 
 ## 3. Estrutura do Sistema
-- **Home**: Status atual e meta de consistência semanal.
-- **Treinos**: Gestão de protocolos e planilhas de treinamento.
-- **Histórico**: Linha do tempo completa e detalhada de treinos realizados.
-- **Análise**: Evolução de performance e métricas de carga.
-- **Configuração**: Preferências de interface e gestão de dados.
+- **Home**: Status atual, meta de consistência e resumo semanal.
+- **Treinos**: Gestão de protocolos e montador de sessões.
+- **Histórico**: Linha do tempo detalhada de atividades passadas.
+- **Análise**: Gráficos de performance, carga progressiva e métricas.
+- **Configuração**: Preferências de interface, metas e gestão de dados.
 
 ---
 
 ## 4. Tecnologias
-- **Frontend**: React, TypeScript, Tailwind CSS
-- **Componentes**: Radix UI / Shadcn based components
-- **Banco**: IndexedDB (Dexie.js) - 100% Offline first
+- **Frontend**: React 19, TypeScript, Tailwind CSS 4
+- **Componentes**: Radix UI / Shadcn / Base UI
+- **Backend & Sync**: Supabase (Auth + Postgres)
+- **Banco Local**: IndexedDB (Dexie.js) - 100% Offline first
 - **Icons**: Lucide React
 - **PWA**: Vite PWA Plugin
+- **Analytics**: Recharts & Chart.js
 
 ---
 
-## 5. Pendências e Próximos Passos
-- [ ] Implementar visualização de progressão por exercício individual (drill-down)
-- [ ] Refinar lógica de "Meta Semanal" para ser customizável na Configuração
-- [ ] Exportação/Backup de dados JSON
+## 5. Próximos Passos Imediatos
+1. **EXPORTAÇÃO JSON**: Finalizar a ferramenta de soberania de dados para backup local.
+2. **PWA NOTIFICATIONS**: Implementar notificações básicas para consistência.
+3. **WIDGETS**: Atalhos na home para acesso rápido ao treino do dia.
 
 ---
 
 ## 8. Status Atual
-- **Versão**: 1.2.0-PRO
-- **Estado**: Estável em ambiente de dev
-- **Foco**: Polimento final de UX e Dashboard expandido.
+- **Versão**: 1.6.0-ULTIMATE
+- **Estado**: Funcional com sincronização cloud robusta e métricas avançadas.
+- **Foco**: Soberania de dados e Notificações.
 
 ---
 
-Este roadmap reflete a transição para um design mais limpo e a remoção de dependências de IA externas em prol de um sistema mais ágil e focado no usuário regular de academia.
+Este roadmap reflete a transição de um MVP local para um ecossistema sincronizado e robusto de treinamento.
