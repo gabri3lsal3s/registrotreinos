@@ -59,9 +59,17 @@ const toCamel = (obj: any) => {
   const newObj: any = {};
   for (const key in obj) {
     let value = obj[key];
-    if (['created_at', 'finished_at', 'timestamp', 'date', 'updated_at'].includes(key) && value && typeof value === 'string') {
-      const parsed = Date.parse(value);
-      if (!isNaN(parsed)) value = parsed;
+    // Força todos os campos de data para number (timestamp em ms)
+    if ([
+      'created_at', 'finished_at', 'timestamp', 'date', 'updated_at'
+    ].includes(key)) {
+      if (typeof value === 'string') {
+        const parsed = Date.parse(value);
+        if (!isNaN(parsed)) value = parsed;
+        else if (!isNaN(Number(value))) value = Number(value);
+      } else if (typeof value === 'bigint' || typeof value === 'number') {
+        value = Number(value);
+      }
     }
     newObj[mapping[key] || key] = value;
   }

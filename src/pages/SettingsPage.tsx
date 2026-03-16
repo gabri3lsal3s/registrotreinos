@@ -1,3 +1,62 @@
+// Função utilitária para importar protocolo Upper/Lower (sexta e sábado)
+async function handleImportUpperLowerProtocol(user, toast) {
+  if (!user) return;
+  try {
+    const protocolId = await createProtocol({
+      name: 'Upper/Lower (Calistenia, Elásticos, Pilates)',
+      userId: user.id,
+      isEnabled: false,
+      daysOfWeek: ['fri', 'sat']
+    });
+
+    // Sexta-feira: Upper Body
+    const upperExercises = [
+      { name: 'Flexão de braços (Padrão ou Declinada com pés no sofá)', sets: 4, reps: 0, dayOfWeek: 'fri' },
+      { name: 'Remada com elástico (sentado, elástico nos pés)', sets: 4, reps: 15, dayOfWeek: 'fri' },
+      { name: 'Flexão Pike (foco em ombros)', sets: 3, reps: 12, dayOfWeek: 'fri' },
+      { name: 'Crucifixo inverso com elástico (em pé)', sets: 3, reps: 15, dayOfWeek: 'fri' },
+      { name: 'Flexão Diamante (mãos juntas, foco tríceps)', sets: 3, reps: 15, dayOfWeek: 'fri' },
+      { name: 'Rosca direta com elástico', sets: 3, reps: 15, dayOfWeek: 'fri' },
+      { name: 'Magic Circle / Anel de Pilates (pressão no peito)', sets: 3, reps: 1, dayOfWeek: 'fri' },
+    ];
+    // Sábado: Lower Body & Core
+    const lowerExercises = [
+      { name: 'Agachamento Búlgaro (pé de trás no sofá)', sets: 4, reps: 12, dayOfWeek: 'sat' },
+      { name: 'Elevação Pélvica Unilateral', sets: 4, reps: 15, dayOfWeek: 'sat' },
+      { name: 'Flexão de isquiotibiais (Hamstring curl)', sets: 3, reps: 15, dayOfWeek: 'sat' },
+      { name: 'Agachamento Sissy (foco em quadríceps)', sets: 3, reps: 12, dayOfWeek: 'sat' },
+      { name: 'Panturrilha unilateral em um degrau', sets: 4, reps: 20, dayOfWeek: 'sat' },
+      { name: 'Roll-up ou Teaser (Pilates)', sets: 3, reps: 12, dayOfWeek: 'sat' },
+      { name: 'Prancha (apoiado na bola de Pilates)', sets: 3, reps: 1, dayOfWeek: 'sat' },
+    ];
+    let order = 0;
+    for (const ex of upperExercises) {
+      await addExercise({
+        protocolId,
+        name: ex.name,
+        order: order++,
+        dayOfWeek: ex.dayOfWeek,
+        sets: ex.sets,
+        reps: ex.reps,
+      });
+    }
+    for (const ex of lowerExercises) {
+      await addExercise({
+        protocolId,
+        name: ex.name,
+        order: order++,
+        dayOfWeek: ex.dayOfWeek,
+        sets: ex.sets,
+        reps: ex.reps,
+      });
+    }
+    await fullSync();
+    toast.success('Protocolo Upper/Lower importado!');
+  } catch (err) {
+    console.error(err);
+    toast.error('Erro ao importar protocolo Upper/Lower.');
+  }
+}
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import Layout from '../components/Layout';
@@ -296,16 +355,16 @@ export default function SettingsPage() {
                       <Zap className="w-5 h-5" />
                     </div>
                     <div>
-                      <span className="font-black text-[clamp(11px,1.4vw,14px)] uppercase tracking-tight text-foreground">Importar PPL 3 Dias</span>
-                      <p className="text-[clamp(9px,1.2vw,11px)] text-muted-foreground font-mono uppercase tracking-widest opacity-60 mt-0.5">Push, Pull e Legs</p>
+                      <span className="font-black text-[clamp(11px,1.4vw,14px)] uppercase tracking-tight text-foreground">Ferramenta: Upper/Lower</span>
+                      <p className="text-[clamp(9px,1.2vw,11px)] text-muted-foreground font-mono uppercase tracking-widest opacity-60 mt-0.5">Protocolo sexta e sábado</p>
                     </div>
                   </div>
                   <Button 
                     variant="outline" 
-                    onClick={handleImportPPLProtocol}
+                    onClick={() => handleImportUpperLowerProtocol(user, toast)}
                     className="w-full rounded-xl h-12 font-black uppercase tracking-widest text-[10px] border-primary/20 hover:bg-primary/5 hover:text-primary transition-all"
                   >
-                    Importar PPL
+                    Importar Upper/Lower
                   </Button>
                 </div>
               </CardContent>

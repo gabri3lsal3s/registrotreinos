@@ -701,14 +701,16 @@ export default function ProtocolsPage() {
           title="Treinos" 
           description="Gestão de Protocolos e Planilhas"
           action={
-            <Button 
-              onClick={() => setShowBuilder(true)}
-              size="sm"
-              className="px-5"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Novo
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                onClick={() => setShowBuilder(true)}
+                size="sm"
+                className="px-5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Novo
+              </Button>
+            </div>
           }
         />
 

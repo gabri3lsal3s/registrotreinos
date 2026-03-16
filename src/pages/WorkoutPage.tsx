@@ -251,6 +251,9 @@ export default function WorkoutPage() {
       });
 
       await syncData();
+      // Garante que o IndexedDB local será atualizado com dados do Supabase
+      const { fullSync } = await import('../services/syncService');
+      await fullSync();
       toast.success('Treino finalizado e salvo!');
       navigate('/history');
     } catch (err) {
