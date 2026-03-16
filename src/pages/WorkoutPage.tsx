@@ -300,13 +300,14 @@ export default function WorkoutPage() {
           </div>
         </header>
 
-        <div className="space-y-4">
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150 fill-mode-both">
           {exercises.map((ex, exIdx) => (
             <Card 
               key={ex.id} 
               className={`rounded-2xl border transition-all duration-300 ${
                 expandedExercise === ex.id ? 'border-primary ring-1 ring-primary/20 bg-card shadow-md' : 'border-border opacity-100 bg-card'
               }`}
+              style={{ animationDelay: `${exIdx * 50}ms` }}
             >
               <header 
                 className="p-4 flex items-center justify-between cursor-pointer"
@@ -385,7 +386,7 @@ export default function WorkoutPage() {
         </div>
 
         {/* Action Buttons */}
-        <div className="fixed bottom-24 left-0 right-0 p-6 bg-gradient-to-t from-background via-background to-transparent z-[60]">
+        <div className="fixed bottom-24 left-0 right-0 p-6 z-[60] animate-in fade-in slide-in-from-bottom-4 duration-700 delay-400 fill-mode-both">
           <div className="max-w-xl mx-auto grid grid-cols-2 gap-4">
             <Button 
               variant="outline"

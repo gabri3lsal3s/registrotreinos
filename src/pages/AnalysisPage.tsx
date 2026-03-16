@@ -111,7 +111,7 @@ export default function AnalysisPage() {
           </div>
         ) : (
           <>
-            <section className="grid grid-cols-2 gap-3 sm:gap-4">
+            <section className="grid grid-cols-2 gap-3 sm:gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100 fill-mode-both">
               <Card className="bg-card border border-border/50 rounded-2xl shadow-sm p-4 md:p-5 flex flex-col items-center text-center group hover:border-primary/20 transition-all">
                 <div className="p-2.5 rounded-xl bg-primary/10 text-primary mb-3 group-hover:scale-110 transition-transform">
                   <BarChart3 className="w-5 h-5" />
@@ -136,7 +136,7 @@ export default function AnalysisPage() {
 
             {/* Muscle Breakdown */}
             {data && data.muscleBreakdown.length > 0 && (
-              <section className="space-y-4">
+              <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-200 fill-mode-both">
                 <header className="px-1 flex items-center justify-between group">
                   <h3 className="text-[11px] font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-wider flex items-center gap-2 group-hover:text-foreground transition-colors">
                     <Activity className="w-4 h-4 text-primary" />
@@ -186,7 +186,7 @@ export default function AnalysisPage() {
 
             {/* Evolução por Exercício */}
             {data && data.exerciseProgression.length > 0 && (
-              <section className="space-y-6">
+              <section className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-[450ms] fill-mode-both">
                 <header className="px-1 flex items-center justify-between group">
                    <h3 className="text-[11px] font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-wider flex items-center gap-2 group-hover:text-foreground transition-colors">
                       <LineChartIcon className="w-4 h-4 text-emerald-600" />
@@ -197,7 +197,10 @@ export default function AnalysisPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {data.exerciseProgression.map((ex) => (
-                    <Card key={ex.name} className="bg-card border border-border/50 rounded-2xl shadow-sm overflow-hidden">
+                    <Card 
+                      key={ex.name} 
+                      className="bg-card border border-border/50 rounded-2xl shadow-sm overflow-hidden hover:scale-[1.01] active:scale-[0.99] transition-all duration-300"
+                    >
                       <CardContent className="p-6 space-y-4">
                         <header className="flex justify-between items-start">
                           <h4 className="text-[11px] font-black uppercase tracking-wider text-foreground font-geist">{ex.name}</h4>
@@ -246,7 +249,7 @@ export default function AnalysisPage() {
             )}
 
             <div className="grid grid-cols-1 gap-6">
-              <section className="space-y-4">
+              <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-[600ms] fill-mode-both">
                 <header className="px-1 flex items-center justify-between group">
                    <h3 className="text-[11px] font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-wider flex items-center gap-2 group-hover:text-foreground transition-colors">
                       <TrendingUp className="w-4 h-4 text-primary" />

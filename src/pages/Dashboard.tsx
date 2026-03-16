@@ -101,11 +101,11 @@ export default function Dashboard() {
         />
 
         {/* Home Inteligente: Treino do Dia */}
-        <section className="space-y-4">
+        <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100 fill-mode-both">
           <header className="px-1 flex justify-between items-center group">
             <h3 className="text-[clamp(10px,1.2vw,12px)] font-black text-muted-foreground uppercase tracking-wider flex items-center gap-2 group-hover:text-foreground transition-colors">
               <Calendar className="w-3.5 h-3.5 text-primary" />
-              Status Atual
+              Sessão Atual
             </h3>
             <span className="text-[clamp(9px,1vw,11px)] font-mono text-muted-foreground uppercase">
               {new Date().toLocaleDateString('pt-BR', { weekday: 'long' })}
@@ -115,7 +115,7 @@ export default function Dashboard() {
           {loading ? (
             <Card className="rounded-2xl border border-border bg-card/50 animate-pulse h-24 shadow-sm"></Card>
           ) : activeWorkout ? (
-            <Card className="rounded-2xl border-2 border-primary bg-primary/5 overflow-hidden shadow-lg group hover:bg-primary/10 transition-all cursor-pointer active:scale-[0.98] relative"
+            <Card className="rounded-2xl border border-border border-l-4 border-l-primary bg-primary/5 overflow-hidden shadow-lg group hover:bg-primary/10 transition-all cursor-pointer active:scale-[0.98] relative"
                   onClick={() => navigate(`/workout/${activeWorkout.protocolId}`)}>
               <div className="absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1 rounded-full bg-primary text-primary-foreground text-[8px] font-black uppercase tracking-widest animate-pulse">
                 <div className="w-1.5 h-1.5 bg-white rounded-full" />
@@ -137,7 +137,7 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           ) : todayWorkout ? (
-            <Card className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm group hover:border-primary/40 transition-all cursor-pointer active:scale-[0.98]"
+            <Card className="rounded-2xl border border-border border-l-4 border-l-primary bg-card overflow-hidden shadow-sm group hover:border-primary/40 transition-all cursor-pointer active:scale-[0.98]"
                   onClick={() => navigate(`/workout/${todayWorkout.protocolId}`)}>
               <CardContent className="p-4 md:p-6 flex flex-col gap-3">
                 <div className="flex justify-between items-center">
@@ -155,8 +155,7 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           ) : (
-            <Card className="rounded-2xl border border-border bg-muted/40 shadow-sm overflow-hidden relative">
-              <div className="absolute top-0 left-0 w-1 h-full bg-primary/20" />
+            <Card className="rounded-2xl border border-border bg-muted/40 shadow-sm overflow-hidden relative border-l-4 border-l-primary/30">
               <CardContent className="p-6 md:p-8 flex items-center justify-between gap-6">
                 <div className="space-y-2">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest">
@@ -175,7 +174,7 @@ export default function Dashboard() {
           )}
         </section>
 
-        <section className="space-y-4">
+        <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-200 fill-mode-both">
           <header className="px-1">
             <h3 className="text-[clamp(10px,1.2vw,12px)] font-black text-muted-foreground uppercase tracking-[0.2em] flex items-center gap-2">
               <TrendingUp className="w-3.5 h-3.5 text-primary" />
@@ -183,7 +182,7 @@ export default function Dashboard() {
             </h3>
           </header>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Card className="relative overflow-hidden rounded-2xl border border-border shadow-sm bg-card flex flex-col justify-between min-h-[140px] hover:border-primary transition-all border-l-4 border-l-primary">
+            <Card className="relative overflow-hidden rounded-2xl border border-border shadow-sm bg-card flex flex-col justify-between min-h-[140px] hover:border-primary/30 transition-all hover:scale-[1.01] active:scale-[0.99] duration-300">
               <CardContent className="p-5 md:p-6 flex flex-col gap-2 justify-center h-full">
                 <span className="text-[clamp(10px,1.2vw,12px)] font-black text-muted-foreground uppercase tracking-widest">Consistência</span>
                 <h2 className="text-3xl md:text-4xl font-black text-foreground uppercase tracking-tight leading-none">
@@ -197,7 +196,7 @@ export default function Dashboard() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="rounded-2xl border border-border shadow-sm bg-card flex flex-col justify-between min-h-[140px] hover:border-primary/20 transition-all">
+            <Card className="rounded-2xl border border-border shadow-sm bg-card flex flex-col justify-between min-h-[140px] hover:border-primary/20 transition-all hover:scale-[1.01] active:scale-[0.99] duration-300">
               <CardContent className="p-5 md:p-6 flex flex-col gap-2 justify-center h-full">
                 <div className="flex justify-between items-start">
                   <span className="text-[clamp(10px,1.2vw,12px)] font-black text-muted-foreground uppercase tracking-widest">Sessões (7D)</span>

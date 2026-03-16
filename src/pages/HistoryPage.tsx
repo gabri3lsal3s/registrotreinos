@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import Layout from '../components/Layout';
 import { getWorkoutHistory, db, getWorkoutSets, deleteWorkout } from '../services/workoutDB';
-import { syncData } from '../services/syncService';
+import { fullSync, deleteRemoteItem } from '../services/syncService';
 import { Card, CardContent } from "@/components/ui/card"
 import { ClipboardList, Clock, Zap, ChevronRight, Activity, ChevronDown, Dumbbell, Trash2 } from "lucide-react"
 import { toast } from 'sonner';
@@ -78,8 +78,9 @@ export default function HistoryPage() {
     if (!window.confirm('Deseja excluir este treino permanentemente?')) return;
     
     try {
+      await deleteRemoteItem('workouts', workoutId);
       await deleteWorkout(workoutId);
-      await syncData();
+      await fullSync();
       setHistory(prev => prev.filter(w => w.id !== workoutId));
       toast.success('Treino removido com sucesso.');
     } catch (err) {
@@ -96,7 +97,7 @@ export default function HistoryPage() {
           description="Histórico de Atividade" 
         />
 
-        <section className="space-y-4">
+        <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100 fill-mode-both">
           <header className="px-1 flex items-center justify-between group">
              <h3 className="text-[clamp(10px,1.2vw,12px)] font-black text-muted-foreground uppercase tracking-tight flex items-center gap-2 group-hover:text-foreground transition-colors">
                  <Clock className="w-3.5 h-3.5 text-primary" />
@@ -122,12 +123,13 @@ export default function HistoryPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {history.map((workout) => (
+            {history.map((workout, index) => (
               <Card 
                 key={workout.id} 
-                className={`bg-card border transition-all cursor-pointer group overflow-hidden rounded-2xl shadow-sm hover:shadow-md ${
+                className={`bg-card border transition-all cursor-pointer group overflow-hidden rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.01] active:scale-[0.99] duration-300 ${
                   expandedId === workout.id ? 'border-primary ring-1 ring-primary/20 shadow-md' : 'border-border hover:border-primary/60 shadow-sm'
                 }`}
+                style={{ animationDelay: `${index * 50}ms` }}
                 onClick={() => toggleExpand(workout.id)}
               >
                 <CardContent className="p-0">

@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
 import Layout from '../components/Layout';
 import { db, getProtocolsByUser, getExercisesByProtocol, createProtocol, deleteProtocol, addExercise, type Protocol } from '../services/workoutDB';
-import { syncData } from '../services/syncService';
+import { fullSync, deleteRemoteItem } from '../services/syncService';
 import {
   DndContext,
   closestCenter,
@@ -119,7 +119,7 @@ function DraggableExercise({
 }
 
 export default function ProtocolsPage() {
-  const { user } = useAuth();
+  const { user, syncStatus } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [protocols, setProtocols] = useState<Protocol[]>([]);
@@ -139,6 +139,13 @@ export default function ProtocolsPage() {
       loadProtocols();
     }
   }, [user]);
+
+  // Recarregar quando o sync terminar (background ou automático)
+  useEffect(() => {
+    if (syncStatus === 'synced' && user) {
+      loadProtocols();
+    }
+  }, [syncStatus]);
 
   useEffect(() => {
     if (searchParams.get('action') === 'new') {
@@ -160,6 +167,7 @@ export default function ProtocolsPage() {
     if (!user) return;
     try {
       const data = await getProtocolsByUser(user.id);
+      console.log(`[ProtocolsPage] Carregando protocolos para user: ${user.id}. Encontrados: ${data.length}`);
       setProtocols(data || []);
 
       // Check for active workouts
@@ -169,7 +177,7 @@ export default function ProtocolsPage() {
       setActiveWorkoutIds(new Set(activeWorkouts.map((aw: any) => aw.protocolId)));
 
     } catch (err) {
-      console.error(err);
+      console.error('[ProtocolsPage] Erro ao carregar:', err);
     } finally {
       setLoading(false);
     }
@@ -179,9 +187,9 @@ export default function ProtocolsPage() {
     if (!user) return;
     if (window.confirm('Tem certeza que deseja excluir este protocolo? Todos os exercícios e treinos associados serão perdidos.')) {
       try {
+        await deleteRemoteItem('protocols', protocolId);
         await deleteProtocol(protocolId);
-        await syncData();
-        loadProtocols();
+        await fullSync();
         toast.success('Protocolo removido.');
       } catch (err) {
         toast.error('Erro ao excluir protocolo');
@@ -248,7 +256,7 @@ export default function ProtocolsPage() {
         }
       }
 
-      await syncData();
+      await fullSync();
       toast.success(editingProtocolId ? 'Protocolo atualizado!' : 'Protocolo salvo!');
       setShowBuilder(false);
       resetBuilder();
@@ -354,7 +362,7 @@ export default function ProtocolsPage() {
             }
           />
 
-          <section className="space-y-5">
+          <section className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150 fill-mode-both">
             <Card className="bg-card border-border rounded-2xl shadow-sm overflow-hidden outline outline-1 outline-primary/5">
               <CardContent className="p-5 md:p-8 space-y-8">
                 <div className="space-y-2">
@@ -410,7 +418,7 @@ export default function ProtocolsPage() {
                 </div>
               )}
               {activeDays.map((day) => (
-                <Card key={day} className="bg-card border-border rounded-2xl shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <Card key={day} className="bg-card border-border rounded-2xl shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-700 delay-75 fill-mode-both">
                   <CardContent className="p-4 md:p-6 space-y-4">
                     <div className="flex items-center justify-between px-1">
                       <div className="flex items-center gap-2">
@@ -469,7 +477,7 @@ export default function ProtocolsPage() {
           }
         />
 
-        <section className="space-y-4">
+        <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100 fill-mode-both">
           <div className="px-1 flex items-center justify-between group">
              <h3 className="text-[clamp(10px,1.2vw,12px)] font-black text-muted-foreground uppercase tracking-wider flex items-center gap-2 group-hover:text-foreground transition-colors">
                <Zap className="w-3.5 h-3.5 text-primary" />
@@ -496,7 +504,11 @@ export default function ProtocolsPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {protocols.map((p, index) => (
-                <Card key={p.id} className="bg-card border-border hover:border-primary/20 transition-all group overflow-hidden rounded-2xl shadow-sm">
+                <Card 
+                  key={p.id} 
+                  className="bg-card border-border hover:border-primary/20 transition-all group overflow-hidden rounded-2xl shadow-sm hover:scale-[1.01] active:scale-[0.99] duration-300"
+                  style={{ animationDelay: `${index * 50}ms` }}
+                >
                   <CardContent className="p-0 flex flex-col divide-y divide-border/20">
                     <div className="flex items-center gap-3 p-4 md:p-5 min-w-0">
                       <div className="w-10 h-10 md:w-11 md:h-11 border border-border/40 flex items-center justify-center rounded-xl bg-muted/20 group-hover:bg-primary/5 transition-all">

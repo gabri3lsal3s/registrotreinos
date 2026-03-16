@@ -12,14 +12,25 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 
 import { useEffect } from 'react';
 import { useAuthStore } from './services/authStore';
-import { pullData } from './services/syncService';
+import { fullSync } from './services/syncService';
 
 function App() {
   const { isAuthenticated } = useAuthStore();
 
   useEffect(() => {
     if (isAuthenticated) {
-      pullData().catch(console.error);
+      // Sincronismo inicial
+      fullSync().catch(console.error);
+
+      // Sincronismo ao retornar para o app (Visibility API)
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          fullSync().catch(console.error);
+        }
+      };
+
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }
   }, [isAuthenticated]);
 

@@ -14,11 +14,18 @@ const toSnake = (obj: any) => {
     lastWeight: 'last_weight',
     lastReps: 'last_reps',
     sleepQuality: 'sleep_quality',
-    stressLevel: 'stress_level'
+    stressLevel: 'stress_level',
+    timestamp: 'timestamp',
+    date: 'date'
   };
   const newObj: any = {};
   for (const key in obj) {
-    newObj[mapping[key] || key] = obj[key];
+    let value = obj[key];
+    // Converter timestamps de número (Dexie) para ISO String (Supabase timestamptz)
+    if (['createdAt', 'finishedAt', 'timestamp', 'date'].includes(key) && typeof value === 'number') {
+      value = new Date(value).toISOString();
+    }
+    newObj[mapping[key] || key] = value;
   }
   return newObj;
 };
@@ -35,58 +42,58 @@ const toCamel = (obj: any) => {
     last_weight: 'lastWeight',
     last_reps: 'lastReps',
     sleep_quality: 'sleepQuality',
-    stress_level: 'stressLevel'
+    stress_level: 'stressLevel',
+    timestamp: 'timestamp',
+    date: 'date'
   };
   const newObj: any = {};
   for (const key in obj) {
-    newObj[mapping[key] || key] = obj[key];
+    let value = obj[key];
+    if (['created_at', 'finished_at', 'timestamp', 'date'].includes(key) && value && typeof value === 'string') {
+      const parsed = Date.parse(value);
+      if (!isNaN(parsed)) value = parsed;
+    }
+    newObj[mapping[key] || key] = value;
   }
   return newObj;
 };
 
+let isSyncing = false;
+
 export async function syncData() {
   const { user, setSyncStatus } = useAuthStore.getState();
-  if (!user) throw new Error('Usuário não autenticado para sincronização');
+  if (!user) throw new Error('Usuário não autenticado');
 
   setSyncStatus('syncing');
 
-  // 1. Coleta e mapeia dados locais
-  const protocols = (await db.protocols.where('userId').equals(user.id).toArray()).map(toSnake);
-  const workouts = (await db.workouts.where('userId').equals(user.id).toArray()).map(toSnake);
-  
-  const protocolIds = (await db.protocols.where('userId').equals(user.id).toArray()).map(p => p.id);
-  const exercises = (await db.exercises.where('protocolId').anyOf(protocolIds).toArray()).map(toSnake);
-  
-  const workoutIds = (await db.workouts.where('userId').equals(user.id).toArray()).map(w => w.id);
-  const workoutSets = (await db.workoutSets.where('workoutId').anyOf(workoutIds).toArray()).map(toSnake);
-
   try {
-    // 2. Sincronização via Supabase
-    if (protocols.length > 0) {
-      const { error } = await supabase.from('protocols').upsert(protocols);
-      if (error) throw error;
-    }
+    const protocolsLocal = await db.protocols.where('userId').equals(user.id).toArray();
+    const workoutsLocal = await db.workouts.where('userId').equals(user.id).toArray();
+    
+    const protocolIds = protocolsLocal.map(p => p.id);
+    const exercisesLocal = await db.exercises.where('protocolId').anyOf(protocolIds).toArray();
+    
+    const workoutIds = workoutsLocal.map(w => w.id);
+    const workoutSetsLocal = await db.workoutSets.where('workoutId').anyOf(workoutIds).toArray();
 
-    if (exercises.length > 0) {
-      const { error } = await supabase.from('exercises').upsert(exercises);
-      if (error) throw error;
-    }
+    console.log(`[Sync] PUSH - User: ${user.id}, Encontrados no Local: Protocols(${protocolsLocal.length}), Exercises(${exercisesLocal.length})`);
 
-    if (workouts.length > 0) {
-      const { error } = await supabase.from('workouts').upsert(workouts);
-      if (error) throw error;
-    }
+    const protocols = protocolsLocal.map(toSnake);
+    const workouts = workoutsLocal.map(toSnake);
+    const exercises = exercisesLocal.map(ex => ({ ...ex, userId: user.id })).map(toSnake);
+    const workoutSets = workoutSetsLocal.map(set => ({ ...set, userId: user.id })).map(toSnake);
 
-    if (workoutSets.length > 0) {
-      const { error } = await supabase.from('workout_sets').upsert(workoutSets);
-      if (error) throw error;
-    }
+    if (protocols.length > 0) await supabase.from('protocols').upsert(protocols);
+    if (exercises.length > 0) await supabase.from('exercises').upsert(exercises);
+    if (workouts.length > 0) await supabase.from('workouts').upsert(workouts);
+    if (workoutSets.length > 0) await supabase.from('workout_sets').upsert(workoutSets);
 
+    console.log('[Sync] PUSH finalizado com sucesso.');
     setSyncStatus('synced');
-    return { success: true, message: 'Dados enviados!' };
+    return { success: true };
   } catch (err: any) {
     setSyncStatus('error');
-    console.error('Erro na sincronização:', err);
+    console.error('[Sync] Erro no PUSH:', err.message || err);
     throw err;
   }
 }
@@ -98,46 +105,92 @@ export async function pullData() {
   setSyncStatus('syncing');
 
   try {
-    // 1. Fetch from Supabase
-    const protocolKeys = await db.protocols.where('userId').equals(user.id).primaryKeys();
-    const workoutKeys = await db.workouts.where('userId').equals(user.id).primaryKeys();
-
-    const [protocolsRes, exercisesRes, workoutsRes, setsRes] = await Promise.all([
+    console.log(`[Sync] PULL - Iniciando para: ${user.id}`);
+    
+    const [pRes, eRes, wRes, sRes] = await Promise.all([
       supabase.from('protocols').select('*').eq('user_id', user.id),
-      protocolKeys.length > 0 
-        ? supabase.from('exercises').select('*').in('protocol_id', protocolKeys)
-        : Promise.resolve({ data: [], error: null }),
+      supabase.from('exercises').select('*').eq('user_id', user.id),
       supabase.from('workouts').select('*').eq('user_id', user.id),
-      workoutKeys.length > 0
-        ? supabase.from('workout_sets').select('*').in('workout_id', workoutKeys)
-        : Promise.resolve({ data: [], error: null })
+      supabase.from('workout_sets').select('*').eq('user_id', user.id)
     ]);
 
-    if (protocolsRes.error) throw protocolsRes.error;
-    if (exercisesRes.error) throw exercisesRes.error;
-    if (workoutsRes.error) throw workoutsRes.error;
-    if (setsRes.error) throw setsRes.error;
+    if (pRes.error || eRes.error || wRes.error || sRes.error) {
+      throw pRes.error || eRes.error || wRes.error || sRes.error;
+    }
 
-    // 2. Transforma de volta para camelCase e salva no Dexie
-    // ESTRATÉGIA DE ESPELHAMENTO: Limpa dados locais do usuário antes de inserir os da nuvem
+    const remoteP = pRes.data || [];
+    const remoteE = eRes.data || [];
+    const remoteW = wRes.data || [];
+    const remoteS = sRes.data || [];
+
+    console.log(`[Sync] PULL - Recebidos do Supabase: P(${remoteP.length}), E(${remoteE.length}), W(${remoteW.length}), S(${remoteS.length})`);
+
     await db.transaction('rw', [db.protocols, db.exercises, db.workouts, db.workoutSets], async () => {
-      // Deletar apenas dados pertencentes ao usuário ou referenciados por seus protocolos
-      await db.protocols.where('userId').equals(user.id).delete();
-      await db.exercises.where('protocolId').anyOf(protocolKeys).delete();
-      await db.workouts.where('userId').equals(user.id).delete();
-      await db.workoutSets.where('workoutId').anyOf(workoutKeys).delete();
+      // 1. Limpeza Radical
+      // Deletamos TUDO que pertence a este usuário no local antes de persistir o que veio da nuvem
+      const localP = await db.protocols.where('userId').equals(user.id).toArray();
+      const localW = await db.workouts.where('userId').equals(user.id).toArray();
+      const pIds = localP.map(p => p.id);
+      const wIds = localW.map(w => w.id);
 
-      if (protocolsRes.data) await db.protocols.bulkPut(protocolsRes.data.map(toCamel));
-      if (exercisesRes.data) await db.exercises.bulkPut(exercisesRes.data.map(toCamel));
-      if (workoutsRes.data) await db.workouts.bulkPut(workoutsRes.data.map(toCamel));
-      if (setsRes.data) await db.workoutSets.bulkPut(setsRes.data.map(toCamel));
+      if (pIds.length > 0) await db.exercises.where('protocolId').anyOf(pIds).delete();
+      if (wIds.length > 0) await db.workoutSets.where('workoutId').anyOf(wIds).delete();
+      await db.protocols.where('userId').equals(user.id).delete();
+      await db.workouts.where('userId').equals(user.id).delete();
+
+      // 2. Mapeamento e Persistência
+      // FORÇAMOS o userId igual ao logado para garantir que as queries locais funcionem
+      const format = (item: any) => ({ ...toCamel(item), userId: user.id });
+
+      if (remoteP.length > 0) await db.protocols.bulkPut(remoteP.map(format));
+      if (remoteE.length > 0) await db.exercises.bulkPut(remoteE.map(format));
+      if (remoteW.length > 0) await db.workouts.bulkPut(remoteW.map(format));
+      if (remoteS.length > 0) await db.workoutSets.bulkPut(remoteS.map(format));
+      
+      console.log('[Sync] PULL - Mirror local atualizado com sucesso.');
     });
 
     setSyncStatus('synced');
-    return { success: true, message: 'Dados baixados da nuvem!' };
+    return { success: true };
   } catch (err: any) {
     setSyncStatus('error');
-    console.error('Erro no pull de dados:', err);
+    console.error('[Sync] Erro no PULL:', err.message || err);
     throw err;
+  }
+}
+
+export async function deleteRemoteItem(table: string, id: string) {
+  const { user } = useAuthStore.getState();
+  if (!user) return;
+
+  try {
+    console.log(`[Sync] DELETE - Tabela: ${table}, ID: ${id}`);
+    const { error } = await supabase
+      .from(table)
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+  } catch (err: any) {
+    console.error(`[Sync] Erro ao deletar no Supabase (${table}):`, err.message || err);
+    throw err;
+  }
+}
+
+export async function fullSync() {
+  if (isSyncing) return;
+  isSyncing = true;
+  try {
+    console.log('[Sync] Ciclo Completo: Início');
+    await syncData();
+    await pullData();
+    console.log('[Sync] Ciclo Completo: Sucesso');
+    return { success: true };
+  } catch (err) {
+    console.error('[Sync] Erro no Ciclo Completo:', err);
+    throw err;
+  } finally {
+    isSyncing = false;
   }
 }
