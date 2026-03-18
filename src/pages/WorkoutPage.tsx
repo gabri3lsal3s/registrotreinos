@@ -233,10 +233,10 @@ export default function WorkoutPage() {
 
   const finishWorkout = async () => {
     if (!user || !protocolId) return;
-    
-    const totalCompleted = exercises.reduce((acc, ex) => 
+
+    const totalCompleted = exercises.reduce((acc, ex) =>
       acc + ex.completedSets.filter(Boolean).length, 0);
-    
+
     if (totalCompleted === 0) {
       toast.error('Complete pelo menos uma série antes de finalizar.');
       return;
@@ -245,10 +245,54 @@ export default function WorkoutPage() {
     if (!activeWorkoutId) return;
 
     try {
+      // Atualiza local
       await db.workouts.update(activeWorkoutId, {
         status: 'completed',
-        finishedAt: Date.now()
+        finishedAt: Date.now(),
+        isSynced: false
       });
+
+      // Busca o treino atualizado
+      const workout = await db.workouts.get(activeWorkoutId);
+      if (workout) {
+        // Salva imediatamente no Supabase
+        const { supabase } = await import('../services/supabaseClient');
+        // Conversão para snake_case (sem isSynced/is_synced)
+        const toSnake = (obj: any) => {
+          const mapping: Record<string, string> = {
+            userId: 'user_id',
+            protocolId: 'protocol_id',
+            date: 'date',
+            status: 'status',
+            finishedAt: 'finished_at',
+            mood: 'mood',
+            sleepQuality: 'sleep_quality',
+            stressLevel: 'stress_level',
+            recovery: 'recovery',
+            notes: 'notes',
+            createdAt: 'created_at',
+            updatedAt: 'updated_at',
+            id: 'id'
+          };
+          const newObj: any = {};
+          for (const key in obj) {
+            if (key === 'isSynced') continue;
+            let value = obj[key];
+            if ([
+              'createdAt', 'finishedAt', 'date', 'updatedAt'
+            ].includes(key) && typeof value === 'number') {
+              value = new Date(value).toISOString();
+            }
+            newObj[mapping[key] || key] = value;
+          }
+          return newObj;
+        };
+        const workoutData = toSnake(workout);
+        const { error } = await supabase.from('workouts').upsert([workoutData]);
+        if (error) {
+          throw new Error('Erro ao salvar treino no Supabase: ' + error.message);
+        }
+      }
 
       await syncData();
       // Garante que o IndexedDB local será atualizado com dados do Supabase

@@ -24,7 +24,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [todayWorkout, setTodayWorkout] = useState<any>(null);
   const [activeWorkout, setActiveWorkout] = useState<any>(null);
-  const [stats, setStats] = useState({ weeklyWorkouts: 0 });
+  const [stats, setStats] = useState({ weeklyWorkouts: 0, monthlyWorkouts: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -110,16 +110,23 @@ export default function Dashboard() {
           setActiveWorkout(null);
         }
 
-        // 3. Get Stats (last 7 days)
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-        const history = await db.workouts
+        // 3. Get Stats (last 7 days and current month)
+        // const now já foi declarado acima
+        const nowTs = now.getTime();
+        const sevenDaysAgo = nowTs - 7 * 24 * 60 * 60 * 1000;
+        // Primeiro dia do mês atual
+        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+        const allWorkouts = await db.workouts
           .where('userId').equals(user.id)
-          .and(w => w.date >= sevenDaysAgo.getTime() && w.status === 'completed')
+          .and(w => w.status === 'completed')
           .toArray();
-        
+
+        const weeklyWorkouts = allWorkouts.filter(w => w.date >= sevenDaysAgo).length;
+        const monthlyWorkouts = allWorkouts.filter(w => w.date >= firstDayOfMonth).length;
+
         setStats({
-          weeklyWorkouts: history.length
+          weeklyWorkouts,
+          monthlyWorkouts
         });
 
       } catch (err) {
@@ -217,13 +224,13 @@ export default function Dashboard() {
           <header className="px-1">
             <h3 className="text-[clamp(10px,1.2vw,12px)] font-black text-muted-foreground uppercase tracking-[0.2em] flex items-center gap-2">
               <TrendingUp className="w-3.5 h-3.5 text-primary" />
-              Meta Semanal
+                Metas Definidas
             </h3>
           </header>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Card className="relative overflow-hidden rounded-2xl border border-border shadow-sm bg-card flex flex-col justify-between min-h-[140px] hover:border-primary/30 transition-all hover:scale-[1.01] active:scale-[0.99] duration-300">
               <CardContent className="p-5 md:p-6 flex flex-col gap-2 justify-center h-full">
-                <span className="text-[clamp(10px,1.2vw,12px)] font-black text-muted-foreground uppercase tracking-widest">Consistência</span>
+                <span className="text-[clamp(10px,1.2vw,12px)] font-black text-muted-foreground uppercase tracking-widest">Consistência Semanal</span>
                 <h2 className="text-3xl md:text-4xl font-black text-foreground uppercase tracking-tight leading-none">
                   {Math.round((stats.weeklyWorkouts / (user ? (useAuthStore.getState().weeklyGoal) : 5)) * 100)}%
                 </h2>
@@ -237,15 +244,23 @@ export default function Dashboard() {
             </Card>
             <Card className="rounded-2xl border border-border shadow-sm bg-card flex flex-col justify-between min-h-[140px] hover:border-primary/20 transition-all hover:scale-[1.01] active:scale-[0.99] duration-300">
               <CardContent className="p-5 md:p-6 flex flex-col gap-2 justify-center h-full">
-                <div className="flex justify-between items-start">
-                  <span className="text-[clamp(10px,1.2vw,12px)] font-black text-muted-foreground uppercase tracking-widest">Sessões (7D)</span>
-                  <span className="text-[clamp(9px,1.2vw,11px)] text-primary font-mono font-bold">FEITO</span>
-                </div>
-                <p className="text-3xl md:text-4xl font-black text-foreground leading-tight tracking-tight">{stats.weeklyWorkouts} <span className="text-[12px] font-mono opacity-60 tracking-normal ml-1 uppercase">Treinos</span></p>
-                <div className="flex gap-1.5 mt-3 overflow-hidden">
-                  {[...Array(7)].map((_, i) => (
-                    <div key={i} className={`h-1.5 flex-1 min-w-[4px] rounded-full transition-all duration-500 ${i < stats.weeklyWorkouts ? 'bg-primary/80 shadow-[0_0_4px_rgba(16,185,129,0.3)]' : 'bg-muted/50'}`} />
-                  ))}
+                <span className="text-[clamp(10px,1.2vw,12px)] font-black text-muted-foreground uppercase tracking-widest">Consistência Mensal</span>
+                <h2 className="text-3xl md:text-4xl font-black text-foreground uppercase tracking-tight leading-none">
+                  {(() => {
+                    const goal = user ? (useAuthStore.getState().weeklyGoal * 4) : 20;
+                    const safeGoal = goal > 0 ? goal : 1;
+                    return Math.round((stats.monthlyWorkouts / safeGoal) * 100);
+                  })()}%
+                </h2>
+                <div className="flex items-center gap-2 mt-2">
+                  <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden flex-1">
+                    <div className="h-full bg-primary rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)] dark:shadow-[0_0_8px_rgba(52,211,153,0.5)] transition-all duration-1000" style={{ width: `${(() => {
+                      const goal = user ? (useAuthStore.getState().weeklyGoal * 4) : 20;
+                      const safeGoal = goal > 0 ? goal : 1;
+                      return Math.min(100, (stats.monthlyWorkouts / safeGoal) * 100);
+                    })()}%` }} />
+                  </div>
+                  <span className="text-[clamp(9px,1vw,11px)] text-muted-foreground uppercase font-mono">{stats.monthlyWorkouts}/{Math.max(1, user ? (useAuthStore.getState().weeklyGoal * 4) : 20)}</span>
                 </div>
               </CardContent>
             </Card>

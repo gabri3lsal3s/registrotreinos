@@ -65,6 +65,17 @@ export default function AnalysisPage() {
     }
   }, [user, protocolId]);
 
+  // Atualiza análise ao receber evento global
+  useEffect(() => {
+    function handleRefresh() {
+      if (user) loadData();
+    }
+    window.addEventListener('refresh-analysis', handleRefresh);
+    return () => {
+      window.removeEventListener('refresh-analysis', handleRefresh);
+    };
+  }, [user, protocolId]);
+
   async function loadData() {
     setLoading(true);
     try {

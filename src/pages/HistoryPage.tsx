@@ -1,7 +1,8 @@
+// ...existing code...
 import { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import Layout from '../components/Layout';
-import { getWorkoutHistory, db, getWorkoutSets, deleteWorkout } from '../services/workoutDB';
+import { getWorkoutHistory, db, getWorkoutSets, deleteWorkout, deleteWorkoutSet } from '../services/workoutDB';
 import { fullSync, deleteRemoteItem } from '../services/syncService';
 import { Card, CardContent } from "@/components/ui/card"
 import { ClipboardList, Clock, Zap, ChevronRight, Activity, ChevronDown, Dumbbell, Trash2 } from "lucide-react"
@@ -9,6 +10,12 @@ import { toast } from 'sonner';
 import { PageHeader } from '../components/PageHeader';
 
 export default function HistoryPage() {
+    const [editingDateId, setEditingDateId] = useState<string | null>(null);
+    const [editingDateValue, setEditingDateValue] = useState<string>('');
+    const [editingTimeValue, setEditingTimeValue] = useState<string>('');
+    const [editingSetId, setEditingSetId] = useState<string | null>(null);
+    const [editingSetWeight, setEditingSetWeight] = useState<string>('');
+    const [editingSetReps, setEditingSetReps] = useState<string>('');
   const { user } = useAuth();
   const [history, setHistory] = useState<any[]>([]);
   const [protocolsMap, setProtocolsMap] = useState<Record<string, string>>({});
@@ -83,9 +90,109 @@ export default function HistoryPage() {
       await fullSync();
       setHistory(prev => prev.filter(w => w.id !== workoutId));
       toast.success('Treino removido com sucesso.');
+      // Dispara evento global para atualizar análise
+      window.dispatchEvent(new Event('refresh-analysis'));
     } catch (err) {
       console.error(err);
       toast.error('Erro ao excluir treino.');
+    }
+  }
+
+  // Edição discreta da data
+  async function handleDateClick(e: React.MouseEvent, workout: any) {
+    e.stopPropagation();
+    setEditingDateId(workout.id);
+    // Preenche valor inicial no formato yyyy-MM-dd e HH:mm
+    const d = new Date(workout.date);
+    setEditingDateValue(d.toISOString().slice(0, 10));
+    setEditingTimeValue(d.toTimeString().slice(0,5));
+  }
+
+  async function handleDateChange(e: React.ChangeEvent<HTMLInputElement>, workout: any) {
+    setEditingDateValue(e.target.value);
+  }
+
+  async function handleTimeChange(e: React.ChangeEvent<HTMLInputElement>, workout: any) {
+    setEditingTimeValue(e.target.value);
+  }
+
+  async function handleDateBlurOrSave(workout: any) {
+    if (!editingDateValue || !editingTimeValue) {
+      setEditingDateId(null);
+      return;
+    }
+    try {
+      // Nova data e hora
+      const [year, month, day] = editingDateValue.split('-').map(Number);
+      const [hour, minute] = editingTimeValue.split(':').map(Number);
+      const newDate = new Date(workout.date);
+      newDate.setFullYear(year, month - 1, day);
+      newDate.setHours(hour, minute, 0, 0);
+      const newTimestamp = newDate.getTime();
+      await db.workouts.update(workout.id, { date: newTimestamp, isSynced: false });
+      // Sincroniza com Supabase (bidirecional)
+      await fullSync();
+      setHistory(h => h.map(w => w.id === workout.id ? { ...w, date: newTimestamp } : w));
+      setEditingDateId(null);
+      toast.success('Data e horário do treino atualizados!');
+      // Dispara evento global para atualizar análise
+      window.dispatchEvent(new Event('refresh-analysis'));
+    } catch (err: any) {
+      toast.error('Erro ao atualizar data/horário: ' + (err.message || err));
+      setEditingDateId(null);
+    }
+  }
+
+  async function handleSetEditClick(e: React.MouseEvent, set: any) {
+    e.stopPropagation();
+    setEditingSetId(set.id);
+    setEditingSetWeight(set.weight);
+    setEditingSetReps(set.reps);
+  }
+
+  async function handleSetEditSave(set: any) {
+    if (!editingSetId || !editingSetWeight || !editingSetReps) {
+      setEditingSetId(null);
+      return;
+    }
+    // Edição otimista: atualiza UI imediatamente
+    setSessionDetails(prev => {
+      const newDetails = { ...prev };
+      for (const [exId, sets] of Object.entries(newDetails)) {
+        newDetails[exId] = sets.map(([exerciseId, arr]) => [exerciseId, arr.map(s => s.id === set.id ? { ...s, weight: editingSetWeight, reps: editingSetReps } : s)]);
+      }
+      return newDetails;
+    });
+    setEditingSetId(null);
+    try {
+      await db.workouts.update(set.id, { weight: editingSetWeight, reps: editingSetReps });
+      toast.success('Set atualizado com sucesso.');
+      window.dispatchEvent(new Event('refresh-analysis'));
+    } catch (err: any) {
+      toast.error('Erro ao atualizar set: ' + (err.message || err));
+    }
+  }
+
+  async function handleSetDelete(set: any) {
+    if (!window.confirm('Deseja excluir este exercício da sessão?')) return;
+    // Edição otimista: remove da UI imediatamente
+    setSessionDetails(prev => {
+      const newDetails = { ...prev };
+      for (const [workoutId, exArr] of Object.entries(newDetails)) {
+        newDetails[workoutId] = exArr.map(([exId, sets]) => [exId, sets.filter(s => s.id !== set.id)]);
+      }
+      return newDetails;
+    });
+    setEditingSetId(null);
+    try {
+      await deleteRemoteItem('workout_sets', set.id);
+      await deleteWorkoutSet(set.id);
+      await fullSync();
+      toast.success('Exercício removido!');
+      window.dispatchEvent(new Event('refresh-analysis'));
+      if (expandedId) toggleExpand(expandedId);
+    } catch (err: any) {
+      toast.error('Erro ao remover exercício: ' + (err.message || err));
     }
   }
 
@@ -136,8 +243,53 @@ export default function HistoryPage() {
                   <div className="p-4 flex flex-row items-center justify-between">
                     <div className="flex items-center gap-4 min-w-0 flex-1 mr-4">
                       <div className="w-11 h-11 border border-border/60 flex flex-col items-center justify-center bg-muted/20 group-hover:bg-primary/5 transition-all rounded-xl flex-shrink-0">
-                        <span className="text-sm font-black text-foreground group-hover:text-primary transition-colors leading-none tabular-nums">{new Date(workout.date).getDate()}</span>
-                        <span className="text-[clamp(8px,1vw,10px)] text-muted-foreground uppercase font-black opacity-90 mt-0.5 leading-none">{new Date(workout.date).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')}</span>
+                        {editingDateId === workout.id ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, position: 'absolute', left: 0, top: 0, zIndex: 10, minWidth: 44, minHeight: 44, background: 'rgba(255,255,255,0.95)', borderRadius: 8, boxShadow: '0 2px 8px 0 #0001' }}>
+                            <input
+                              type="date"
+                              className="rounded-lg border border-primary/40 bg-background text-foreground text-center text-xs font-mono outline-none focus:ring-2 focus:ring-primary/40 transition-all mb-0.5"
+                              style={{ width: 80, marginBottom: 2 }}
+                              value={editingDateValue}
+                              onChange={e => handleDateChange(e, workout)}
+                              autoFocus
+                              onClick={e => e.stopPropagation()}
+                            />
+                            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <input
+                                type="time"
+                                className="rounded-lg border border-primary/40 bg-background text-foreground text-center text-xs font-mono outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+                                style={{ width: 70 }}
+                                value={editingTimeValue}
+                                onChange={e => handleTimeChange(e, workout)}
+                                onClick={e => e.stopPropagation()}
+                              />
+                              <button
+                                className="ml-1 text-muted-foreground/40 hover:text-primary transition-colors text-xs border border-primary/30 rounded px-1 py-0.5"
+                                title="Concluir edição"
+                                onClick={e => { e.stopPropagation(); handleDateBlurOrSave(workout); }}
+                                style={{ background: 'none', cursor: 'pointer' }}
+                              >
+                                ✔
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+                        <span
+                          className="text-sm font-black text-foreground group-hover:text-primary transition-colors leading-none tabular-nums"
+                          onClick={e => handleDateClick(e, workout)}
+                          style={{ cursor: 'pointer', position: 'relative', zIndex: 1 }}
+                          title="Clique para editar a data"
+                        >
+                          {new Date(workout.date).getDate()}
+                        </span>
+                        <span
+                          className="text-[clamp(8px,1vw,10px)] text-muted-foreground uppercase font-black opacity-90 mt-0.5 leading-none"
+                          onClick={e => handleDateClick(e, workout)}
+                          style={{ cursor: 'pointer', position: 'relative', zIndex: 1 }}
+                          title="Clique para editar a data"
+                        >
+                          {new Date(workout.date).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')}
+                        </span>
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 mb-1">
@@ -185,9 +337,61 @@ export default function HistoryPage() {
                           </div>
                           <div className="flex flex-wrap gap-1.5 pl-5">
                             {sets.map((s, si) => (
-                              <div key={s.id} className="bg-muted/30 px-2 py-0.5 rounded-md border border-border/20 flex items-center gap-1.5">
+                              <div
+                                key={s.id}
+                                className="bg-muted/30 px-2 py-0.5 rounded-md border border-border/20 flex items-center gap-1.5 group relative"
+                                onClick={e => {
+                                  // Evita propagação para não fechar o card ao clicar em editar/excluir/concluir
+                                  e.stopPropagation();
+                                }}
+                              >
                                 <span className="text-[9px] font-mono text-muted-foreground">S{si + 1}</span>
-                                <span className="text-[10px] font-black tabular-nums">{s.weight}kg x {s.reps}</span>
+                                {editingSetId === s.id ? (
+                                  <>
+                                    <input
+                                      type="number"
+                                      className="w-12 rounded border border-primary/40 text-xs font-mono text-center mr-1"
+                                      value={editingSetWeight}
+                                      onChange={e => setEditingSetWeight(e.target.value)}
+                                      style={{ width: 45 }}
+                                      onClick={e => e.stopPropagation()}
+                                    />
+                                    <span className="font-black text-xs">kg</span>
+                                    <input
+                                      type="number"
+                                      className="w-10 rounded border border-primary/40 text-xs font-mono text-center mx-1"
+                                      value={editingSetReps}
+                                      onChange={e => setEditingSetReps(e.target.value)}
+                                      style={{ width: 35 }}
+                                      onClick={e => e.stopPropagation()}
+                                    />
+                                    <span className="font-black text-xs">reps</span>
+                                    <button
+                                      className="ml-1 text-muted-foreground/40 hover:text-destructive transition-colors text-xs"
+                                      title="Excluir exercício"
+                                      onClick={e => { e.stopPropagation(); handleSetDelete(s); }}
+                                      style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      className="ml-1 text-muted-foreground/40 hover:text-primary transition-colors text-xs border border-primary/30 rounded px-1 py-0.5"
+                                      title="Concluir edição"
+                                      onClick={e => { e.stopPropagation(); handleSetEditSave(s); }}
+                                      style={{ background: 'none', cursor: 'pointer' }}
+                                    >
+                                      ✔
+                                    </button>
+                                  </>
+                                ) : (
+                                  <span
+                                    className="text-[10px] font-black tabular-nums cursor-pointer hover:text-primary transition-colors"
+                                    title="Clique para editar"
+                                    onClick={e => { e.stopPropagation(); handleSetEditClick(e, s); }}
+                                  >
+                                    {s.weight}kg x {s.reps}
+                                  </span>
+                                )}
                               </div>
                             ))}
                           </div>

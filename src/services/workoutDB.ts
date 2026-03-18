@@ -1,3 +1,12 @@
+// Edita um set de exercício (WorkoutSet)
+export async function updateWorkoutSet(id: string, updates: Partial<WorkoutSet>) {
+  await db.workoutSets.update(id, { ...updates, isSynced: false });
+}
+
+// Exclui um set de exercício (WorkoutSet)
+export async function deleteWorkoutSet(id: string) {
+  await db.workoutSets.delete(id);
+}
 import Dexie, { type Table } from 'dexie';
 
 export interface Protocol {

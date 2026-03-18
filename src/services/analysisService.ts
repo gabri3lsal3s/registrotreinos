@@ -32,12 +32,14 @@ export async function getAnalysisSummary(
 
   // 2. Get workouts in the period
   let workoutQuery = db.workouts.where('userId').equals(userId);
-  
+
+  // Filtra apenas sessões finalizadas (status 'completed'), igual ao histórico
   const workouts = await workoutQuery
     .filter(w => {
       const matchDate = w.date >= startDate;
       const matchProtocol = protocolId ? w.protocolId === protocolId : true;
-      return matchDate && matchProtocol;
+      const isCompleted = w.status === 'completed';
+      return matchDate && matchProtocol && isCompleted;
     })
     .toArray();
 
