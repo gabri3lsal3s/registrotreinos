@@ -1,5 +1,5 @@
 // Função utilitária para importar protocolo Upper/Lower (sexta e sábado)
-async function handleImportUpperLowerProtocol(user, toast) {
+async function handleImportUpperLowerProtocol(user: any, toast: any) {
   if (!user) return;
   try {
     const protocolId = await createProtocol({
@@ -167,6 +167,7 @@ export default function SettingsPage() {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function handleImportPPLProtocol() {
     if (!user) return;
     try {

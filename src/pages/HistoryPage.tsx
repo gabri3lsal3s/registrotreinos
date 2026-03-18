@@ -108,11 +108,11 @@ export default function HistoryPage() {
     setEditingTimeValue(d.toTimeString().slice(0,5));
   }
 
-  async function handleDateChange(e: React.ChangeEvent<HTMLInputElement>, workout: any) {
+  async function handleDateChange(e: React.ChangeEvent<HTMLInputElement>) {
     setEditingDateValue(e.target.value);
   }
 
-  async function handleTimeChange(e: React.ChangeEvent<HTMLInputElement>, workout: any) {
+  async function handleTimeChange(e: React.ChangeEvent<HTMLInputElement>) {
     setEditingTimeValue(e.target.value);
   }
 
@@ -146,8 +146,8 @@ export default function HistoryPage() {
   async function handleSetEditClick(e: React.MouseEvent, set: any) {
     e.stopPropagation();
     setEditingSetId(set.id);
-    setEditingSetWeight(set.weight);
-    setEditingSetReps(set.reps);
+    setEditingSetWeight(String(set.weight));
+    setEditingSetReps(String(set.reps));
   }
 
   async function handleSetEditSave(set: any) {
@@ -159,13 +159,13 @@ export default function HistoryPage() {
     setSessionDetails(prev => {
       const newDetails = { ...prev };
       for (const [exId, sets] of Object.entries(newDetails)) {
-        newDetails[exId] = sets.map(([exerciseId, arr]) => [exerciseId, arr.map(s => s.id === set.id ? { ...s, weight: editingSetWeight, reps: editingSetReps } : s)]);
+        newDetails[exId] = sets.map(([exerciseId, arr]) => [exerciseId, arr.map((s: any) => s.id === set.id ? { ...s, weight: editingSetWeight, reps: editingSetReps } : s)]);
       }
       return newDetails;
     });
     setEditingSetId(null);
     try {
-      await db.workouts.update(set.id, { weight: editingSetWeight, reps: editingSetReps });
+      await db.workoutSets.update(set.id, { weight: Number(editingSetWeight), reps: Number(editingSetReps) });
       toast.success('Set atualizado com sucesso.');
       window.dispatchEvent(new Event('refresh-analysis'));
     } catch (err: any) {
@@ -179,7 +179,7 @@ export default function HistoryPage() {
     setSessionDetails(prev => {
       const newDetails = { ...prev };
       for (const [workoutId, exArr] of Object.entries(newDetails)) {
-        newDetails[workoutId] = exArr.map(([exId, sets]) => [exId, sets.filter(s => s.id !== set.id)]);
+        newDetails[workoutId] = exArr.map(([exId, sets]: [string, any[]]) => [exId, sets.filter((s: any) => s.id !== set.id)]);
       }
       return newDetails;
     });
@@ -250,7 +250,7 @@ export default function HistoryPage() {
                               className="rounded-lg border border-primary/40 bg-background text-foreground text-center text-xs font-mono outline-none focus:ring-2 focus:ring-primary/40 transition-all mb-0.5"
                               style={{ width: 80, marginBottom: 2 }}
                               value={editingDateValue}
-                              onChange={e => handleDateChange(e, workout)}
+                              onChange={handleDateChange}
                               autoFocus
                               onClick={e => e.stopPropagation()}
                             />
@@ -260,7 +260,7 @@ export default function HistoryPage() {
                                 className="rounded-lg border border-primary/40 bg-background text-foreground text-center text-xs font-mono outline-none focus:ring-2 focus:ring-primary/40 transition-all"
                                 style={{ width: 70 }}
                                 value={editingTimeValue}
-                                onChange={e => handleTimeChange(e, workout)}
+                                onChange={handleTimeChange}
                                 onClick={e => e.stopPropagation()}
                               />
                               <button
