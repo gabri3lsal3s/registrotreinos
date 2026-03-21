@@ -90,19 +90,21 @@ export async function syncData() {
     const workoutsLocal = await db.workouts.where('userId').equals(user.id).and(w => !w.isSynced).toArray();
     const exercisesLocal = await db.exercises.toCollection().filter(e => !e.isSynced).toArray();
     const workoutSetsLocal = await db.workoutSets.toCollection().filter(s => !s.isSynced).toArray();
+    const bodyWeightsLocal = await db.bodyWeights.where('userId').equals(user.id).and(b => !b.isSynced).toArray();
 
-    if (protocolsLocal.length === 0 && workoutsLocal.length === 0 && exercisesLocal.length === 0 && workoutSetsLocal.length === 0) {
+    if (protocolsLocal.length === 0 && workoutsLocal.length === 0 && exercisesLocal.length === 0 && workoutSetsLocal.length === 0 && bodyWeightsLocal.length === 0) {
       console.log('[Sync] Nada para subir (PUSH).');
       setSyncStatus('synced');
       return { success: true };
     }
 
-    console.log(`[Sync] PUSH - User: ${user.id}, Encontrados no Local: Protocols(${protocolsLocal.length}), Exercises(${exercisesLocal.length})`);
+    console.log(`[Sync] PUSH - User: ${user.id}, Encontrados no Local: BW(${bodyWeightsLocal.length}), Protocols(${protocolsLocal.length}), Exercises(${exercisesLocal.length})`);
 
     const protocols = protocolsLocal.map(toSnake);
     const workouts = workoutsLocal.map(toSnake);
     const exercises = exercisesLocal.map(ex => ({ ...ex, userId: user.id })).map(toSnake);
     const workoutSets = workoutSetsLocal.map(set => ({ ...set, userId: user.id })).map(toSnake);
+    const bodyWeights = bodyWeightsLocal.map(toSnake);
 
     // Enviar para o Supabase e CHECAR ERROS
     if (protocols.length > 0) {
@@ -125,8 +127,13 @@ export async function syncData() {
       if (error) throw new Error(`Erro ao subir séries: ${error.message}`);
     }
 
+    if (bodyWeights.length > 0) {
+      const { error } = await supabase.from('body_weights').upsert(bodyWeights);
+      if (error) throw new Error(`Erro ao subir peso corporal: ${error.message}`);
+    }
+
     // Marcar como sincronizado localmente APENAS se o PUSH funcionou
-    await db.transaction('rw', [db.protocols, db.exercises, db.workouts, db.workoutSets], async () => {
+    await db.transaction('rw', [db.protocols, db.exercises, db.workouts, db.workoutSets, db.bodyWeights], async () => {
       if (protocolsLocal.length > 0) {
         await db.protocols.where('id').anyOf(protocolsLocal.map(p => p.id)).modify({ isSynced: true });
       }
@@ -138,6 +145,9 @@ export async function syncData() {
       }
       if (workoutSetsLocal.length > 0) {
         await db.workoutSets.where('id').anyOf(workoutSetsLocal.map(s => s.id)).modify({ isSynced: true });
+      }
+      if (bodyWeightsLocal.length > 0) {
+        await db.bodyWeights.where('id').anyOf(bodyWeightsLocal.map(b => b.id)).modify({ isSynced: true });
       }
     });
 
@@ -160,35 +170,39 @@ export async function pullData() {
   try {
     console.log(`[Sync] PULL - Iniciando para: ${user.id}`);
     
-    const [pRes, eRes, wRes, sRes] = await Promise.all([
+    const [pRes, eRes, wRes, sRes, bwRes] = await Promise.all([
       supabase.from('protocols').select('*').eq('user_id', user.id),
       supabase.from('exercises').select('*').eq('user_id', user.id),
       supabase.from('workouts').select('*').eq('user_id', user.id),
-      supabase.from('workout_sets').select('*').eq('user_id', user.id)
+      supabase.from('workout_sets').select('*').eq('user_id', user.id),
+      supabase.from('body_weights').select('*').eq('user_id', user.id)
     ]);
 
-    if (pRes.error || eRes.error || wRes.error || sRes.error) {
-      throw pRes.error || eRes.error || wRes.error || sRes.error;
+    if (pRes.error || eRes.error || wRes.error || sRes.error || bwRes.error) {
+      throw pRes.error || eRes.error || wRes.error || sRes.error || bwRes.error;
     }
 
     const remoteP = pRes.data || [];
     const remoteE = eRes.data || [];
     const remoteW = wRes.data || [];
     const remoteS = sRes.data || [];
+    const remoteBW = bwRes.data || [];
 
-    console.log(`[Sync] PULL - Recebidos do Supabase: P(${remoteP.length}), E(${remoteE.length}), W(${remoteW.length}), S(${remoteS.length})`);
+    console.log(`[Sync] PULL - Recebidos do Supabase: BW(${remoteBW.length}), P(${remoteP.length}), ...`);
 
-    await db.transaction('rw', [db.protocols, db.exercises, db.workouts, db.workoutSets], async () => {
+    await db.transaction('rw', [db.protocols, db.exercises, db.workouts, db.workoutSets, db.bodyWeights], async () => {
       // 1. Limpeza Inteligente
       // Deletamos apenas o que já FOI sincronizado anteriormente mas não está mais na nuvem
       const remotePIds = remoteP.map(p => p.id);
       const remoteWIds = remoteW.map(w => w.id);
       const remoteEIds = remoteE.map(e => e.id);
       const remoteSIds = remoteS.map(s => s.id);
+      const remoteBWIds = remoteBW.map(b => b.id);
 
       // Remover locais que eram "synced" mas sumiram da nuvem (foi deletado em outro device)
       await db.protocols.where('userId').equals(user.id).and(p => p.isSynced === true && !remotePIds.includes(p.id)).delete();
       await db.workouts.where('userId').equals(user.id).and(w => w.isSynced === true && !remoteWIds.includes(w.id)).delete();
+      await db.bodyWeights.where('userId').equals(user.id).and(b => b.isSynced === true && !remoteBWIds.includes(b.id)).delete();
       
       // Para exercises e sets, usamos filter() pois eles não têm userId indexado no Dexie
       await db.exercises.toCollection().filter(e => e.isSynced === true && !remoteEIds.includes(e.id)).delete();
@@ -225,6 +239,14 @@ export async function pullData() {
         const local = await db.workoutSets.get(camel.id);
         if (!local || local.isSynced) {
           await db.workoutSets.put({ ...camel, userId: user.id, isSynced: true });
+        }
+      }
+      
+      for (const item of remoteBW) {
+        const camel = toCamel(item);
+        const local = await db.bodyWeights.get(camel.id);
+        if (!local || local.isSynced) {
+          await db.bodyWeights.put({ ...camel, userId: user.id, isSynced: true });
         }
       }
       

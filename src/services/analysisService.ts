@@ -1,5 +1,6 @@
-import { db } from './workoutDB';
+import { db, getBodyWeightsByUser } from './workoutDB';
 import dayjs from 'dayjs';
+import { getExerciseInfo } from '../utils/exerciseDictionary';
 
 export interface AnalysisSummary {
   totalVolume: number;
@@ -9,7 +10,15 @@ export interface AnalysisSummary {
   protocols: { id: string; name: string }[];
   exerciseProgression: {
     name: string;
-    data: { date: string; weight: number; volume: number; e1rm: number }[];
+    data: { date: string; weight: number; volume: number; e1rm: number; relativeStrength?: number }[];
+  }[];
+  muscleGroupProgression: {
+    name: string;
+    data: { date: string; volume: number }[];
+  }[];
+  bodyWeightProgression: {
+    date: string;
+    weight: number;
   }[];
   muscleBreakdown: { name: string; value: number }[];
 }
@@ -97,31 +106,66 @@ export async function getAnalysisSummary(
     volume
   }));
 
-  // 8. Exercise Progression
+  // 8. Body Weight History & Helper
+  const bwHistory = await getBodyWeightsByUser(userId);
+  const bodyWeightProgressionMap: Record<string, number> = {};
+  
+  bwHistory.forEach(bw => {
+    if (bw.date >= startDate) {
+      const dateKey = dayjs(bw.date).format('DD/MM');
+      // Overwrite with latest weight of the day
+      bodyWeightProgressionMap[dateKey] = bw.weight;
+    }
+  });
+  
+  const bodyWeightProgression = Object.entries(bodyWeightProgressionMap)
+    .map(([date, weight]) => ({ date, weight }))
+    .sort((a, b) => dayjs(a.date, 'DD/MM').unix() - dayjs(b.date, 'DD/MM').unix());
+
+  const getWeightAtDate = (timestamp: number) => {
+    let closestWeight = 0;
+    for (const bw of bwHistory) {
+      if (bw.date <= timestamp) {
+        closestWeight = bw.weight;
+      } else {
+        break;
+      }
+    }
+    return closestWeight;
+  };
+
+  // 9. Exercise Progression
   // First, get all exercise names for the workout sets
   const exerciseIds = [...new Set(allSets.map(s => s.exerciseId))];
   const allExercises = await db.exercises.where('id').anyOf(exerciseIds).toArray();
   const exerciseNameMap = new Map(allExercises.map(e => [e.id, e.name]));
 
-  const exerciseGroups: Record<string, Record<string, { weight: number; volume: number; e1rm: number }>> = {};
+  const exerciseGroups: Record<string, Record<string, { weight: number; volume: number; e1rm: number; relativeStrength?: number }>> = {};
   
   allSets.forEach(set => {
     const workout = workouts.find(w => w.id === set.workoutId);
     if (workout) {
       const dateKey = dayjs(workout.date).format('DD/MM');
-      const exName = exerciseNameMap.get(set.exerciseId) || 'Exercício Removido';
+      const rawExName = exerciseNameMap.get(set.exerciseId) || 'Exercício Removido';
+      const exInfo = getExerciseInfo(rawExName);
+      const exName = exInfo.canonicalName;
       
       if (!exerciseGroups[exName]) exerciseGroups[exName] = {};
       
-      const current = exerciseGroups[exName][dateKey] || { weight: 0, volume: 0, e1rm: 0 };
+      const current = exerciseGroups[exName][dateKey] || { weight: 0, volume: 0, e1rm: 0, relativeStrength: 0 };
       
       // Calculate Estimated 1RM: weight * (1 + reps/30)
       const e1rm = set.weight * (1 + set.reps / 30);
+      
+      // Relative Strength Metric
+      const userWeightAtTime = getWeightAtDate(workout.date);
+      const relativeStrength = userWeightAtTime > 0 ? (e1rm / userWeightAtTime) : 0;
 
       exerciseGroups[exName][dateKey] = {
         weight: Math.max(current.weight, set.weight),
         volume: current.volume + (set.weight * set.reps),
-        e1rm: Math.max(current.e1rm, e1rm)
+        e1rm: Math.max(current.e1rm, e1rm),
+        relativeStrength: Math.max(current.relativeStrength || 0, relativeStrength)
       };
     }
   });
@@ -137,13 +181,31 @@ export async function getAnalysisSummary(
       })
   }));
 
-  // 9. Muscle Breakdown
+  // 9. Muscle Breakdown & Progression
   const muscleGroupsVolume: Record<string, number> = {};
+  const muscleGroupsTimeline: Record<string, Record<string, { volume: number }>> = {};
   
   allSets.forEach(set => {
-    const exercise = allExercises.find(e => e.id === set.exerciseId);
-    if (exercise?.muscleGroup) {
-      muscleGroupsVolume[exercise.muscleGroup] = (muscleGroupsVolume[exercise.muscleGroup] || 0) + (set.weight * set.reps);
+    const workout = workouts.find(w => w.id === set.workoutId);
+    if (workout) {
+      const dateKey = dayjs(workout.date).format('DD/MM');
+      const exercise = allExercises.find(e => e.id === set.exerciseId);
+      
+      let muscleGroup = 'Outros';
+      if (exercise) {
+        const exInfo = getExerciseInfo(exercise.name, exercise.muscleGroup);
+        muscleGroup = exInfo.muscleGroup;
+      }
+      
+      // Breakdown summary
+      muscleGroupsVolume[muscleGroup] = (muscleGroupsVolume[muscleGroup] || 0) + (set.weight * set.reps);
+      
+      // Progression summary
+      if (!muscleGroupsTimeline[muscleGroup]) muscleGroupsTimeline[muscleGroup] = {};
+      const current = muscleGroupsTimeline[muscleGroup][dateKey] || { volume: 0 };
+      muscleGroupsTimeline[muscleGroup][dateKey] = {
+        volume: current.volume + (set.weight * set.reps)
+      };
     }
   });
 
@@ -151,13 +213,36 @@ export async function getAnalysisSummary(
     .map(([name, value]) => ({ name: name.toUpperCase(), value }))
     .sort((a, b) => b.value - a.value);
 
+  const muscleGroupProgression = Object.entries(muscleGroupsTimeline).map(([name, dates]) => ({
+    name: name.toUpperCase(),
+    data: Object.entries(dates)
+      .map(([date, values]) => ({ date, ...values }))
+      .sort((a, b) => dayjs(a.date, 'DD/MM').unix() - dayjs(b.date, 'DD/MM').unix())
+  }));
+
+  const allUserCompletedWorkouts = await db.workouts
+    .where('userId').equals(userId)
+    .filter(w => w.status === 'completed')
+    .toArray();
+    
+  const validProtocolIds = new Set(allUserCompletedWorkouts.map(w => w.protocolId));
+  
+  const filteredAndSortedProtocols = userProtocols
+    .filter(p => validProtocolIds.has(p.id))
+    .sort((a, b) => {
+      if (a.isEnabled === b.isEnabled) return b.updatedAt - a.updatedAt;
+      return a.isEnabled ? -1 : 1;
+    });
+
   return {
     totalVolume,
     frequency,
     progressData,
     protocolBreakdown,
     exerciseProgression,
+    muscleGroupProgression,
+    bodyWeightProgression,
     muscleBreakdown,
-    protocols: userProtocols.map(p => ({ id: p.id, name: p.name }))
+    protocols: filteredAndSortedProtocols.map(p => ({ id: p.id, name: p.name }))
   };
 }

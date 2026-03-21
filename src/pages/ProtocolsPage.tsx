@@ -26,6 +26,13 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Plus, ClipboardList, Zap, Dumbbell, ListTodo, Play, Trash2, GripVertical, RefreshCw } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select"
 
 import { PageHeader } from '../components/PageHeader';
 
@@ -72,16 +79,33 @@ function DraggableExercise({
       style={style}
       className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-muted/20 border border-border/50 rounded-2xl px-3 py-3 sm:py-2.5 group hover:bg-muted/30 transition-colors"
     >
-      <div className="flex items-center gap-3 flex-1">
-        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1 shrink-0">
           <GripVertical className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary transition-colors" />
         </div>
-        <Input
-          placeholder="Exercício"
-          className="flex-1 bg-transparent border-none font-black text-[clamp(11px,1.4vw,13px)] uppercase tracking-tight focus-visible:ring-0 placeholder:opacity-50 p-0 h-auto"
-          value={ex.name}
-          onChange={(e) => onUpdate(day, idx, 'name', e.target.value)}
-        />
+        <div className="flex flex-col flex-1 min-w-0 pr-2">
+          <Input
+            placeholder="Exercício"
+            className="w-full bg-transparent border-none font-black text-[clamp(11px,1.4vw,13px)] uppercase tracking-tight focus-visible:ring-0 placeholder:opacity-50 p-0 h-auto"
+            value={ex.name}
+            onChange={(e) => onUpdate(day, idx, 'name', e.target.value)}
+          />
+          <Select value={ex.muscleGroup || ''} onValueChange={(val) => onUpdate(day, idx, 'muscleGroup', val)}>
+            <SelectTrigger className="h-5 text-[9px] w-[fit-content] min-w-[130px] border-none bg-primary/5 hover:bg-primary/10 transition-colors focus:ring-0 px-2 mt-1 rounded-md uppercase tracking-wide font-bold text-muted-foreground flex items-center gap-1 shadow-none">
+              <SelectValue placeholder="G. MUSCULAR (AUTO)" />
+            </SelectTrigger>
+            <SelectContent className="text-[10px] uppercase font-bold tracking-wider border-border/40">
+              <SelectItem value="Peito">PEITO</SelectItem>
+              <SelectItem value="Costas">COSTAS</SelectItem>
+              <SelectItem value="Pernas">PERNAS</SelectItem>
+              <SelectItem value="Ombros">OMBROS</SelectItem>
+              <SelectItem value="Bíceps">BÍCEPS</SelectItem>
+              <SelectItem value="Tríceps">TRÍCEPS</SelectItem>
+              <SelectItem value="Core">CORE</SelectItem>
+              <SelectItem value="Outros">OUTROS</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
       <div className="flex items-center justify-between gap-3 sm:justify-end">
         <div className="flex items-center gap-1 bg-background/50 rounded-xl px-2 py-1.5 border border-border/30">
@@ -293,8 +317,8 @@ export default function ProtocolsPage() {
           const ex = dayExercises[i];
           await addExercise({
             protocolId,
-            userId: user.id,
             name: `${ex.name} (${dayLabel})`,
+            muscleGroup: ex.muscleGroup || undefined,
             order: i,
             dayOfWeek: day,
             sets: Number(ex.sets) || 3,
@@ -355,6 +379,7 @@ export default function ProtocolsPage() {
         .map((ex: any) => ({
           id: ex.id,
           name: ex.name.replace(` (${label})`, ''),
+          muscleGroup: ex.muscleGroup || '',
           sets: ex.sets || 3,
           reps: ex.reps || 10,
           baseline: ex.lastWeight || '',
@@ -380,6 +405,7 @@ export default function ProtocolsPage() {
         ...orphans.map((ex: any) => ({
           id: ex.id,
           name: ex.name,
+          muscleGroup: ex.muscleGroup || '',
           sets: ex.sets || 3,
           reps: ex.reps || 10,
           baseline: ex.lastWeight || '',
@@ -503,7 +529,7 @@ export default function ProtocolsPage() {
       ...prev,
       [day]: [
         ...(prev[day] || []),
-        { name: '', sets: 3, reps: 10, baseline: '', id: crypto.randomUUID() },
+        { name: '', muscleGroup: '', sets: 3, reps: 10, baseline: '', id: crypto.randomUUID() },
       ],
     }));
   }

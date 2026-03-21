@@ -2,10 +2,10 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import Layout from '../components/Layout';
-import { getWorkoutHistory, db, getWorkoutSets, deleteWorkout, deleteWorkoutSet, updateWorkoutSet, updateExercise } from '../services/workoutDB';
+import { getWorkoutHistory, db, getWorkoutSets, deleteWorkout, deleteWorkoutSet, updateWorkoutSet, updateExercise, getBodyWeightsByUser, updateBodyWeight, deleteBodyWeight } from '../services/workoutDB';
 import { fullSync, deleteRemoteItem } from '../services/syncService';
 import { Card, CardContent } from "@/components/ui/card"
-import { ClipboardList, Clock, Zap, ChevronRight, Activity, ChevronDown, Dumbbell, Trash2 } from "lucide-react"
+import { ClipboardList, Clock, Zap, ChevronRight, Activity, ChevronDown, Dumbbell, Trash2, Scale } from "lucide-react"
 import { toast } from 'sonner';
 import { PageHeader } from '../components/PageHeader';
 
@@ -16,6 +16,8 @@ export default function HistoryPage() {
     const [editingSetId, setEditingSetId] = useState<string | null>(null);
     const [editingSetWeight, setEditingSetWeight] = useState<string>('');
     const [editingSetReps, setEditingSetReps] = useState<string>('');
+    const [editingWeightId, setEditingWeightId] = useState<string | null>(null);
+    const [editingWeightValue, setEditingWeightValue] = useState<string>('');
   const { user } = useAuth();
   const [history, setHistory] = useState<any[]>([]);
   const [protocolsMap, setProtocolsMap] = useState<Record<string, string>>({});
@@ -34,7 +36,13 @@ export default function HistoryPage() {
     if (!user) return;
     try {
       const histories = await getWorkoutHistory(user.id);
+      const weights = await getBodyWeightsByUser(user.id);
       
+      const mixed = [
+        ...histories.map(h => ({ ...h, type: 'workout' as const })),
+        ...weights.map(w => ({ ...w, type: 'weight' as const }))
+      ].sort((a, b) => b.date - a.date);
+
       const protocols = await db.protocols.where('userId').equals(user.id).toArray();
       const pMap: Record<string, string> = {};
       protocols.forEach(p => {
@@ -49,7 +57,7 @@ export default function HistoryPage() {
       
       setProtocolsMap(pMap);
       setExercisesMap(exMap);
-      setHistory(histories);
+      setHistory(mixed);
     } catch (err) {
       console.error(err);
     } finally {
@@ -149,6 +157,65 @@ export default function HistoryPage() {
     } catch (err: any) {
       toast.error('Erro ao atualizar data/horário: ' + (err.message || err));
       setEditingDateId(null);
+    }
+  }
+
+  async function handleBWDateBlurOrSave(item: any) {
+    if (!editingDateValue || !editingTimeValue) {
+      setEditingDateId(null);
+      return;
+    }
+    try {
+      const [year, month, day] = editingDateValue.split('-').map(Number);
+      const [hour, minute] = editingTimeValue.split(':').map(Number);
+      const newDate = new Date(item.date);
+      newDate.setFullYear(year, month - 1, day);
+      newDate.setHours(hour, minute, 0, 0);
+      const newTimestamp = newDate.getTime();
+      await updateBodyWeight(item.id, { date: newTimestamp });
+      await fullSync();
+      setHistory(h => h.map(w => w.id === item.id ? { ...w, date: newTimestamp } : w).sort((a, b) => b.date - a.date));
+      setEditingDateId(null);
+      toast.success('Data da pesagem atualizada!');
+      window.dispatchEvent(new Event('refresh-analysis'));
+    } catch (err: any) {
+      toast.error('Erro ao atualizar data: ' + (err.message || err));
+      setEditingDateId(null);
+    }
+  }
+
+  async function handleBWEditSave(item: any) {
+    if (!editingWeightValue) {
+      setEditingWeightId(null);
+      return;
+    }
+    const val = parseFloat(editingWeightValue);
+    if (isNaN(val) || val <= 0) return;
+    try {
+      await updateBodyWeight(item.id, { weight: val });
+      await fullSync();
+      setHistory(h => h.map(w => w.id === item.id ? { ...w, weight: val } : w));
+      setEditingWeightId(null);
+      toast.success('Peso atualizado com sucesso!');
+      window.dispatchEvent(new Event('refresh-analysis'));
+    } catch (err: any) {
+      toast.error('Erro ao editar peso: ' + (err.message || err));
+    }
+  }
+
+  async function handleBWDelete(e: React.MouseEvent, item: any) {
+    e.stopPropagation();
+    if (!window.confirm('Deseja excluir este registro de peso?')) return;
+    try {
+      await deleteRemoteItem('body_weights', item.id);
+      await deleteBodyWeight(item.id);
+      await fullSync();
+      setHistory(prev => prev.filter(w => w.id !== item.id));
+      toast.success('Registro de peso removido.');
+      window.dispatchEvent(new Event('refresh-analysis'));
+    } catch (err) {
+       console.error(err);
+       toast.error('Erro ao excluir registro de peso.');
     }
   }
 
@@ -257,9 +324,160 @@ export default function HistoryPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {history.map((workout, index) => (
+            {history.map((item, index) => {
+              if (item.type === 'weight') {
+                return (
+                  <Card 
+                    key={`bw-${item.id}`} 
+                    className={`bg-card border transition-all cursor-pointer group overflow-hidden rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.01] active:scale-[0.99] duration-300 ${
+                      expandedId === item.id ? 'border-primary ring-1 ring-primary/20 shadow-md' : 'border-border hover:border-primary/60 shadow-sm'
+                    }`}
+                    style={{ animationDelay: `${index * 50}ms` }}
+                    onClick={() => toggleExpand(item.id)}
+                  >
+                    <CardContent className="p-0">
+                      <div className="p-4 flex flex-row items-center justify-between">
+                        <div className="flex items-center gap-4 min-w-0 flex-1 mr-4">
+                          <div className="w-11 h-11 border border-border/60 flex flex-col items-center justify-center bg-muted/20 group-hover:bg-primary/5 transition-all rounded-xl flex-shrink-0">
+                            {editingDateId === item.id ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, position: 'absolute', left: 0, top: 0, zIndex: 10, minWidth: 44, minHeight: 44, background: 'rgba(255,255,255,0.95)', borderRadius: 8, boxShadow: '0 2px 8px 0 #0001' }}>
+                                <input
+                                  type="date"
+                                  className="rounded-lg border border-primary/40 bg-background text-foreground text-center text-xs font-mono outline-none focus:ring-2 focus:ring-primary/40 transition-all mb-0.5"
+                                  style={{ width: 80, marginBottom: 2 }}
+                                  value={editingDateValue}
+                                  onChange={handleDateChange}
+                                  autoFocus
+                                  onClick={e => e.stopPropagation()}
+                                />
+                                <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                  <input
+                                    type="time"
+                                    className="rounded-lg border border-primary/40 bg-background text-foreground text-center text-xs font-mono outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+                                    style={{ width: 70 }}
+                                    value={editingTimeValue}
+                                    onChange={handleTimeChange}
+                                    onClick={e => e.stopPropagation()}
+                                  />
+                                  <button
+                                    className="ml-1 text-muted-foreground/40 hover:text-primary transition-colors text-xs border border-primary/30 rounded px-1 py-0.5"
+                                    title="Concluir edição"
+                                    onClick={e => { e.stopPropagation(); handleBWDateBlurOrSave(item); }}
+                                    style={{ background: 'none', cursor: 'pointer' }}
+                                  >
+                                    ✔
+                                  </button>
+                                </div>
+                              </div>
+                            ) : null}
+                            <span
+                              className="text-sm font-black text-foreground group-hover:text-primary transition-colors leading-none tabular-nums"
+                              onClick={e => handleDateClick(e, item)}
+                              style={{ cursor: 'pointer', position: 'relative', zIndex: 1 }}
+                            >
+                              {new Date(item.date).getDate()}
+                            </span>
+                            <span
+                              className="text-[clamp(8px,1vw,10px)] text-muted-foreground uppercase font-black opacity-90 mt-0.5 leading-none"
+                              onClick={e => handleDateClick(e, item)}
+                              style={{ cursor: 'pointer', position: 'relative', zIndex: 1 }}
+                            >
+                              {new Date(item.date).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')}
+                            </span>
+                          </div>
+                          <div className="min-w-0 flex-1 flex flex-col justify-center">
+                            <div className="flex items-center gap-2 mb-1 pl-[2px]">
+                               <Scale className="w-3 h-3 text-primary" />
+                              <h4 className="font-black text-[clamp(11px,1.4vw,14px)] uppercase tracking-tight text-foreground truncate group-hover:text-primary transition-colors leading-tight">
+                                Registro de Peso
+                              </h4>
+                            </div>
+                            <div className="flex items-center gap-3 opacity-90">
+                              <span className="text-[clamp(9px,1vw,11px)] text-muted-foreground font-mono uppercase tracking-wider">
+                                {item.weight} kg
+                              </span>
+                              <div className="w-1 h-1 rounded-full bg-border" />
+                              <span className="text-[clamp(9px,1vw,11px)] text-muted-foreground font-mono uppercase tracking-wider">
+                                 {new Date(item.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={(e) => handleBWDelete(e, item)}
+                             className="p-2 text-muted-foreground/60 hover:text-destructive hover:bg-destructive/5 rounded-lg transition-colors flex-shrink-0"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                          {expandedId === item.id ? (
+                            <ChevronDown className="w-4 h-4 text-primary transition-all flex-shrink-0" />
+                          ) : (
+                             <ChevronRight className="w-4 h-4 text-muted-foreground/60 group-hover:text-primary group-hover:translate-x-1 transition-all flex-shrink-0" />
+                          )}
+                        </div>
+                      </div>
+
+                      {expandedId === item.id && (
+                        <div className="px-4 pb-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                          <div className="h-px bg-border/40 w-full" />
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-2">
+                              <Scale className="w-3 h-3 text-primary/60" />
+                              <span className="text-[10px] font-black uppercase text-foreground/80 tracking-wider">
+                                Peso Corporal Gravado
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 pl-5">
+                              <div
+                                className="bg-muted/30 px-2 py-0.5 rounded-md border border-border/20 flex items-center gap-1.5 group relative"
+                                onClick={e => e.stopPropagation()}
+                              >
+                                <span className="text-[9px] font-mono text-muted-foreground">VALOR</span>
+                                {editingWeightId === item.id ? (
+                                  <>
+                                    <input
+                                      type="number"
+                                      step="0.1"
+                                      className="w-16 rounded border border-primary/40 text-xs font-mono text-center mr-1 bg-background text-foreground"
+                                      value={editingWeightValue}
+                                      onChange={e => setEditingWeightValue(e.target.value)}
+                                      autoFocus
+                                    />
+                                    <span className="font-black text-xs">kg</span>
+                                    <button
+                                      className="ml-1 text-muted-foreground/40 hover:text-primary transition-colors text-xs border border-primary/30 rounded px-1 py-0.5"
+                                      title="Concluir edição"
+                                      onClick={e => { e.stopPropagation(); handleBWEditSave(item); }}
+                                      style={{ background: 'none', cursor: 'pointer' }}
+                                    >
+                                      ✔
+                                    </button>
+                                  </>
+                                ) : (
+                                  <span
+                                    className="text-[10px] font-black tabular-nums cursor-pointer hover:text-primary transition-colors"
+                                    title="Clique para editar"
+                                    onClick={e => { e.stopPropagation(); setEditingWeightId(item.id); setEditingWeightValue(String(item.weight)); }}
+                                  >
+                                    {item.weight}kg
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              }
+
+              // Rendering Workout
+              const workout = item;
+              return (
               <Card 
-                key={workout.id} 
+                key={`wo-${workout.id}`} 
                 className={`bg-card border transition-all cursor-pointer group overflow-hidden rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.01] active:scale-[0.99] duration-300 ${
                   expandedId === workout.id ? 'border-primary ring-1 ring-primary/20 shadow-md' : 'border-border hover:border-primary/60 shadow-sm'
                 }`}
@@ -428,7 +646,8 @@ export default function HistoryPage() {
                   )}
                 </CardContent>
               </Card>
-            ))}
+            );
+            })}
           </div>
         )}
         </section>

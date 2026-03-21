@@ -66,11 +66,20 @@ export interface WorkoutSet {
   isSynced?: boolean;
 }
 
+export interface BodyWeight {
+  id: string;
+  userId: string;
+  weight: number;
+  date: number;
+  isSynced?: boolean;
+}
+
 class WorkoutDB extends Dexie {
   protocols!: Table<Protocol, string>;
   exercises!: Table<Exercise, string>;
   workouts!: Table<Workout, string>;
   workoutSets!: Table<WorkoutSet, string>;
+  bodyWeights!: Table<BodyWeight, string>;
 
   constructor() {
     super('WorkoutDB');
@@ -85,6 +94,10 @@ class WorkoutDB extends Dexie {
       protocols: 'id, userId, name, isEnabled, [userId+isEnabled]',
       workouts: 'id, userId, protocolId, date, status, [userId+protocolId+status], [userId+status]',
       workoutSets: 'id, workoutId, exerciseId, [workoutId+exerciseId]',
+    });
+    
+    this.version(5).stores({
+      bodyWeights: 'id, userId, date, [userId+date]',
     });
   }
 }
@@ -107,6 +120,25 @@ export async function deleteProtocol(id: string) {
   await db.protocols.delete(id);
   // Optional: delete associated exercises and workouts
   await db.exercises.where('protocolId').equals(id).delete();
+}
+
+// Body Weight Services
+export async function addBodyWeight(entry: Omit<BodyWeight, 'id' | 'isSynced'>) {
+  const id = crypto.randomUUID();
+  await db.bodyWeights.put({ ...entry, id, isSynced: false });
+  return id;
+}
+
+export async function getBodyWeightsByUser(userId: string) {
+  return db.bodyWeights.where('userId').equals(userId).sortBy('date');
+}
+
+export async function updateBodyWeight(id: string, updates: Partial<BodyWeight>) {
+  await db.bodyWeights.update(id, { ...updates, isSynced: false });
+}
+
+export async function deleteBodyWeight(id: string) {
+  await db.bodyWeights.delete(id);
 }
 
 // Exercise Services

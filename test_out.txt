@@ -1,0 +1,32 @@
+TESTING NORMALIZE
+Original: "Supino Reto (Seg)"
+Normalized: "supinoreto"
+Info: { canonicalName: 'Supino Reto', muscleGroup: 'Peito' }
+-------------------
+Original: "Puxada frontal"
+Normalized: "puxadafrontal"
+Info: { canonicalName: 'Puxada Frontal', muscleGroup: 'Costas' }
+-------------------
+Original: "Face pull"
+Normalized: "facepull"
+Info: { canonicalName: 'Face Pull', muscleGroup: 'Ombros' }
+-------------------
+Original: "Puxada Frontal (Segunda)"
+Normalized: "puxadafrontalsegunda"
+Info: { canonicalName: 'Puxada Frontal (segunda)', muscleGroup: 'Outros' }
+-------------------
+Original: "Supino inclinado halteres"
+Normalized: "supinoinclinadohalteres"
+Info: {
+  canonicalName: 'Supino Inclinado com Halteres',
+  muscleGroup: 'Peito'
+}
+-------------------
+Original: "Tr├¡ceps pulley"
+Normalized: "tricepspulley"
+Info: { canonicalName: 'Tr├¡ceps Pulley', muscleGroup: 'Tr├¡ceps' }
+-------------------
+Original: "Abdominal prancha"
+Normalized: "abdominalprancha"
+Info: { canonicalName: 'Prancha', muscleGroup: 'Core' }
+-------------------

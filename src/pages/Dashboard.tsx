@@ -1,10 +1,12 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import Layout from '../components/Layout';
-import { db, getExercisesByProtocol } from '../services/workoutDB';
+import { db, getExercisesByProtocol, addBodyWeight, getBodyWeightsByUser } from '../services/workoutDB';
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from "@/components/ui/card"
-import { Dumbbell, ArrowRight, Calendar, TrendingUp, Zap, RefreshCw } from "lucide-react"
+import { Dumbbell, ArrowRight, Calendar, TrendingUp, Zap, RefreshCw, Scale, Check } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import { useAuthStore } from '../services/authStore';
 
 const WEEK_DAYS = [
@@ -26,6 +28,10 @@ export default function Dashboard() {
   const [activeWorkout, setActiveWorkout] = useState<any>(null);
   const [stats, setStats] = useState({ weeklyWorkouts: 0, monthlyWorkouts: 0 });
   const [loading, setLoading] = useState(true);
+  const [currentWeight, setCurrentWeight] = useState<string>('');
+  const [latestWeight, setLatestWeight] = useState<number | null>(null);
+  const [savingWeight, setSavingWeight] = useState(false);
+  const [weightSaved, setWeightSaved] = useState(false);
 
   useEffect(() => {
     async function loadDashboardData() {
@@ -129,6 +135,14 @@ export default function Dashboard() {
           monthlyWorkouts
         });
 
+        // 4. Get Latest Body Weight
+        const bwHistory = await getBodyWeightsByUser(user.id);
+        if (bwHistory.length > 0) {
+          const w = bwHistory[bwHistory.length - 1].weight;
+          setLatestWeight(w);
+          setCurrentWeight(w.toString());
+        }
+
       } catch (err) {
         console.error("Erro ao carregar dados do dashboard:", err);
       } finally {
@@ -137,6 +151,28 @@ export default function Dashboard() {
     }
     loadDashboardData();
   }, [user]);
+
+  const handleSaveWeight = async () => {
+    if (!user || !currentWeight) return;
+    try {
+      setSavingWeight(true);
+      const val = parseFloat(currentWeight);
+      if (isNaN(val) || val <= 0) return;
+      
+      await addBodyWeight({
+        userId: user.id,
+        weight: val,
+        date: Date.now()
+      });
+      setLatestWeight(val);
+      setWeightSaved(true);
+      setTimeout(() => setWeightSaved(false), 2000);
+    } catch (error) {
+      console.error('Erro ao salvar peso:', error);
+    } finally {
+      setSavingWeight(false);
+    }
+  };
 
   return (
     <Layout>
@@ -265,6 +301,40 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           </div>
+        </section>
+
+        <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-[300ms] fill-mode-both">
+          <header className="px-1">
+            <h3 className="text-[clamp(10px,1.2vw,12px)] font-black text-muted-foreground uppercase tracking-[0.2em] flex items-center gap-2">
+              <Scale className="w-3.5 h-3.5 text-primary" />
+                Saúde & Corpo
+            </h3>
+          </header>
+          <Card className="rounded-2xl border border-border shadow-sm bg-card hover:border-primary/20 transition-all duration-300 p-5 md:p-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+               <div>
+                 <h4 className="text-[clamp(11px,1.4vw,14px)] font-black text-foreground uppercase tracking-tight mb-1">Peso Corporal</h4>
+                 <p className="text-[clamp(10px,1.2vw,12px)] text-muted-foreground uppercase tracking-widest font-mono">Último registro: {latestWeight ? `${latestWeight} kg` : 'Nenhum'}</p>
+               </div>
+               <div className="flex items-center gap-3 w-full sm:w-auto">
+                 <Input 
+                   type="number" 
+                   step="0.1" 
+                   placeholder="Ex: 75.5"
+                   value={currentWeight}
+                   onChange={e => setCurrentWeight(e.target.value)}
+                   className="w-full sm:w-32 text-center font-mono font-bold text-lg h-12 rounded-xl bg-background"
+                 />
+                 <Button 
+                   onClick={handleSaveWeight} 
+                   disabled={savingWeight || !currentWeight || parseFloat(currentWeight) === latestWeight}
+                   className="h-12 rounded-xl px-6 font-black uppercase tracking-wider text-[10px] w-full sm:w-auto transition-all"
+                 >
+                   {savingWeight ? <RefreshCw className="w-4 h-4 animate-spin" /> : weightSaved ? <Check className="w-4 h-4" /> : 'Salvar'}
+                 </Button>
+               </div>
+            </div>
+          </Card>
         </section>
       </div>
     </Layout>
