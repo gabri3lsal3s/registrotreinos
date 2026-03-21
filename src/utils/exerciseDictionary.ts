@@ -8,32 +8,43 @@ export type MuscleGroup =
   | 'Core'
   | 'Outros';
 
+export type ExerciseCategory = 'weight' | 'bodyweight' | 'time';
+
 interface ExerciseDef {
   canonicalName: string;
   muscleGroup: MuscleGroup;
   aliases: string[]; // Variations of the name to match against
+  category?: ExerciseCategory;
+  multiplier?: number;
 }
 
 // Helper to remove accents and special chars, and lowercase
 export function normalizeExerciseName(name: string): string {
   if (!name) return '';
   
-  // Remove any text inside parentheses. Users often add notes like "(máquina)", "(halteres)", "(Segunda)" which break generic matching.
-  const noParenthesis = name.replace(/\s*\([^)]*\)\s*/g, ' ');
+  // Remove any text inside parentheses carefully
+  const noParenthesis = name.replace(/\([^)]*\)/g, ' ');
 
   return noParenthesis
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '') // remove acentos
     .toLowerCase()
-    .replace(/[^a-z0-9]/g, '') // remove espaços, parênteses, barras etc pra comparar melhor
+    .replace(/[^a-z0-9\s]/g, ' ') // mantém espaços, substitui outros por espaço
+    .replace(/\s+/g, ' ') // remove espaços duplos
     .trim();
 }
 
 // A dictionary mapping normalized aliases to their central definition
 const exerciseDict: Record<string, ExerciseDef> = {};
 
-function addExercise(canonicalName: string, muscleGroup: MuscleGroup, aliases: string[]) {
-  const def: ExerciseDef = { canonicalName, muscleGroup, aliases };
+function addExercise(
+  canonicalName: string, 
+  muscleGroup: MuscleGroup, 
+  aliases: string[], 
+  category: ExerciseCategory = 'weight', 
+  multiplier?: number
+) {
+  const def: ExerciseDef = { canonicalName, muscleGroup, aliases, category, multiplier };
   
   // Add canonical name as an alias too
   const allAliases = [...aliases, canonicalName];
@@ -68,7 +79,7 @@ addExercise('Remada Baixa', 'Costas', ['remada sentada', 'remada polia baixa', '
 addExercise('Remada Unilateral', 'Costas', ['serrote', 'remada serrote', 'remada unilateral halteres', 'remada unilateral maquina']);
 addExercise('Remada Articulada', 'Costas', ['remada cavalinho', 'remada articulada maquina']);
 addExercise('Pull Down', 'Costas', ['pulldown', 'pulldown corda', 'puxada alta corda braços estendidos']);
-addExercise('Barra Fixa', 'Costas', ['pull up', 'chin up', 'barra fixa supinada', 'barra fixa pronada']);
+addExercise('Barra Fixa', 'Costas', ['pull up', 'chin up', 'barra fixa supinada', 'barra fixa pronada'], 'bodyweight', 0.95);
 
 // PERNAS
 addExercise('Agachamento Livre', 'Pernas', ['agachamento', 'agachamento barra', 'agachamento costas', 'squat']);
@@ -113,28 +124,106 @@ addExercise('Tríceps Corda', 'Tríceps', ['triceps polia corda', 'triceps pulle
 addExercise('Tríceps Testa', 'Tríceps', ['rosca testa', 'triceps testa barra w', 'triceps testa polia']);
 addExercise('Tríceps Frances', 'Tríceps', ['triceps frances halteres', 'triceps frances corda']);
 addExercise('Tríceps Coice', 'Tríceps', ['triceps coice polia', 'triceps coice halter']);
-addExercise('Mergulho nas Paralelas', 'Tríceps', ['paralelas', 'triceps banco', 'mergulho']);
+addExercise('Mergulho nas Paralelas', 'Tríceps', ['paralelas', 'triceps banco', 'mergulho', 'dips'], 'bodyweight', 0.95);
+
+// PEITO EXTRA
+addExercise('Flexão de Braço', 'Peito', ['flexao', 'flexao de braco', 'push up', 'pushups'], 'bodyweight', 0.65);
 
 // CORE
-addExercise('Abdominal Reto', 'Core', ['abdominal', 'crunch', 'abdominal supra']);
-addExercise('Abdominal Infra', 'Core', ['elevacao de pernas', 'elevacao de pernas pendurado']);
-addExercise('Prancha', 'Core', ['plank', 'prancha isometrica', 'abdominal prancha']);
+addExercise('Abdominal Reto', 'Core', ['abdominal', 'crunch', 'abdominal supra'], 'bodyweight', 0.30);
+addExercise('Abdominal Infra', 'Core', ['elevacao de pernas', 'elevacao de pernas pendurado', 'infra'], 'bodyweight', 0.30);
+addExercise('Prancha', 'Core', ['plank', 'prancha isometrica', 'abdominal prancha', 'ponte'], 'time', 0.65);
 
-export function getExerciseInfo(rawName: string, fallbackMuscleGroup?: string): { canonicalName: string, muscleGroup: string } {
+// KEYWORD MAPPING FOR HEURISTIC DETECTION
+const muscleKeywords: Record<MuscleGroup, string[]> = {
+  'Peito': ['supino', 'voador', 'peck', 'deck', 'crucifixo', 'cross', 'crossover', 'flexao', 'pushup', 'peitoral', 'chest'],
+  'Costas': ['remada', 'puxada', 'pulley', 'puxador', 'barra fixa', 'pullup', 'chinup', 'serrote', 'cavalinho', 'pulldown', 'lat', 'back', 'costas', 'trap'],
+  'Pernas': ['agachamento', 'leg', 'press', 'extensora', 'flexora', 'stiff', 'terra', 'deadlift', 'panturrilha', 'gemeos', 'afundo', 'passada', 'bulgaro', 'abdutora', 'adutora', 'squat', 'lunge', 'perna', 'gluteo'],
+  'Ombros': ['desenvolvimento', 'elevacao', 'lateral', 'frontal', 'militar', 'overhead', 'shoulder', 'ombro', 'deltoide', 'facepull', 'trapezio'],
+  'Bíceps': ['rosca', 'biceps', 'martelo', 'scott', 'concentrada', 'curl'],
+  'Tríceps': ['triceps', 'testa', 'frances', 'coice', 'mergulho', 'corda', 'pulley', 'skullcrusher', 'dips'],
+  'Core': ['abdominal', 'prancha', 'plank', 'crunch', 'supra', 'infra', 'lombar', 'core'],
+  'Outros': []
+};
+
+export function getExerciseInfo(rawName: string, fallbackMuscleGroup?: string): { canonicalName: string, muscleGroup: string, category: ExerciseCategory, multiplier?: number } {
   const normName = normalizeExerciseName(rawName);
-  const def = exerciseDict[normName];
   
-  console.log(`[AutoMode] Analisando: "${rawName}" -> Norm: "${normName}" -> Encontrou:`, !!def);
-  
-  if (def) {
-    return {
-      canonicalName: def.canonicalName,
-      muscleGroup: def.muscleGroup
-    };
+  // 1. Exact Dictionary Match (Alias or Canonical)
+  // We need to re-scan the dict because normName now has spaces
+  for (const key in exerciseDict) {
+    if (normalizeExerciseName(key) === normName) {
+      const def = exerciseDict[key];
+      return {
+        canonicalName: def.canonicalName,
+        muscleGroup: def.muscleGroup,
+        category: def.category || 'weight',
+        multiplier: def.multiplier
+      };
+    }
   }
 
-  // Fallback if not found: title case the raw name (or just keep it) 
-  // and use the provided muscle group or "Outros"
+  // 2. Heuristic Search by Keywords
+  const words = normName.split(' ');
+  const scores: Record<string, number> = {
+    'Peito': 0, 'Costas': 0, 'Pernas': 0, 'Ombros': 0, 'Bíceps': 0, 'Tríceps': 0, 'Core': 0
+  };
+
+  words.forEach(word => {
+    // Skip small or generic words
+    if (word.length < 3) return;
+
+    for (const [group, keywords] of Object.entries(muscleKeywords)) {
+      if (group === 'Outros') continue;
+      
+      keywords.forEach(kw => {
+        const normKw = normalizeExerciseName(kw);
+        // Match exact word or start of word for better accuracy
+        if (word === normKw || (word.includes(normKw) && word.length - normKw.length < 3)) {
+          scores[group] += 1;
+          
+          // Boost for certain primary keywords
+          if (['supino', 'agachamento', 'remada', 'rosca', 'triceps'].includes(normKw)) {
+            scores[group] += 2;
+          }
+        }
+      });
+    }
+  });
+
+  // Special rules: "Supinada" usually means Costas, not Biceps
+  if (normName.includes('puxada') || normName.includes('pulley')) {
+    scores['Costas'] += 2;
+  }
+
+  // Find the winning group
+  let winner: MuscleGroup = (fallbackMuscleGroup as MuscleGroup) || 'Outros';
+  let maxScore = 0;
+
+  for (const [group, score] of Object.entries(scores)) {
+    if (score > maxScore) {
+      maxScore = score;
+      winner = group as MuscleGroup;
+    }
+  }
+
+  // Final category/multiplier heuristic
+  let finalCat: ExerciseCategory = 'weight';
+  let finalMult = 1;
+
+  if (normName.includes('prancha') || normName.includes('plank')) {
+    finalCat = 'time';
+    finalMult = 0.65;
+  } else if (normName.includes('flexao') || normName.includes('pushup') || normName.includes('paralela') || normName.includes('barra fixa') || normName.includes('pullup') || normName.includes('chinup') || normName.includes('abdominal')) {
+    finalCat = 'bodyweight';
+    // Se não for possível ser específico, usamos o mais comum para o grupo
+    if (winner === 'Peito') finalMult = 0.65;
+    else if (winner === 'Costas') finalMult = 0.95;
+    else if (winner === 'Core') finalMult = 0.30;
+    else if (winner === 'Tríceps') finalMult = 0.95;
+  }
+
+  // Fallback title case for canonical name
   const formattedName = rawName
     .trim()
     .split(' ')
@@ -144,6 +233,8 @@ export function getExerciseInfo(rawName: string, fallbackMuscleGroup?: string): 
 
   return {
     canonicalName: formattedName || 'Exercício Desconhecido',
-    muscleGroup: fallbackMuscleGroup || 'Outros'
+    muscleGroup: winner,
+    category: finalCat,
+    multiplier: finalMult
   };
 }

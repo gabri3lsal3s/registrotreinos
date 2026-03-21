@@ -29,6 +29,7 @@ const WEEK_DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 interface WorkoutExercise {
   id: string;
   name: string;
+  category?: 'weight' | 'bodyweight' | 'time';
   order: number;
   lastWeight?: number;
   lastReps?: number;
@@ -171,6 +172,7 @@ export default function WorkoutPage() {
 
             return {
               ...ex,
+              category: ex.category || 'weight',
               sets: setNum,
               completedSets,
               setsData
@@ -468,34 +470,39 @@ export default function WorkoutPage() {
 
               {expandedExercise === ex.id && (
                 <CardContent className="p-4 pt-0 space-y-3">
-                  <div className="grid grid-cols-[3.5rem_1fr_1fr_3.5rem] gap-2 px-2 text-[9px] font-black text-muted-foreground uppercase tracking-wider opacity-70">
+                  <div className={`grid gap-2 px-2 text-[9px] font-black text-muted-foreground uppercase tracking-wider opacity-70 grid-cols-[3.5rem_1fr_1fr_3.5rem]`}>
                     <span className="pl-1">Série</span>
-                    <span className="text-center">Carga (kg)</span>
-                    <span className="text-center">Reps</span>
+                    <span className="text-center">
+                      {ex.category === 'time' ? 'Carga (kg)' : (ex.category === 'bodyweight' ? '+ Carga (kg)' : 'Carga (kg)')}
+                    </span>
+                    <span className="text-center">{ex.category === 'time' ? 'Tempo (s)' : 'Reps'}</span>
                     <span className="text-right pr-2">Ok</span>
                   </div>
                   {ex.completedSets.map((isDone, setIdx) => (
                     <div 
                       key={setIdx} 
-                      className={`grid grid-cols-[3.5rem_1fr_1fr_3.5rem] items-center gap-2 p-1.5 rounded-xl transition-colors ${
-                        isDone ? 'bg-primary/10' : 'bg-muted/50'
-                      }`}
+                      className={`grid items-center gap-2 p-1.5 rounded-xl transition-colors grid-cols-[3.5rem_1fr_1fr_3.5rem] ${isDone ? 'bg-primary/10' : 'bg-muted/50'}`}
                     >
                        <span className="text-xs font-black text-muted-foreground/60 tabular-nums pl-2">#{setIdx + 1}</span>
+                      
                       <input 
                         type="number"
                         inputMode="decimal"
                         className="bg-background border border-border/50 rounded-xl h-11 text-center font-black text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 w-full transition-all"
                         value={ex.setsData[setIdx].weight}
                         onChange={(e) => updateSetData(exIdx, setIdx, 'weight', e.target.value)}
+                        placeholder={(ex.category === 'bodyweight' || ex.category === 'time') ? "+ kg" : "kg"}
                       />
+                      
                       <input 
                         type="number"
                         inputMode="numeric"
                         className="bg-background border border-border/50 rounded-xl h-11 text-center font-black text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 w-full transition-all"
-                        value={ex.setsData[setIdx].reps}
+                        value={ex.setsData[setIdx].reps} 
                         onChange={(e) => updateSetData(exIdx, setIdx, 'reps', e.target.value)}
+                        placeholder={ex.category === 'time' ? "Seg" : "Reps"}
                       />
+                      
                       <div className="flex justify-end">
                         <button 
                           onClick={() => handleSetToggle(exIdx, setIdx)}

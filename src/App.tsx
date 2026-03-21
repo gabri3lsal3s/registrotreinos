@@ -13,14 +13,24 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { useEffect } from 'react';
 import { useAuthStore } from './services/authStore';
 import { fullSync } from './services/syncService';
+import { runHistoryRecovery } from './services/recoveryService';
 
 function App() {
   const { isAuthenticated } = useAuthStore();
 
   useEffect(() => {
     if (isAuthenticated) {
-      // Sincronismo inicial
-      fullSync().catch(console.error);
+      // Sincronismo e recuperação inicial (Séquencial para evitar race conditions)
+      const initApp = async () => {
+        try {
+          await runHistoryRecovery();
+          await fullSync();
+        } catch (err) {
+          console.error('[Init] Erro ao inicializar app:', err);
+        }
+      };
+      
+      initApp();
 
       // Sincronismo ao retornar para o app (Visibility API)
       const handleVisibilityChange = () => {

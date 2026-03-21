@@ -42,10 +42,10 @@ export default function Dashboard() {
         const today = now.getDay(); // 0-6
         
         // 1. Get Today's Workout
-        const allProtocols = await db.protocols
+        const allProtocols = (await db.protocols
           .where('userId')
           .equals(user.id)
-          .toArray();
+          .toArray()).filter(p => !p.isArchived);
 
         console.log(`[Dashboard] Total protocolos local: ${allProtocols.length}`);
 
@@ -317,14 +317,21 @@ export default function Dashboard() {
                  <p className="text-[clamp(10px,1.2vw,12px)] text-muted-foreground uppercase tracking-widest font-mono">Último registro: {latestWeight ? `${latestWeight} kg` : 'Nenhum'}</p>
                </div>
                <div className="flex items-center gap-3 w-full sm:w-auto">
-                 <Input 
-                   type="number" 
-                   step="0.1" 
-                   placeholder="Ex: 75.5"
-                   value={currentWeight}
-                   onChange={e => setCurrentWeight(e.target.value)}
-                   className="w-full sm:w-32 text-center font-mono font-bold text-lg h-12 rounded-xl bg-background"
-                 />
+                 <div className="relative w-full sm:w-32">
+                   <Input 
+                     type="number" 
+                     step="0.1" 
+                     placeholder="Ex: 75.5"
+                     value={currentWeight}
+                     onChange={e => setCurrentWeight(e.target.value)}
+                     className="w-full text-center pl-6 pr-6 font-mono font-bold text-lg h-12 rounded-xl bg-background"
+                   />
+                   {currentWeight && (
+                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground font-black text-[clamp(10px,1.2vw,12px)] pointer-events-none">
+                       kg
+                     </span>
+                   )}
+                 </div>
                  <Button 
                    onClick={handleSaveWeight} 
                    disabled={savingWeight || !currentWeight || parseFloat(currentWeight) === latestWeight}

@@ -1,0 +1,5 @@
+
+> registro_treinos@0.0.0 build
+> tsc -b && vite build
+
+src/pages/ProtocolsPage.tsx(8,38): error TS6133: 'deleteExercisesByProtocol' is declared but its value is never read.

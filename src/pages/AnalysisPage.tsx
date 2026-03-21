@@ -122,6 +122,20 @@ export default function AnalysisPage() {
           </div>
         ) : (
           <>
+            {/* Aviso de Falta de Peso */}
+            {data && data.bodyWeightProgression.length === 0 && (
+              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-2xl p-4 mb-6 flex gap-3 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150 fill-mode-both">
+                <div className="mt-0.5">
+                  <Activity className="w-5 h-5 text-amber-600 dark:text-amber-500" />
+                </div>
+                <div>
+                  <h4 className="text-[11px] font-black uppercase tracking-wider text-amber-900 dark:text-amber-400">Peso Corporal Ausente</h4>
+                  <p className="text-[10px] text-amber-700 dark:text-amber-500/90 mt-1 leading-relaxed max-w-[90%]">
+                    Você ainda não registrou seu peso corporal. Ele é essencial para calcular o volume de exercícios combinados (peso do corpo) e por tempo (pranchas). O volume destes exercícios constará como <span className="font-bold">0kg</span> na sua progressão até que você o registre.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Muscle Breakdown */}
             {data && data.muscleBreakdown.length > 0 && (
@@ -136,7 +150,7 @@ export default function AnalysisPage() {
                   <CardContent className="p-6">
                     <div className="flex flex-col md:flex-row items-center gap-8">
                       <div className="w-full md:w-1/2 h-[200px]">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                           <PieChart>
                             <Pie
                               data={data.muscleBreakdown}
@@ -163,7 +177,12 @@ export default function AnalysisPage() {
                               <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
                               <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground group-hover:text-foreground transition-colors">{item.name}</span>
                             </div>
-                            <span className="text-[10px] font-mono font-bold">{formatVolume(item.value)} kg</span>
+                             <span className="text-[10px] font-mono font-bold flex flex-col items-end">
+                               <span>{formatVolume(item.value)} kg</span>
+                               {item.avgWeight > 0 && (
+                                 <span className="text-[8px] opacity-60 font-black">MED: {item.avgWeight.toFixed(1)}kg</span>
+                               )}
+                             </span>
                           </div>
                         ))}
                       </div>
@@ -201,7 +220,7 @@ export default function AnalysisPage() {
                           </div>
                         </header>
                         <ChartContainer config={chartConfig} className="h-[140px] w-full">
-                          <ResponsiveContainer width="100%" height="100%">
+                          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                             <LineChart data={ex.data}>
                               <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.1} />
                               <XAxis 
@@ -265,7 +284,7 @@ export default function AnalysisPage() {
                           <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-800/30 px-2.5 py-1 rounded-lg">MAX: {Math.max(...mg.data.map(d => d.volume))}kg</span>
                         </header>
                         <ChartContainer config={chartConfig} className="h-[140px] w-full">
-                          <ResponsiveContainer width="100%" height="100%">
+                          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                             <LineChart data={mg.data}>
                               <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.1} />
                               <XAxis 
@@ -308,7 +327,7 @@ export default function AnalysisPage() {
                 <Card className="bg-card border border-border/50 rounded-2xl shadow-sm overflow-hidden">
                   <CardContent className="p-6">
                     <ChartContainer config={chartConfig} className="h-[220px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                           <BarChart data={data?.progressData}>
                             <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.1} />
                             <XAxis 

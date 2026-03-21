@@ -20,7 +20,7 @@ export interface AnalysisSummary {
     date: string;
     weight: number;
   }[];
-  muscleBreakdown: { name: string; value: number }[];
+  muscleBreakdown: { name: string; value: number; avgWeight: number }[];
 }
 
 /**
@@ -60,68 +60,12 @@ export async function getAnalysisSummary(
     .anyOf(workoutIds)
     .toArray();
 
-  // 4. Calculate Total Volume
-  const totalVolume = allSets.reduce((sum, set) => sum + (set.weight * set.reps), 0);
+  // 4. Pre-fetch dependencies for calculations
+  const exerciseIds = [...new Set(allSets.map(s => s.exerciseId))];
+  const allExercises = await db.exercises.where('id').anyOf(exerciseIds).toArray();
+  const exerciseMap = new Map(allExercises.map(e => [e.id, e]));
 
-  // 5. Calculate Frequency
-  const frequency = workouts.length;
-
-  // 6. Build Progress Data (Volume per day)
-  const volumeByDay: Record<string, number> = {};
-  for (let i = 9; i >= 0; i--) {
-    const d = dayjs().subtract(i, 'day').format('DD/MM');
-    volumeByDay[d] = 0;
-  }
-
-  allSets.forEach(set => {
-    const workout = workouts.find(w => w.id === set.workoutId);
-    if (workout) {
-      const dateKey = dayjs(workout.date).format('DD/MM');
-      if (volumeByDay[dateKey] !== undefined) {
-        volumeByDay[dateKey] += (set.weight * set.reps);
-      }
-    }
-  });
-
-  // 7. Protocol Breakdown (only for "All Protocols" view)
-  const breakdown: Record<string, number> = {};
-  
-  if (!protocolId) {
-    allSets.forEach(set => {
-      const workout = workouts.find(w => w.id === set.workoutId);
-      if (workout) {
-        const pName = userProtocols.find(p => p.id === workout.protocolId)?.name || 'Outros';
-        breakdown[pName] = (breakdown[pName] || 0) + (set.weight * set.reps);
-      }
-    });
-  }
-
-  const progressData = Object.entries(volumeByDay).map(([date, volume]) => ({
-    date,
-    volume
-  }));
-
-  const protocolBreakdown = Object.entries(breakdown).map(([name, volume]) => ({
-    name,
-    volume
-  }));
-
-  // 8. Body Weight History & Helper
   const bwHistory = await getBodyWeightsByUser(userId);
-  const bodyWeightProgressionMap: Record<string, number> = {};
-  
-  bwHistory.forEach(bw => {
-    if (bw.date >= startDate) {
-      const dateKey = dayjs(bw.date).format('DD/MM');
-      // Overwrite with latest weight of the day
-      bodyWeightProgressionMap[dateKey] = bw.weight;
-    }
-  });
-  
-  const bodyWeightProgression = Object.entries(bodyWeightProgressionMap)
-    .map(([date, weight]) => ({ date, weight }))
-    .sort((a, b) => dayjs(a.date, 'DD/MM').unix() - dayjs(b.date, 'DD/MM').unix());
-
   const getWeightAtDate = (timestamp: number) => {
     let closestWeight = 0;
     for (const bw of bwHistory) {
@@ -134,84 +78,135 @@ export async function getAnalysisSummary(
     return closestWeight;
   };
 
-  // 9. Exercise Progression
-  // First, get all exercise names for the workout sets
-  const exerciseIds = [...new Set(allSets.map(s => s.exerciseId))];
-  const allExercises = await db.exercises.where('id').anyOf(exerciseIds).toArray();
-  const exerciseNameMap = new Map(allExercises.map(e => [e.id, e.name]));
-
-  const exerciseGroups: Record<string, Record<string, { weight: number; volume: number; e1rm: number; relativeStrength?: number }>> = {};
-  
-  allSets.forEach(set => {
-    const workout = workouts.find(w => w.id === set.workoutId);
-    if (workout) {
-      const dateKey = dayjs(workout.date).format('DD/MM');
-      const rawExName = exerciseNameMap.get(set.exerciseId) || 'Exercício Removido';
-      const exInfo = getExerciseInfo(rawExName);
-      const exName = exInfo.canonicalName;
-      
-      if (!exerciseGroups[exName]) exerciseGroups[exName] = {};
-      
-      const current = exerciseGroups[exName][dateKey] || { weight: 0, volume: 0, e1rm: 0, relativeStrength: 0 };
-      
-      // Calculate Estimated 1RM: weight * (1 + reps/30)
-      const e1rm = set.weight * (1 + set.reps / 30);
-      
-      // Relative Strength Metric
-      const userWeightAtTime = getWeightAtDate(workout.date);
-      const relativeStrength = userWeightAtTime > 0 ? (e1rm / userWeightAtTime) : 0;
-
-      exerciseGroups[exName][dateKey] = {
-        weight: Math.max(current.weight, set.weight),
-        volume: current.volume + (set.weight * set.reps),
-        e1rm: Math.max(current.e1rm, e1rm),
-        relativeStrength: Math.max(current.relativeStrength || 0, relativeStrength)
-      };
+  // Build bodyWeightProgressionMap early
+  const bodyWeightProgressionMap: Record<string, number> = {};
+  bwHistory.forEach(bw => {
+    if (bw.date >= startDate) {
+      const dateKey = dayjs(bw.date).format('DD/MM');
+      bodyWeightProgressionMap[dateKey] = bw.weight;
     }
+  });
+
+  const bodyWeightProgression = Object.entries(bodyWeightProgressionMap)
+    .map(([date, weight]) => ({ date, weight }))
+    .sort((a, b) => dayjs(a.date, 'DD/MM').unix() - dayjs(b.date, 'DD/MM').unix());
+
+  // 5. Enhance Sets with calculated Volume and eqWeight
+  const enhancedSets = allSets.map(set => {
+    const workout = workouts.find(w => w.id === set.workoutId);
+    const date = workout ? workout.date : 0;
+    const ex = exerciseMap.get(set.exerciseId);
+    const info = getExerciseInfo(ex?.name || '');
+    
+    const cat = ex?.category || info.category || 'weight';
+    const k = ex?.multiplier || info.multiplier || 1;
+    const userWeight = getWeightAtDate(date);
+    
+    let eqWeight = 0;
+    let volume = 0;
+
+    if (cat === 'time') {
+      eqWeight = (userWeight * k) + set.weight;
+      // Normalização: Cada 10 segundos equivalem a 1 repetição teórica para evitar inflação de volume
+      const theoreticalReps = set.reps / 10; 
+      volume = eqWeight * theoreticalReps;
+    } else if (cat === 'bodyweight') {
+      eqWeight = (userWeight * k) + set.weight;
+      volume = eqWeight * set.reps;
+    } else {
+      eqWeight = set.weight;
+      volume = eqWeight * set.reps;
+    }
+
+    return {
+      ...set,
+      dateKey: workout ? dayjs(workout.date).format('DD/MM') : '',
+      timestamp: date,
+      protocolId: workout ? workout.protocolId : '',
+      eqWeight,
+      volume,
+      cat,
+      exName: info.canonicalName,
+      muscleGroup: info.muscleGroup,
+      userWeightAtTime: userWeight
+    };
+  }).filter(s => s.dateKey);
+
+  // 6. Calculate Aggregates
+  const totalVolume = enhancedSets.reduce((sum, set) => sum + set.volume, 0);
+  const frequency = workouts.length;
+
+  const volumeByDay: Record<string, number> = {};
+  for (let i = 9; i >= 0; i--) {
+    const d = dayjs().subtract(i, 'day').format('DD/MM');
+    volumeByDay[d] = 0;
+  }
+  enhancedSets.forEach(set => {
+    if (volumeByDay[set.dateKey] !== undefined) {
+      volumeByDay[set.dateKey] += set.volume;
+    }
+  });
+
+  const breakdown: Record<string, number> = {};
+  if (!protocolId) {
+    enhancedSets.forEach(set => {
+      const pName = userProtocols.find(p => p.id === set.protocolId)?.name || 'Outros';
+      breakdown[pName] = (breakdown[pName] || 0) + set.volume;
+    });
+  }
+
+  const progressData = Object.entries(volumeByDay).map(([date, volume]) => ({ date, volume }));
+  const protocolBreakdown = Object.entries(breakdown).map(([name, volume]) => ({ name, volume }));
+
+  // 7. Exercise Progression
+  const exerciseGroups: Record<string, Record<string, { weight: number; volume: number; e1rm: number; relativeStrength?: number }>> = {};
+  enhancedSets.forEach(set => {
+    const exName = set.exName;
+    if (!exerciseGroups[exName]) exerciseGroups[exName] = {};
+    const current = exerciseGroups[exName][set.dateKey] || { weight: 0, volume: 0, e1rm: 0, relativeStrength: 0 };
+    
+    // e1rm calculation
+    const e1rm = set.cat === 'time' ? 0 : set.eqWeight * (1 + set.reps / 30);
+    const relativeStrength = set.userWeightAtTime > 0 && e1rm > 0 ? (e1rm / set.userWeightAtTime) : 0;
+
+    exerciseGroups[exName][set.dateKey] = {
+      weight: Math.max(current.weight, set.eqWeight), // track max equivalent weight
+      volume: current.volume + set.volume,
+      e1rm: Math.max(current.e1rm, e1rm),
+      relativeStrength: Math.max(current.relativeStrength || 0, relativeStrength)
+    };
   });
 
   const exerciseProgression = Object.entries(exerciseGroups).map(([name, dates]) => ({
     name,
     data: Object.entries(dates)
       .map(([date, values]) => ({ date, ...values }))
-      .sort((a, b) => {
-        // Simple string comparison for DD/MM is not enough for year turnover, 
-        // but since we filter by last 30 days, we can find the workout and compare dates properly
-        return dayjs(a.date, 'DD/MM').unix() - dayjs(b.date, 'DD/MM').unix();
-      })
+      .sort((a, b) => dayjs(a.date, 'DD/MM').unix() - dayjs(b.date, 'DD/MM').unix())
   }));
 
-  // 9. Muscle Breakdown & Progression
+  // 8. Muscle Breakdown & Progression
   const muscleGroupsVolume: Record<string, number> = {};
+  const muscleGroupsWeight: Record<string, { total: number, count: number }> = {};
   const muscleGroupsTimeline: Record<string, Record<string, { volume: number }>> = {};
   
-  allSets.forEach(set => {
-    const workout = workouts.find(w => w.id === set.workoutId);
-    if (workout) {
-      const dateKey = dayjs(workout.date).format('DD/MM');
-      const exercise = allExercises.find(e => e.id === set.exerciseId);
-      
-      let muscleGroup = 'Outros';
-      if (exercise) {
-        const exInfo = getExerciseInfo(exercise.name, exercise.muscleGroup);
-        muscleGroup = exInfo.muscleGroup;
-      }
-      
-      // Breakdown summary
-      muscleGroupsVolume[muscleGroup] = (muscleGroupsVolume[muscleGroup] || 0) + (set.weight * set.reps);
-      
-      // Progression summary
-      if (!muscleGroupsTimeline[muscleGroup]) muscleGroupsTimeline[muscleGroup] = {};
-      const current = muscleGroupsTimeline[muscleGroup][dateKey] || { volume: 0 };
-      muscleGroupsTimeline[muscleGroup][dateKey] = {
-        volume: current.volume + (set.weight * set.reps)
-      };
-    }
+  enhancedSets.forEach(set => {
+    const bg = set.muscleGroup;
+    muscleGroupsVolume[bg] = (muscleGroupsVolume[bg] || 0) + set.volume;
+
+    if (!muscleGroupsWeight[bg]) muscleGroupsWeight[bg] = { total: 0, count: 0 };
+    muscleGroupsWeight[bg].total += set.eqWeight;
+    muscleGroupsWeight[bg].count += 1;
+    
+    if (!muscleGroupsTimeline[bg]) muscleGroupsTimeline[bg] = {};
+    const current = muscleGroupsTimeline[bg][set.dateKey] || { volume: 0 };
+    muscleGroupsTimeline[bg][set.dateKey] = { volume: current.volume + set.volume };
   });
 
-  const muscleBreakdown = Object.entries(muscleGroupsVolume)
-    .map(([name, value]) => ({ name: name.toUpperCase(), value }))
-    .sort((a, b) => b.value - a.value);
+  const muscleBreakdown = Object.entries(muscleGroupsVolume).map(([name, volume]) => {
+    const weights = muscleGroupsWeight[name];
+    const avgWeight = weights && weights.count > 0 ? (weights.total / weights.count) : 0;
+    return { name: name.toUpperCase(), value: volume, avgWeight };
+  }).sort((a, b) => b.value - a.value);
 
   const muscleGroupProgression = Object.entries(muscleGroupsTimeline).map(([name, dates]) => ({
     name: name.toUpperCase(),

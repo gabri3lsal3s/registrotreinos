@@ -4,7 +4,8 @@ import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
 import Layout from '../components/Layout';
 import { db, getProtocolsByUser, getExercisesByProtocol, createProtocol, deleteProtocol, addExercise, updateExercise, type Protocol } from '../services/workoutDB';
-import { fullSync, deleteRemoteItem, deleteExercisesByProtocol, syncData } from '../services/syncService';
+import { getExerciseInfo } from '../utils/exerciseDictionary';
+import { fullSync, deleteRemoteItem, syncData } from '../services/syncService';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   DndContext,
@@ -90,58 +91,84 @@ function DraggableExercise({
             value={ex.name}
             onChange={(e) => onUpdate(day, idx, 'name', e.target.value)}
           />
-          <Select value={ex.muscleGroup || ''} onValueChange={(val) => onUpdate(day, idx, 'muscleGroup', val)}>
-            <SelectTrigger className="h-5 text-[9px] w-[fit-content] min-w-[130px] border-none bg-primary/5 hover:bg-primary/10 transition-colors focus:ring-0 px-2 mt-1 rounded-md uppercase tracking-wide font-bold text-muted-foreground flex items-center gap-1 shadow-none">
-              <SelectValue placeholder="G. MUSCULAR (AUTO)" />
-            </SelectTrigger>
-            <SelectContent className="text-[10px] uppercase font-bold tracking-wider border-border/40">
-              <SelectItem value="Peito">PEITO</SelectItem>
-              <SelectItem value="Costas">COSTAS</SelectItem>
-              <SelectItem value="Pernas">PERNAS</SelectItem>
-              <SelectItem value="Ombros">OMBROS</SelectItem>
-              <SelectItem value="Bíceps">BÍCEPS</SelectItem>
-              <SelectItem value="Tríceps">TRÍCEPS</SelectItem>
-              <SelectItem value="Core">CORE</SelectItem>
-              <SelectItem value="Outros">OUTROS</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            <Select value={ex.category || 'weight'} onValueChange={(val) => onUpdate(day, idx, 'category', val)}>
+              <SelectTrigger className="h-6 text-[9px] w-[fit-content] border-none bg-secondary/15 hover:bg-secondary/25 transition-colors focus:ring-0 px-2.5 rounded-md uppercase tracking-wide font-bold text-secondary-foreground flex items-center gap-1 shadow-none">
+                <SelectValue placeholder="TIPO: CARGA" />
+              </SelectTrigger>
+              <SelectContent className="text-[10px] uppercase font-bold tracking-wider border-border/40">
+                <SelectItem value="weight">Carga (Peso)</SelectItem>
+                <SelectItem value="bodyweight">Peso Corporal</SelectItem>
+                <SelectItem value="time">Tempo (Timer)</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={ex.muscleGroup || ''} onValueChange={(val) => onUpdate(day, idx, 'muscleGroup', val)}>
+              <SelectTrigger className="h-6 text-[9px] w-[fit-content] border-none bg-primary/10 hover:bg-primary/20 transition-colors focus:ring-0 px-2.5 rounded-md uppercase tracking-wide font-bold text-muted-foreground flex items-center gap-1 shadow-none">
+                <SelectValue placeholder="G. MUSCULAR" />
+              </SelectTrigger>
+              <SelectContent className="text-[10px] uppercase font-bold tracking-wider border-border/40">
+                <SelectItem value="Peito">PEITO</SelectItem>
+                <SelectItem value="Costas">COSTAS</SelectItem>
+                <SelectItem value="Pernas">PERNAS</SelectItem>
+                <SelectItem value="Ombros">OMBROS</SelectItem>
+                <SelectItem value="Bíceps">BÍCEPS</SelectItem>
+                <SelectItem value="Tríceps">TRÍCEPS</SelectItem>
+                <SelectItem value="Core">CORE</SelectItem>
+                <SelectItem value="Outros">OUTROS</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
-      <div className="flex items-center justify-between gap-3 sm:justify-end">
-        <div className="flex items-center gap-1 bg-background/50 rounded-xl px-2 py-1.5 border border-border/30">
-          <Input
-            type="number"
-            min={1}
-            max={99}
-            className="w-10 bg-transparent border-none text-[clamp(11px,1.2vw,13px)] text-center font-black p-0 h-6 focus-visible:ring-0"
-            value={ex.sets}
-            onChange={(e) => onUpdate(day, idx, 'sets', Number(e.target.value))}
-          />
-          <span className="text-[10px] font-black opacity-60">X</span>
-          <Input
-            type="number"
-            min={1}
-            max={99}
-            className="w-10 bg-transparent border-none text-[clamp(11px,1.2vw,13px)] text-center font-black p-0 h-6 focus-visible:ring-0"
-            value={ex.reps}
-            onChange={(e) => onUpdate(day, idx, 'reps', Number(e.target.value))}
-          />
+      <div className="flex items-end justify-between gap-3 sm:justify-end mt-2 sm:mt-0">
+        
+        <div className="flex flex-col items-center gap-1">
+          <span className="text-[9px] font-black uppercase text-muted-foreground/70">
+            {ex.category === 'time' ? 'Tempo' : 'Séries x Reps'}
+          </span>
+          <div className="flex items-center gap-1 bg-background/50 rounded-xl px-2 py-1.5 border border-border/30">
+            <Input
+              type="number"
+              min={1}
+              max={99}
+              className="w-10 bg-transparent border-none text-[clamp(11px,1.2vw,13px)] text-center font-black p-0 h-6 focus-visible:ring-0"
+              value={ex.sets}
+              onChange={(e) => onUpdate(day, idx, 'sets', Number(e.target.value))}
+            />
+            <span className="text-[10px] font-black opacity-60">X</span>
+            <Input
+              type="number"
+              min={1}
+              max={999}
+              className={`${ex.category === 'time' ? 'w-12' : 'w-10'} bg-transparent border-none text-[clamp(11px,1.2vw,13px)] text-center font-black p-0 h-6 focus-visible:ring-0`}
+              value={ex.reps}
+              onChange={(e) => onUpdate(day, idx, 'reps', Number(e.target.value))}
+            />
+            {ex.category === 'time' && <span className="text-[10px] font-black opacity-60">s</span>}
+          </div>
         </div>
-        <div className="flex items-center gap-1 bg-background/50 rounded-xl px-2.5 py-1.5 border border-border/30 w-24">
-          <Input
-            type="number"
-            min={0}
-            step={0.5}
-            className="w-14 bg-transparent border-none text-[clamp(11px,1.2vw,13px)] text-center font-black p-0 h-6 focus-visible:ring-0"
-            value={ex.baseline}
-            onChange={(e) => onUpdate(day, idx, 'baseline', e.target.value)}
-            placeholder="0"
-          />
-          <span className="text-[10px] font-black opacity-60">KG</span>
+
+        <div className="flex flex-col items-center gap-1">
+           <span className="text-[9px] font-black uppercase text-muted-foreground/70">
+            {ex.category === 'weight' ? 'Carga' : '+ Carga'}
+           </span>
+           <div className="flex items-center gap-1 bg-background/50 rounded-xl px-2.5 py-1.5 border border-border/30 w-24">
+            <Input
+              type="number"
+              min={0}
+              step={0.5}
+              className="w-14 bg-transparent border-none text-[clamp(11px,1.2vw,13px)] text-center font-black p-0 h-6 focus-visible:ring-0"
+              value={ex.baseline}
+              onChange={(e) => onUpdate(day, idx, 'baseline', e.target.value)}
+              placeholder="0"
+            />
+            <span className="text-[10px] font-black opacity-60">KG</span>
+          </div>
         </div>
+
         <button
           type="button"
-          className="ml-2 p-1 rounded hover:bg-destructive/10 text-destructive transition-colors"
+          className="ml-1 p-2 rounded-lg hover:bg-destructive/10 text-destructive/70 hover:text-destructive transition-colors mb-0.5"
           title="Excluir exercício"
           onClick={() => onUpdate(day, idx, 'delete', true)}
         >
@@ -201,8 +228,9 @@ export default function ProtocolsPage() {
     if (!user) return;
     try {
       const data = await getProtocolsByUser(user.id);
-      console.log(`[ProtocolsPage] Carregando protocolos para user: ${user.id}. Encontrados: ${data.length}`);
-      setProtocols(data || []);
+      const filtered = data.filter((p: any) => !p.isArchived);
+      console.log(`[ProtocolsPage] Carregando protocolos para user: ${user.id}. Encontrados: ${data.length}, Visíveis: ${filtered.length}`);
+      setProtocols(filtered || []);
 
       // Check for active workouts
       const activeWorkouts = await db.workouts
@@ -228,7 +256,13 @@ export default function ProtocolsPage() {
 
   async function handleDeleteProtocol(protocolId: string) {
     if (!user) return;
-    if (window.confirm('Tem certeza que deseja excluir este protocolo? Todos os exercícios e treinos associados serão perdidos.')) {
+    
+    const workoutsCount = await db.workouts.where('protocolId').equals(protocolId).count();
+    const message = workoutsCount > 0 
+      ? 'Este protocolo possui treinos registrados. Ele será arquivado e oculto, mas seu histórico será preservado. Confirmar?'
+      : 'Tem certeza que deseja excluir este protocolo? Todos os exercícios associados serão perdidos.';
+
+    if (window.confirm(message)) {
       try {
         await deleteRemoteItem('protocols', protocolId);
         await deleteProtocol(protocolId);
@@ -280,20 +314,18 @@ export default function ProtocolsPage() {
       console.log(`[ProtocolsPage] activeDays: ${JSON.stringify(activeDays)}`);
       console.log(`[ProtocolsPage] workouts count: ${Object.keys(workouts).length} dias com exercícios`);
 
+      let oldExercises: any[] = [];
+
       if (protocolId) {
         // Update existing protocol
         console.log('[ProtocolsPage] Atualizando protocolo local...');
+        oldExercises = await db.exercises.where('protocolId').equals(protocolId).toArray();
         await db.protocols.update(protocolId, { 
           name: protocolName.trim(), 
           daysOfWeek: activeDays,
           updatedAt: now,
           isSynced: false 
         });
-        
-        // Fix Duplication: Delete remote and local exercises before recreating
-        console.log('[ProtocolsPage] Limpando exercícios antigos (Remoto + Local)...');
-        await deleteExercisesByProtocol(protocolId);
-        await db.exercises.where('protocolId').equals(protocolId).delete();
       } else {
         // Create new protocol
         console.log('[ProtocolsPage] Criando novo protocolo local...');
@@ -306,8 +338,11 @@ export default function ProtocolsPage() {
       }
 
       // Add/Recreate exercises (Unified for both new and edit)
-      console.log(`[ProtocolsPage] Recriando exercícios para protocolId: ${protocolId}`);
+      console.log(`[ProtocolsPage] Atualizando exercícios para protocolId: ${protocolId}`);
       let totalExercisesCreated = 0;
+      let totalExercisesUpdated = 0;
+      const activeExerciseIds = new Set<string>();
+
       for (const day of activeDays) {
         const dayLabel = WEEK_DAYS.find(d => d.key === day)?.label;
         const dayExercises = workouts[day] || [];
@@ -315,21 +350,45 @@ export default function ProtocolsPage() {
         
         for (let i = 0; i < dayExercises.length; i++) {
           const ex = dayExercises[i];
-          await addExercise({
+          const exData: any = {
             protocolId,
             name: `${ex.name} (${dayLabel})`,
             muscleGroup: ex.muscleGroup || undefined,
+            category: ex.category || 'weight',
+            multiplier: ex.multiplier,
             order: i,
             dayOfWeek: day,
             sets: Number(ex.sets) || 3,
             reps: Number(ex.reps) || 10,
             lastWeight: Number(ex.baseline) || 0,
             lastReps: Number(ex.reps) || 0,
-          });
-          totalExercisesCreated++;
+          };
+
+          if (ex.id && oldExercises.some(old => old.id === ex.id)) {
+            await updateExercise(ex.id, exData);
+            activeExerciseIds.add(ex.id);
+            totalExercisesUpdated++;
+          } else {
+            const newId = await addExercise(exData);
+            activeExerciseIds.add(newId);
+            totalExercisesCreated++;
+          }
         }
       }
-      console.log(`[ProtocolsPage] Total de exercícios criados: ${totalExercisesCreated}`);
+
+      const removedExercises = oldExercises.filter(ex => !activeExerciseIds.has(ex.id));
+      for (const removedEx of removedExercises) {
+         const historyCount = await db.workoutSets.where('exerciseId').equals(removedEx.id).count();
+         if (historyCount === 0) {
+            await deleteRemoteItem('exercises', removedEx.id);
+            await db.exercises.delete(removedEx.id);
+         } else {
+            // Soft delete/Archive to preserve history names
+            await updateExercise(removedEx.id, { isArchived: true });
+         }
+      }
+
+      console.log(`[ProtocolsPage] Exercícios -> Criados: ${totalExercisesCreated}, Atualizados: ${totalExercisesUpdated}, Removidos/Arquivados: ${removedExercises.length}`);
 
       console.log('[ProtocolsPage] Iniciando sincronismo (fullSync)...');
       try {
@@ -380,6 +439,8 @@ export default function ProtocolsPage() {
           id: ex.id,
           name: ex.name.replace(` (${label})`, ''),
           muscleGroup: ex.muscleGroup || '',
+          category: ex.category || 'weight',
+          multiplier: ex.multiplier,
           sets: ex.sets || 3,
           reps: ex.reps || 10,
           baseline: ex.lastWeight || '',
@@ -406,6 +467,8 @@ export default function ProtocolsPage() {
           id: ex.id,
           name: ex.name,
           muscleGroup: ex.muscleGroup || '',
+          category: ex.category || 'weight',
+          multiplier: ex.multiplier,
           sets: ex.sets || 3,
           reps: ex.reps || 10,
           baseline: ex.lastWeight || '',
@@ -529,7 +592,7 @@ export default function ProtocolsPage() {
       ...prev,
       [day]: [
         ...(prev[day] || []),
-        { name: '', muscleGroup: '', sets: 3, reps: 10, baseline: '', id: crypto.randomUUID() },
+        { name: '', muscleGroup: '', category: 'weight', sets: 3, reps: 10, baseline: '', id: crypto.randomUUID() },
       ],
     }));
   }
@@ -542,9 +605,27 @@ export default function ProtocolsPage() {
       }));
     } else {
       setWorkouts((prev) => {
-        const updatedDay = prev[day].map((ex, i) =>
-          i === idx ? { ...ex, [field]: value } : ex
-        );
+        const updatedDay = prev[day].map((ex, i) => {
+          if (i === idx) {
+            const newEx = { ...ex, [field]: value };
+            // Se o usuário digitou um nome e perdeu o foco ou está associando, podemos tentar auto-preencher
+            // Mas faremos direto sempre que 'name' mudar pra ser dinâmico
+            if (field === 'name' && value.length > 2) {
+              const info = getExerciseInfo(value);
+              // Atribuir grupo muscular se o atual estiver vazio ou for "Outros"
+              if (info.muscleGroup !== 'Outros' && (!newEx.muscleGroup || newEx.muscleGroup === 'Outros' || newEx.muscleGroup === '')) {
+                newEx.muscleGroup = info.muscleGroup;
+              }
+              // Atribuir categoria se for diferente do padrão (weight) e o exercício for recém criado
+              if (info.category !== 'weight' && newEx.category === 'weight') {
+                newEx.category = info.category;
+                newEx.multiplier = info.multiplier;
+              }
+            }
+            return newEx;
+          }
+          return ex;
+        });
         // Atualiza no banco se já existir (tem id e não é novo)
         const ex = updatedDay[idx];
         if (ex && ex.id && typeof ex.id === 'string' && ex.id.length > 10) {

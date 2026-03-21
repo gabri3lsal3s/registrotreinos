@@ -304,7 +304,9 @@ export default function HistoryPage() {
                  <Clock className="w-3.5 h-3.5 text-primary" />
                 Sessões Realizadas
               </h3>
-              <span className="text-[clamp(9px,1vw,11px)] font-mono text-muted-foreground uppercase tracking-wider leading-none">Total: {history.length}</span>
+              <div className="flex items-center gap-3">
+                <span className="text-[clamp(9px,1vw,11px)] font-mono text-muted-foreground uppercase tracking-wider leading-none">Total: {history.length}</span>
+              </div>
           </header>
         
         {loading ? (
@@ -436,15 +438,21 @@ export default function HistoryPage() {
                                 <span className="text-[9px] font-mono text-muted-foreground">VALOR</span>
                                 {editingWeightId === item.id ? (
                                   <>
-                                    <input
-                                      type="number"
-                                      step="0.1"
-                                      className="w-16 rounded border border-primary/40 text-xs font-mono text-center mr-1 bg-background text-foreground"
-                                      value={editingWeightValue}
-                                      onChange={e => setEditingWeightValue(e.target.value)}
-                                      autoFocus
-                                    />
-                                    <span className="font-black text-xs">kg</span>
+                                    <div className="relative inline-block w-16 mr-1">
+                                      <input
+                                        type="number"
+                                        step="0.1"
+                                        className="w-full rounded border border-primary/40 text-xs font-mono text-center bg-background text-foreground pr-4"
+                                        value={editingWeightValue}
+                                        onChange={e => setEditingWeightValue(e.target.value)}
+                                        autoFocus
+                                      />
+                                      {editingWeightValue && (
+                                        <span className="absolute right-1 top-1/2 -translate-y-1/2 font-black text-[9px] pointer-events-none text-muted-foreground">
+                                          kg
+                                        </span>
+                                      )}
+                                    </div>
                                     <button
                                       className="ml-1 text-muted-foreground/40 hover:text-primary transition-colors text-xs border border-primary/30 rounded px-1 py-0.5"
                                       title="Concluir edição"
@@ -610,7 +618,7 @@ export default function HistoryPage() {
                                       style={{ width: 35 }}
                                       onClick={e => e.stopPropagation()}
                                     />
-                                    <span className="font-black text-xs">reps</span>
+                                    <span className="font-black text-xs">{exercisesMap[exId]?.category === 'time' ? 's' : 'reps'}</span>
                                     <button
                                       className="ml-1 text-muted-foreground/40 hover:text-destructive transition-colors text-xs"
                                       title="Excluir exercício"
@@ -634,7 +642,7 @@ export default function HistoryPage() {
                                     title="Clique para editar"
                                     onClick={e => { e.stopPropagation(); handleSetEditClick(e, s); }}
                                   >
-                                    {s.weight}kg x {s.reps}
+                                    {s.weight > 0 ? `${s.weight}kg x ` : ''}{s.reps}{exercisesMap[exId]?.category === 'time' ? 's' : ''}
                                   </span>
                                 )}
                               </div>

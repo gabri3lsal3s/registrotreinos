@@ -21,6 +21,7 @@ export interface Protocol {
   isEnabled: boolean;
   daysOfWeek: string[];
   isSynced?: boolean;
+  isArchived?: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -30,6 +31,8 @@ export interface Exercise {
   protocolId: string;
   name: string;
   muscleGroup?: string;
+  category?: 'weight' | 'bodyweight' | 'time'; // New
+  multiplier?: number; // Base multiplier K for bodyweight/time (New)
   order: number;
   sets?: number;
   reps?: number;
@@ -37,6 +40,7 @@ export interface Exercise {
   lastWeight?: number;
   lastReps?: number;
   isSynced?: boolean;
+  isArchived?: boolean;
 }
 
 export interface Workout {
@@ -59,7 +63,8 @@ export interface WorkoutSet {
   workoutId: string;
   exerciseId: string;
   weight: number;
-  reps: number;
+  reps: number; // for time-based, this will store seconds down the line, but we keep the column. Or we can use timeInSeconds.
+  timeInSeconds?: number;
   rpe?: number;
   completed: boolean;
   timestamp: number;
@@ -117,9 +122,18 @@ export async function getProtocolsByUser(userId: string) {
 }
 
 export async function deleteProtocol(id: string) {
-  await db.protocols.delete(id);
-  // Optional: delete associated exercises and workouts
-  await db.exercises.where('protocolId').equals(id).delete();
+  const workoutsCount = await db.workouts.where('protocolId').equals(id).count();
+  
+  if (workoutsCount > 0) {
+    // Soft-delete: manter no banco mas ocultar
+    await db.protocols.update(id, { isArchived: true, isEnabled: false, isSynced: false });
+    // Soft-delete exercícios também
+    await db.exercises.where('protocolId').equals(id).modify({ isArchived: true, isSynced: false });
+  } else {
+    // Deleção física se for seguro (não tem histórico)
+    await db.exercises.where('protocolId').equals(id).delete();
+    await db.protocols.delete(id);
+  }
 }
 
 // Body Weight Services
@@ -148,12 +162,21 @@ export async function addExercise(exercise: Omit<Exercise, 'id'>) {
   return id;
 }
 
-export async function getExercisesByProtocol(protocolId: string) {
-  return db.exercises.where('protocolId').equals(protocolId).sortBy('order');
+export async function getExercisesByProtocol(protocolId: string, includeArchived = false) {
+  const collection = db.exercises.where('protocolId').equals(protocolId);
+  if (includeArchived) return collection.sortBy('order');
+  return collection.filter(ex => !ex.isArchived).sortBy('order');
 }
 
 export async function deleteExercise(id: string) {
-  await db.exercises.delete(id);
+  const setsCount = await db.workoutSets.where('exerciseId').equals(id).count();
+  
+  if (setsCount > 0) {
+    // Soft-delete: arquivar para preservar histórico
+    await db.exercises.update(id, { isArchived: true, isSynced: false });
+  } else {
+    await db.exercises.delete(id);
+  }
 }
 
 // Workout Services

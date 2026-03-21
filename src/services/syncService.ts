@@ -20,7 +20,8 @@ const toSnake = (obj: any) => {
     isEnabled: 'is_enabled',
     daysOfWeek: 'days_of_week',
     updatedAt: 'updated_at',
-    dayOfWeek: 'day_of_week'
+    dayOfWeek: 'day_of_week',
+    isArchived: 'is_archived'
   };
   const newObj: any = {};
   for (const key in obj) {
@@ -54,7 +55,8 @@ const toCamel = (obj: any) => {
     is_enabled: 'isEnabled',
     days_of_week: 'daysOfWeek',
     updated_at: 'updatedAt',
-    day_of_week: 'dayOfWeek'
+    day_of_week: 'dayOfWeek',
+    is_archived: 'isArchived'
   };
   const newObj: any = {};
   for (const key in obj) {
@@ -200,12 +202,13 @@ export async function pullData() {
       const remoteBWIds = remoteBW.map(b => b.id);
 
       // Remover locais que eram "synced" mas sumiram da nuvem (foi deletado em outro device)
-      await db.protocols.where('userId').equals(user.id).and(p => p.isSynced === true && !remotePIds.includes(p.id)).delete();
+      // MAS mantemos se estiver arquivado localmente (proteção extra)
+      await db.protocols.where('userId').equals(user.id).and(p => p.isSynced === true && !p.isArchived && !remotePIds.includes(p.id)).delete();
       await db.workouts.where('userId').equals(user.id).and(w => w.isSynced === true && !remoteWIds.includes(w.id)).delete();
       await db.bodyWeights.where('userId').equals(user.id).and(b => b.isSynced === true && !remoteBWIds.includes(b.id)).delete();
       
       // Para exercises e sets, usamos filter() pois eles não têm userId indexado no Dexie
-      await db.exercises.toCollection().filter(e => e.isSynced === true && !remoteEIds.includes(e.id)).delete();
+      await db.exercises.toCollection().filter(e => e.isSynced === true && !e.isArchived && !remoteEIds.includes(e.id)).delete();
       await db.workoutSets.toCollection().filter(s => s.isSynced === true && !remoteSIds.includes(s.id)).delete();
 
       // 2. Mapeamento e Persistência
