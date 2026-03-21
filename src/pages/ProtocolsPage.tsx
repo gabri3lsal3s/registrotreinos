@@ -3,8 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
 import Layout from '../components/Layout';
-import { db, getProtocolsByUser, getExercisesByProtocol, createProtocol, deleteProtocol, addExercise, type Protocol } from '../services/workoutDB';
-import { fullSync, deleteRemoteItem, deleteExercisesByProtocol } from '../services/syncService';
+import { db, getProtocolsByUser, getExercisesByProtocol, createProtocol, deleteProtocol, addExercise, updateExercise, type Protocol } from '../services/workoutDB';
+import { fullSync, deleteRemoteItem, deleteExercisesByProtocol, syncData } from '../services/syncService';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   DndContext,
@@ -293,6 +293,7 @@ export default function ProtocolsPage() {
           const ex = dayExercises[i];
           await addExercise({
             protocolId,
+            userId: user.id,
             name: `${ex.name} (${dayLabel})`,
             order: i,
             dayOfWeek: day,
@@ -307,13 +308,17 @@ export default function ProtocolsPage() {
       console.log(`[ProtocolsPage] Total de exercícios criados: ${totalExercisesCreated}`);
 
       console.log('[ProtocolsPage] Iniciando sincronismo (fullSync)...');
-      await fullSync();
-      console.log('[ProtocolsPage] Sincronismo concluído.');
-      
-      toast.success(editingProtocolId ? 'Protocolo atualizado!' : 'Protocolo salvo!');
-      setShowBuilder(false);
-      resetBuilder();
-      loadProtocols();
+      try {
+        await fullSync();
+        console.log('[ProtocolsPage] Sincronismo concluído.');
+        toast.success(editingProtocolId ? 'Protocolo atualizado!' : 'Protocolo salvo!');
+        setShowBuilder(false);
+        resetBuilder();
+        loadProtocols();
+      } catch (syncErr: any) {
+        console.error('[ProtocolsPage] Erro ao sincronizar com Supabase:', syncErr);
+        toast.error('Erro ao sincronizar com o banco de dados. Verifique sua conexão e tente novamente.');
+      }
     } catch (error: any) {
       console.error('[ProtocolsPage] Erro fatal no handleSave:', error);
       toast.error(`Erro ao salvar protocolo: ${error.message || 'Erro desconhecido'}`);
@@ -503,19 +508,34 @@ export default function ProtocolsPage() {
     }));
   }
 
-  function handleExerciseChange(day: string, idx: number, field: string, value: any) {
+  async function handleExerciseChange(day: string, idx: number, field: string, value: any) {
     if (field === 'delete') {
       setWorkouts((prev) => ({
         ...prev,
         [day]: prev[day].filter((_, i) => i !== idx),
       }));
     } else {
-      setWorkouts((prev) => ({
-        ...prev,
-        [day]: prev[day].map((ex, i) =>
+      setWorkouts((prev) => {
+        const updatedDay = prev[day].map((ex, i) =>
           i === idx ? { ...ex, [field]: value } : ex
-        ),
-      }));
+        );
+        // Atualiza no banco se já existir (tem id e não é novo)
+        const ex = updatedDay[idx];
+        if (ex && ex.id && typeof ex.id === 'string' && ex.id.length > 10) {
+          // Só tenta atualizar se já foi salvo no banco (id UUID)
+          const updateObj: any = { [field]: value };
+          // Se alterar sets ou reps, atualiza também lastReps
+          if (field === 'reps') updateObj.lastReps = Number(value) || 0;
+          if (field === 'baseline') updateObj.lastWeight = Number(value) || 0;
+          updateExercise(ex.id, updateObj)
+            .then(() => syncData().catch(() => {}))
+            .catch(() => {});
+        }
+        return {
+          ...prev,
+          [day]: updatedDay,
+        };
+      });
     }
   }
 

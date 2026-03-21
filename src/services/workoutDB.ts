@@ -1,3 +1,7 @@
+// Edita um exercício existente (Exercise)
+export async function updateExercise(id: string, updates: Partial<Exercise>) {
+  await db.exercises.update(id, { ...updates, isSynced: false });
+}
 // Edita um set de exercício (WorkoutSet)
 export async function updateWorkoutSet(id: string, updates: Partial<WorkoutSet>) {
   await db.workoutSets.update(id, { ...updates, isSynced: false });

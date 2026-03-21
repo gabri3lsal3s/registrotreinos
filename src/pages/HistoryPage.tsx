@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import Layout from '../components/Layout';
-import { getWorkoutHistory, db, getWorkoutSets, deleteWorkout, deleteWorkoutSet } from '../services/workoutDB';
+import { getWorkoutHistory, db, getWorkoutSets, deleteWorkout, deleteWorkoutSet, updateWorkoutSet, updateExercise } from '../services/workoutDB';
 import { fullSync, deleteRemoteItem } from '../services/syncService';
 import { Card, CardContent } from "@/components/ui/card"
 import { ClipboardList, Clock, Zap, ChevronRight, Activity, ChevronDown, Dumbbell, Trash2 } from "lucide-react"
@@ -66,13 +66,22 @@ export default function HistoryPage() {
     if (!sessionDetails[workoutId]) {
       try {
         const sets = await getWorkoutSets(workoutId);
-        // Group sets by exercise
+        // Sort all sets by timestamp to ensure performance order
+        sets.sort((a, b) => a.timestamp - b.timestamp);
+
+        const orderedExIds: string[] = [];
         const grouped: Record<string, any[]> = {};
+        
         sets.forEach(s => {
-          if (!grouped[s.exerciseId]) grouped[s.exerciseId] = [];
+          if (!grouped[s.exerciseId]) {
+            grouped[s.exerciseId] = [];
+            orderedExIds.push(s.exerciseId);
+          }
           grouped[s.exerciseId].push(s);
         });
-        setSessionDetails(prev => ({ ...prev, [workoutId]: Object.entries(grouped) }));
+
+        const sortedGrouped = orderedExIds.map(id => [id, grouped[id]]);
+        setSessionDetails(prev => ({ ...prev, [workoutId]: sortedGrouped }));
       } catch (err) {
         console.error(err);
       }
@@ -165,7 +174,25 @@ export default function HistoryPage() {
     });
     setEditingSetId(null);
     try {
-      await db.workoutSets.update(set.id, { weight: Number(editingSetWeight), reps: Number(editingSetReps) });
+      await updateWorkoutSet(set.id, { weight: Number(editingSetWeight), reps: Number(editingSetReps) });
+      
+      // Update PR in exercise if hit
+      const exercise = await db.exercises.get(set.exerciseId);
+      if (exercise) {
+        const weight = Number(editingSetWeight);
+        const reps = Number(editingSetReps);
+        const currentMaxWeight = Number(exercise.lastWeight || 0);
+        const currentMaxReps = Number(exercise.lastReps || 0);
+
+        if (weight > currentMaxWeight || (weight === currentMaxWeight && reps > currentMaxReps)) {
+          await updateExercise(exercise.id, { 
+            lastWeight: weight, 
+            lastReps: reps 
+          });
+        }
+      }
+
+      await fullSync();
       toast.success('Set atualizado com sucesso.');
       window.dispatchEvent(new Event('refresh-analysis'));
     } catch (err: any) {

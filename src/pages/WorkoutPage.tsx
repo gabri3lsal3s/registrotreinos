@@ -8,7 +8,8 @@ import {
   getExercisesByProtocol, 
   startWorkout, 
   addWorkoutSet,
-  cancelActiveWorkout
+  cancelActiveWorkout,
+  updateExercise
 } from '../services/workoutDB';
 import { syncData } from '../services/syncService';
 import { Button } from "@/components/ui/button"
@@ -30,6 +31,7 @@ interface WorkoutExercise {
   name: string;
   order: number;
   lastWeight?: number;
+  lastReps?: number;
   sets: number;
   completedSets: boolean[];
   setsData: { weight: string; reps: string }[];
@@ -70,7 +72,57 @@ export default function WorkoutPage() {
           setActiveWorkoutId(active.id);
         }
 
+        // Get last completed workout for this protocol
+        const lastWorkout = await db.workouts
+          .where({ userId: user.id, protocolId, status: 'completed' })
+          .reverse()
+          .sortBy('date');
+        
+        const mostRecentWorkout = lastWorkout[0];
+        const lastSetsMap: Record<string, any[]> = {};
+        if (mostRecentWorkout) {
+          const sets = await db.workoutSets
+            .where('workoutId').equals(mostRecentWorkout.id)
+            .toArray();
+          sets.forEach(s => {
+            if (!lastSetsMap[s.exerciseId]) lastSetsMap[s.exerciseId] = [];
+            lastSetsMap[s.exerciseId].push(s);
+          });
+          // Ensuring order within each exercise
+          for (const eid in lastSetsMap) {
+            lastSetsMap[eid].sort((a, b) => a.timestamp - b.timestamp);
+          }
+        }
+
         const allExercises = await getExercisesByProtocol(protocolId);
+
+        // PR Reconciliation: Ensure all exercises in protocol reflect their true all-time max from history
+        const exerciseIds = allExercises.map(ex => ex.id);
+        const allTimeSets = await db.workoutSets.where('exerciseId').anyOf(exerciseIds).toArray();
+        const bestFromHistory: Record<string, { weight: number; reps: number }> = {};
+        
+        allTimeSets.forEach(s => {
+          if (!bestFromHistory[s.exerciseId] || 
+              s.weight > bestFromHistory[s.exerciseId].weight || 
+              (s.weight === bestFromHistory[s.exerciseId].weight && s.reps > bestFromHistory[s.exerciseId].reps)) {
+            bestFromHistory[s.exerciseId] = { weight: s.weight, reps: s.reps };
+          }
+        });
+
+        // Update any exercises that have a higher PR in history than currently recorded
+        for (const ex of allExercises) {
+          const best = bestFromHistory[ex.id];
+          if (best) {
+            const currentWeight = Number(ex.lastWeight || 0);
+            const currentReps = Number(ex.lastReps || 0);
+            if (best.weight > currentWeight || (best.weight === currentWeight && best.reps > currentReps)) {
+              ex.lastWeight = best.weight;
+              ex.lastReps = best.reps;
+              // Update DB silently (background)
+              updateExercise(ex.id, { lastWeight: best.weight, lastReps: best.reps }).catch(console.error);
+            }
+          }
+        }
         
         // Find days that have exercises
         const daysWithExercises = WEEK_DAYS.filter(day => 
@@ -92,12 +144,17 @@ export default function WorkoutPage() {
           .map(async (ex) => {
             const setNum = (ex as any).sets || 3;
             
-            // If active workout exists, load its sets
+            // Pre-fill logic: Use previous session's sets if available, fallback to PR/Target
+            const prevSets = lastSetsMap[ex.id] || [];
             let completedSets = new Array(setNum).fill(false);
-            let setsData = new Array(setNum).fill(null).map(() => ({ 
-              weight: String(ex.lastWeight || 0), 
-              reps: '10' 
-            }));
+            let setsData = new Array(setNum).fill(null).map((_, idx) => {
+              const prevSet = prevSets[idx];
+              // Fallback priority: Previous Session Set > Protocol definition (lastWeight/reps) > default constants
+              return { 
+                weight: String(prevSet ? prevSet.weight : (ex.lastWeight || 0)), 
+                reps: String(prevSet ? prevSet.reps : (ex.lastReps || (ex as any).reps || 10)) 
+              };
+            });
 
             if (active) {
               const existingSets = await db.workoutSets
@@ -134,6 +191,32 @@ export default function WorkoutPage() {
     loadWorkoutData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, protocolId, selectedDay, navigate]);
+
+  const checkAndUpdatePR = async (exIdx: number, setIdx: number, currentExercises: WorkoutExercise[]) => {
+    const exercise = currentExercises[exIdx];
+    if (!exercise.completedSets[setIdx]) return; // Only PR if set is completed
+
+    const weight = Number(exercise.setsData[setIdx].weight);
+    const reps = Number(exercise.setsData[setIdx].reps);
+    const currentMaxWeight = Number(exercise.lastWeight || 0);
+    const currentMaxReps = Number(exercise.lastReps || 0);
+
+    if (weight > currentMaxWeight || (weight === currentMaxWeight && reps > currentMaxReps)) {
+      // Update local state first for immediate UI feedback
+      exercise.lastWeight = weight;
+      exercise.lastReps = reps;
+      setExercises([...currentExercises]);
+
+      // Update DB
+      await updateExercise(exercise.id, { 
+        lastWeight: weight, 
+        lastReps: reps 
+      });
+      
+      // Sync
+      syncData().catch(e => console.error('Cloud sync error:', e));
+    }
+  };
 
   const handleSetToggle = async (exIdx: number, setIdx: number) => {
     if (!user || !protocolId) return;
@@ -190,16 +273,8 @@ export default function WorkoutPage() {
         }
       }
 
-      // 3. Update lastWeight immediately
-      if (isNowCompleted) {
-        const weight = Number(exercise.setsData[setIdx].weight);
-        if (weight > Number(exercise.lastWeight || 0)) {
-          await db.exercises.update(exercise.id, { lastWeight: weight });
-        }
-      }
-
-      // 4. Sync to cloud
-      syncData().catch(e => console.error('Cloud sync error:', e));
+      // 3. Update PR tracking
+      await checkAndUpdatePR(exIdx, setIdx, newExercises);
 
     } catch (err) {
       console.error('Error in real-time sync:', err);
@@ -210,6 +285,11 @@ export default function WorkoutPage() {
     const newExercises = [...exercises];
     newExercises[exIdx].setsData[setIdx][field] = value;
     setExercises(newExercises);
+    
+    // If already completed, check if this new value is a PR
+    if (newExercises[exIdx].completedSets[setIdx]) {
+      checkAndUpdatePR(exIdx, setIdx, newExercises);
+    }
   };
 
   const handleCancelWorkout = async () => {
@@ -372,12 +452,14 @@ export default function WorkoutPage() {
                       <p className="text-[10px] font-mono text-muted-foreground uppercase opacity-90">
                         {ex.completedSets.filter(Boolean).length} / {ex.sets} séries
                       </p>
-                      {ex.lastWeight && ex.lastWeight > 0 && (
+                      {ex.lastWeight && ex.lastWeight > 0 ? (
                         <>
                           <div className="w-1 h-1 rounded-full bg-border" />
-                          <span className="text-[10px] font-black text-primary uppercase tracking-tight">Ant: {ex.lastWeight}kg</span>
+                          <span className="text-[10px] font-black text-primary uppercase tracking-tight">
+                            PR: {ex.lastWeight}kg
+                          </span>
                         </>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 </div>
