@@ -10,7 +10,6 @@ import { toast } from 'sonner';
  */
 
 export async function runHistoryRecovery() {
-  console.log('[Recovery] Iniciando verificação de integridade do histórico...');
   
   // 1. Fix corrupted protocolIds from previous soft-delete implementation
   await fixArchivedExercises();
@@ -26,7 +25,6 @@ export async function runHistoryRecovery() {
     const orphans = allSets.filter(s => !exerciseIds.has(s.exerciseId));
 
     if (orphans.length === 0) {
-      console.log('[Recovery] Nenhum histórico órfão detectado. Tudo saudável.');
       return;
     }
 
@@ -107,7 +105,6 @@ export async function runHistoryRecovery() {
     }
 
     if (recoveredCount > 0) {
-      console.log(`[Recovery] Sucesso! ${recoveredCount} registros de histórico foram recuperados.`);
       toast.success(`${recoveredCount} registros de histórico recuperados com sucesso!`, {
         description: 'Seus nomes de exercícios foram restaurados.',
         duration: 5000
@@ -130,7 +127,6 @@ async function fixArchivedExercises() {
     .toArray();
 
   if (corrupted.length > 0) {
-    console.log(`[Recovery] 🛡️ Detectados ${corrupted.length} exercícios com ID de protocolo corrompido. Iniciando reparo...`);
     for (const ex of corrupted) {
       const realId = ex.protocolId.replace('archived_', '');
       await db.exercises.update(ex.id, {
@@ -138,8 +134,6 @@ async function fixArchivedExercises() {
         isArchived: true,
         isSynced: false // Forçar PUSH com o dado corrigido
       });
-      console.log(`[Recovery] Exercício ${ex.id} corrigido: protocol_id set to ${realId}`);
     }
-    console.log('[Recovery] ✅ Todos os IDs de protocolo foram saneados.');
   }
 }

@@ -95,12 +95,9 @@ export async function syncData() {
     const bodyWeightsLocal = await db.bodyWeights.where('userId').equals(user.id).and(b => !b.isSynced).toArray();
 
     if (protocolsLocal.length === 0 && workoutsLocal.length === 0 && exercisesLocal.length === 0 && workoutSetsLocal.length === 0 && bodyWeightsLocal.length === 0) {
-      console.log('[Sync] Nada para subir (PUSH).');
       setSyncStatus('synced');
       return { success: true };
     }
-
-    console.log(`[Sync] PUSH - User: ${user.id}, Encontrados no Local: BW(${bodyWeightsLocal.length}), Protocols(${protocolsLocal.length}), Exercises(${exercisesLocal.length})`);
 
     const protocols = protocolsLocal.map(toSnake);
     const workouts = workoutsLocal.map(toSnake);
@@ -153,7 +150,6 @@ export async function syncData() {
       }
     });
 
-    console.log('[Sync] PUSH finalizado com sucesso.');
     setSyncStatus('synced');
     return { success: true };
   } catch (err: any) {
@@ -170,7 +166,6 @@ export async function pullData() {
   setSyncStatus('syncing');
 
   try {
-    console.log(`[Sync] PULL - Iniciando para: ${user.id}`);
     
     const [pRes, eRes, wRes, sRes, bwRes] = await Promise.all([
       supabase.from('protocols').select('*').eq('user_id', user.id),
@@ -190,7 +185,6 @@ export async function pullData() {
     const remoteS = sRes.data || [];
     const remoteBW = bwRes.data || [];
 
-    console.log(`[Sync] PULL - Recebidos do Supabase: BW(${remoteBW.length}), P(${remoteP.length}), ...`);
 
     await db.transaction('rw', [db.protocols, db.exercises, db.workouts, db.workoutSets, db.bodyWeights], async () => {
       // 1. Limpeza Inteligente
@@ -253,7 +247,6 @@ export async function pullData() {
         }
       }
       
-      console.log('[Sync] PULL - Mirror local atualizado (Merge Inteligente).');
     });
 
     setSyncStatus('synced');
@@ -270,7 +263,6 @@ export async function deleteRemoteItem(table: string, id: string) {
   if (!user) return;
 
   try {
-    console.log(`[Sync] DELETE - Tabela: ${table}, ID: ${id}`);
     const { error } = await supabase
       .from(table)
       .delete()
@@ -289,7 +281,6 @@ export async function deleteExercisesByProtocol(protocolId: string) {
   if (!user) return;
 
   try {
-    console.log(`[Sync] DELETE Exercises - Protocol: ${protocolId}`);
     const { error } = await supabase
       .from('exercises')
       .delete()
@@ -307,10 +298,8 @@ export async function fullSync() {
   if (isSyncing) return;
   isSyncing = true;
   try {
-    console.log('[Sync] Ciclo Completo: Início (PUSH -> PULL)');
     await syncData();
     await pullData();
-    console.log('[Sync] Ciclo Completo: Sucesso');
     return { success: true };
   } catch (err) {
     console.error('[Sync] Erro no Ciclo Completo:', err);

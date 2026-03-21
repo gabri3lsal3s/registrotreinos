@@ -229,7 +229,6 @@ export default function ProtocolsPage() {
     try {
       const data = await getProtocolsByUser(user.id);
       const filtered = data.filter((p: any) => !p.isArchived);
-      console.log(`[ProtocolsPage] Carregando protocolos para user: ${user.id}. Encontrados: ${data.length}, Visíveis: ${filtered.length}`);
       setProtocols(filtered || []);
 
       // Check for active workouts
