@@ -7,7 +7,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Dumbbell, ArrowRight, Calendar, TrendingUp, Zap, RefreshCw, Scale, Check } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { useAuthStore } from '../services/authStore';
 
 const WEEK_DAYS = [
   { key: 'sun', label: 'Dom' },
@@ -26,7 +25,12 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [todayWorkout, setTodayWorkout] = useState<any>(null);
   const [activeWorkout, setActiveWorkout] = useState<any>(null);
-  const [stats, setStats] = useState({ weeklyWorkouts: 0, monthlyWorkouts: 0 });
+  const [stats, setStats] = useState({ 
+    weeklyWorkouts: 0, 
+    monthlyWorkouts: 0,
+    weeklyGoal: 5,
+    monthlyGoal: 20
+  });
   const [loading, setLoading] = useState(true);
   const [currentWeight, setCurrentWeight] = useState<string>('');
   const [latestWeight, setLatestWeight] = useState<number | null>(null);
@@ -121,9 +125,30 @@ export default function Dashboard() {
         const weeklyWorkouts = allWorkouts.filter(w => w.date >= sevenDaysAgo).length;
         const monthlyWorkouts = allWorkouts.filter(w => w.date >= firstDayOfMonth).length;
 
+        // 4. Calculate Dynamic Goals from Active Protocols
+        const activeProtocols = allProtocols.filter(p => !p.isArchived && p.isEnabled);
+        const weeklyGoal = activeProtocols.reduce((sum, p) => sum + (p.daysOfWeek?.length || 0), 0);
+
+        // Monthly Goal: Count occurrences of scheduled days in current month
+        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        let monthlyGoal = 0;
+        
+        activeProtocols.forEach(p => {
+          const pDays = p.daysOfWeek || [];
+          for (let d = 1; d <= daysInMonth; d++) {
+            const date = new Date(now.getFullYear(), now.getMonth(), d);
+            const dayKey = WEEK_DAYS[date.getDay()].key;
+            if (pDays.includes(dayKey)) {
+              monthlyGoal++;
+            }
+          }
+        });
+
         setStats({
           weeklyWorkouts,
-          monthlyWorkouts
+          monthlyWorkouts,
+          weeklyGoal: Math.max(1, weeklyGoal),
+          monthlyGoal: Math.max(1, monthlyGoal)
         });
 
         // 4. Get Latest Body Weight
@@ -259,13 +284,13 @@ export default function Dashboard() {
               <CardContent className="p-5 md:p-6 flex flex-col gap-2 justify-center h-full">
                 <span className="text-[clamp(10px,1.2vw,12px)] font-black text-muted-foreground uppercase tracking-widest">Consistência Semanal</span>
                 <h2 className="text-3xl md:text-4xl font-black text-foreground uppercase tracking-tight leading-none">
-                  {Math.round((stats.weeklyWorkouts / (user ? (useAuthStore.getState().weeklyGoal) : 5)) * 100)}%
+                  {Math.round((stats.weeklyWorkouts / stats.weeklyGoal) * 100)}%
                 </h2>
                 <div className="flex items-center gap-2 mt-2">
                   <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden flex-1">
-                    <div className="h-full bg-primary rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)] dark:shadow-[0_0_8px_rgba(52,211,153,0.5)] transition-all duration-1000" style={{ width: `${Math.min(100, (stats.weeklyWorkouts / (useAuthStore.getState().weeklyGoal)) * 100)}%` }} />
+                    <div className="h-full bg-primary rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)] dark:shadow-[0_0_8px_rgba(52,211,153,0.5)] transition-all duration-1000" style={{ width: `${Math.min(100, (stats.weeklyWorkouts / stats.weeklyGoal) * 100)}%` }} />
                   </div>
-                  <span className="text-[clamp(9px,1vw,11px)] text-muted-foreground uppercase font-mono">{stats.weeklyWorkouts}/{useAuthStore.getState().weeklyGoal}</span>
+                  <span className="text-[clamp(9px,1vw,11px)] text-muted-foreground uppercase font-mono">{stats.weeklyWorkouts}/{stats.weeklyGoal}</span>
                 </div>
               </CardContent>
             </Card>
@@ -273,21 +298,13 @@ export default function Dashboard() {
               <CardContent className="p-5 md:p-6 flex flex-col gap-2 justify-center h-full">
                 <span className="text-[clamp(10px,1.2vw,12px)] font-black text-muted-foreground uppercase tracking-widest">Consistência Mensal</span>
                 <h2 className="text-3xl md:text-4xl font-black text-foreground uppercase tracking-tight leading-none">
-                  {(() => {
-                    const goal = user ? (useAuthStore.getState().weeklyGoal * 4) : 20;
-                    const safeGoal = goal > 0 ? goal : 1;
-                    return Math.round((stats.monthlyWorkouts / safeGoal) * 100);
-                  })()}%
+                  {Math.round((stats.monthlyWorkouts / stats.monthlyGoal) * 100)}%
                 </h2>
                 <div className="flex items-center gap-2 mt-2">
                   <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden flex-1">
-                    <div className="h-full bg-primary rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)] dark:shadow-[0_0_8px_rgba(52,211,153,0.5)] transition-all duration-1000" style={{ width: `${(() => {
-                      const goal = user ? (useAuthStore.getState().weeklyGoal * 4) : 20;
-                      const safeGoal = goal > 0 ? goal : 1;
-                      return Math.min(100, (stats.monthlyWorkouts / safeGoal) * 100);
-                    })()}%` }} />
+                    <div className="h-full bg-primary rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)] dark:shadow-[0_0_8px_rgba(52,211,153,0.5)] transition-all duration-1000" style={{ width: `${Math.min(100, (stats.monthlyWorkouts / stats.monthlyGoal) * 100)}%` }} />
                   </div>
-                  <span className="text-[clamp(9px,1vw,11px)] text-muted-foreground uppercase font-mono">{stats.monthlyWorkouts}/{Math.max(1, user ? (useAuthStore.getState().weeklyGoal * 4) : 20)}</span>
+                  <span className="text-[clamp(9px,1vw,11px)] text-muted-foreground uppercase font-mono">{stats.monthlyWorkouts}/{stats.monthlyGoal}</span>
                 </div>
               </CardContent>
             </Card>
@@ -302,20 +319,20 @@ export default function Dashboard() {
             </h3>
           </header>
           <Card className="rounded-2xl border border-border shadow-sm bg-card hover:border-primary/20 transition-all duration-300 p-5 md:p-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-               <div>
-                 <h4 className="text-[clamp(11px,1.4vw,14px)] font-black text-foreground uppercase tracking-tight mb-1">Peso Corporal</h4>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 md:gap-6">
+               <div className="space-y-1">
+                 <h4 className="text-[clamp(11px,1.4vw,14px)] font-black text-foreground uppercase tracking-tight">Peso Corporal</h4>
                  <p className="text-[clamp(10px,1.2vw,12px)] text-muted-foreground uppercase tracking-widest font-mono">Último registro: {latestWeight ? `${latestWeight} kg` : 'Nenhum'}</p>
                </div>
-               <div className="flex items-center gap-3 w-full sm:w-auto">
-                 <div className="relative w-full sm:w-32">
+               <div className="flex items-center gap-2 w-full sm:w-auto">
+                 <div className="relative flex-1 sm:w-32">
                    <Input 
                      type="number" 
                      step="0.1" 
                      placeholder="Ex: 75.5"
                      value={currentWeight}
                      onChange={e => setCurrentWeight(e.target.value)}
-                     className="w-full text-center pl-6 pr-6 font-mono font-bold text-lg h-12 rounded-xl bg-background"
+                     className="w-full text-center pl-6 pr-6 font-mono font-bold text-lg h-12 rounded-xl bg-background border-border/50 focus:border-primary/30 transition-colors"
                    />
                    {currentWeight && (
                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground font-black text-[clamp(10px,1.2vw,12px)] pointer-events-none">
@@ -326,7 +343,7 @@ export default function Dashboard() {
                  <Button 
                    onClick={handleSaveWeight} 
                    disabled={savingWeight || !currentWeight || parseFloat(currentWeight) === latestWeight}
-                   className="h-12 rounded-xl px-6 font-black uppercase tracking-wider text-[10px] w-full sm:w-auto transition-all"
+                   className="h-12 rounded-xl px-4 sm:px-6 font-black uppercase tracking-wider text-[11px] w-auto transition-all shrink-0"
                  >
                    {savingWeight ? <RefreshCw className="w-4 h-4 animate-spin" /> : weightSaved ? <Check className="w-4 h-4" /> : 'Salvar'}
                  </Button>

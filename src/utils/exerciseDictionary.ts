@@ -1,7 +1,10 @@
 export type MuscleGroup = 
   | 'Peito'
   | 'Costas'
-  | 'Pernas'
+  | 'Quadríceps'
+  | 'Isquiotibiais'
+  | 'Glúteos'
+  | 'Panturrilhas'
   | 'Ombros'
   | 'Bíceps'
   | 'Tríceps'
@@ -82,23 +85,23 @@ addExercise('Pull Down', 'Costas', ['pulldown', 'pulldown corda', 'puxada alta c
 addExercise('Barra Fixa', 'Costas', ['pull up', 'chin up', 'barra fixa supinada', 'barra fixa pronada'], 'bodyweight', 0.95);
 
 // PERNAS
-addExercise('Agachamento Livre', 'Pernas', ['agachamento', 'agachamento barra', 'agachamento costas', 'squat']);
-addExercise('Agachamento Hack', 'Pernas', ['hack squat', 'hack', 'hack machine']);
-addExercise('Agachamento Smith', 'Pernas', ['smith', 'smith machine']);
-addExercise('Leg Press 45', 'Pernas', ['leg press', 'leg 45', 'leg press 45o']);
-addExercise('Cadeira Extensora', 'Pernas', ['extensora', 'cadeira extensora pernas', 'extensao de pernas']);
-addExercise('Cadeira Flexora', 'Pernas', ['flexora', 'cadeira flexora sentada']);
-addExercise('Mesa Flexora', 'Pernas', ['mesa flexora deitada']);
-addExercise('Stiff', 'Pernas', ['stiff barra', 'stiff com barra', 'stiff halteres']);
-addExercise('Levantamento Terra', 'Pernas', ['deadlift', 'terra']);
-addExercise('Elevação Pélvica', 'Pernas', ['hip thrust', 'elevacao pelvica barra', 'elevacao pelvica maquina']);
-addExercise('Passada', 'Pernas', ['avanco', 'passada halteres', 'lunge', 'lunges']);
-addExercise('Afundo', 'Pernas', ['bulgaro', 'agachamento bulgaro']);
-addExercise('Cadeira Abdutora', 'Pernas', ['abdutora', 'abducao maquina']);
-addExercise('Cadeira Adutora', 'Pernas', ['adutora', 'aducao maquina']);
-addExercise('Panturrilha em Pé', 'Pernas', ['gemeos em pe', 'panturrilha maquina em pe', 'elevacao de panturrilha']);
-addExercise('Panturrilha Sentado', 'Pernas', ['gemeos sentado', 'panturrilha burrico']);
-addExercise('Panturrilha no Leg Press', 'Pernas', ['gemeos leg press']);
+addExercise('Agachamento Livre', 'Quadríceps', ['agachamento', 'agachamento barra', 'agachamento costas', 'squat']);
+addExercise('Agachamento Hack', 'Quadríceps', ['hack squat', 'hack', 'hack machine']);
+addExercise('Agachamento Smith', 'Quadríceps', ['smith', 'smith machine']);
+addExercise('Leg Press 45', 'Quadríceps', ['leg press', 'leg 45', 'leg press 45o']);
+addExercise('Cadeira Extensora', 'Quadríceps', ['extensora', 'cadeira extensora pernas', 'extensao de pernas']);
+addExercise('Cadeira Flexora', 'Isquiotibiais', ['flexora', 'cadeira flexora sentada']);
+addExercise('Mesa Flexora', 'Isquiotibiais', ['mesa flexora deitada']);
+addExercise('Stiff', 'Isquiotibiais', ['stiff barra', 'stiff com barra', 'stiff halteres']);
+addExercise('Levantamento Terra', 'Isquiotibiais', ['deadlift', 'terra']);
+addExercise('Elevação Pélvica', 'Glúteos', ['hip thrust', 'elevacao pelvica barra', 'elevacao pelvica maquina']);
+addExercise('Passada', 'Quadríceps', ['avanco', 'passada halteres', 'lunge', 'lunges']);
+addExercise('Afundo', 'Quadríceps', ['bulgaro', 'agachamento bulgaro']);
+addExercise('Cadeira Abdutora', 'Glúteos', ['abdutora', 'abducao maquina']);
+addExercise('Cadeira Adutora', 'Quadríceps', ['adutora', 'aducao maquina']);
+addExercise('Panturrilha em Pé', 'Panturrilhas', ['gemeos em pe', 'panturrilha maquina em pe', 'elevacao de panturrilha']);
+addExercise('Panturrilha Sentado', 'Panturrilhas', ['gemeos sentado', 'panturrilha burrico']);
+addExercise('Panturrilha no Leg Press', 'Panturrilhas', ['gemeos leg press']);
 
 // OMBROS
 addExercise('Desenvolvimento com Halteres', 'Ombros', ['desenvolvimento halteres', 'desenvolvimento sentado']);
@@ -138,7 +141,10 @@ addExercise('Prancha', 'Core', ['plank', 'prancha isometrica', 'abdominal pranch
 const muscleKeywords: Record<MuscleGroup, string[]> = {
   'Peito': ['supino', 'voador', 'peck', 'deck', 'crucifixo', 'cross', 'crossover', 'flexao', 'pushup', 'peitoral', 'chest'],
   'Costas': ['remada', 'puxada', 'pulley', 'puxador', 'barra fixa', 'pullup', 'chinup', 'serrote', 'cavalinho', 'pulldown', 'lat', 'back', 'costas', 'trap'],
-  'Pernas': ['agachamento', 'leg', 'press', 'extensora', 'flexora', 'stiff', 'terra', 'deadlift', 'panturrilha', 'gemeos', 'afundo', 'passada', 'bulgaro', 'abdutora', 'adutora', 'squat', 'lunge', 'perna', 'gluteo'],
+  'Quadríceps': ['agachamento', 'leg press', 'extensora', 'afundo', 'passada', 'bulgaro', 'quadriceps', 'quads', 'coxa'],
+  'Isquiotibiais': ['flexora', 'stiff', 'terra', 'deadlift', 'isquio', 'isquiotibial', 'hamstring', 'posterior'],
+  'Glúteos': ['hip thrust', 'elevacao pelvica', 'abdutora', 'gluteo', 'bumbum', 'glute'],
+  'Panturrilhas': ['panturrilha', 'gemeos', 'calf'],
   'Ombros': ['desenvolvimento', 'elevacao', 'lateral', 'frontal', 'militar', 'overhead', 'shoulder', 'ombro', 'deltoide', 'facepull', 'trapezio'],
   'Bíceps': ['rosca', 'biceps', 'martelo', 'scott', 'concentrada', 'curl'],
   'Tríceps': ['triceps', 'testa', 'frances', 'coice', 'mergulho', 'corda', 'pulley', 'skullcrusher', 'dips'],
@@ -166,7 +172,7 @@ export function getExerciseInfo(rawName: string, fallbackMuscleGroup?: string): 
   // 2. Heuristic Search by Keywords
   const words = normName.split(' ');
   const scores: Record<string, number> = {
-    'Peito': 0, 'Costas': 0, 'Pernas': 0, 'Ombros': 0, 'Bíceps': 0, 'Tríceps': 0, 'Core': 0
+    'Peito': 0, 'Costas': 0, 'Quadríceps': 0, 'Isquiotibiais': 0, 'Glúteos': 0, 'Panturrilhas': 0, 'Ombros': 0, 'Bíceps': 0, 'Tríceps': 0, 'Core': 0
   };
 
   words.forEach(word => {

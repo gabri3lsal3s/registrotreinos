@@ -46,7 +46,7 @@ export async function loginWithBiometrics() {
   throw new Error('Biometria em nuvem ainda não implementada com Supabase');
 }
 
-export async function registerBiometry(userId: string) {
-  console.log('Registro de biometria para user:', userId);
+export async function registerBiometry(_userId: string) {
+  // Biometric registration placeholder
   return true;
 }

@@ -7,13 +7,23 @@ import {
   db, 
   getExercisesByProtocol, 
   startWorkout, 
-  addWorkoutSet,
+  upsertWorkoutSet,
   cancelActiveWorkout,
-  updateExercise
+  updateExercise,
+  getExercisePR,
+  addExercise,
+  getUniqueExercisesLibrary
 } from '../services/workoutDB';
 import { syncData } from '../services/syncService';
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import { 
   CheckCircle2, 
   Circle, 
@@ -21,7 +31,10 @@ import {
   Save,
   ChevronDown,
   ChevronUp,
-  X
+  X,
+  PlusCircle,
+  Search,
+  Dumbbell
 } from "lucide-react"
 
 const WEEK_DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -45,12 +58,18 @@ export default function WorkoutPage() {
   
   const [protocolName, setProtocolName] = useState('');
   const [exercises, setExercises] = useState<WorkoutExercise[]>([]);
+  const [truePRs, setTruePRs] = useState<Record<string, { weight: number, reps: number }>>({});
   const [loading, setLoading] = useState(true);
   const [expandedExercise, setExpandedExercise] = useState<string | null>(null);
   const [activeWorkoutId, setActiveWorkoutId] = useState<string | null>(null);
 
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [availableDays, setAvailableDays] = useState<string[]>([]);
+  
+  // Library State
+  const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+  const [library, setLibrary] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     async function loadWorkoutData() {
@@ -95,35 +114,19 @@ export default function WorkoutPage() {
           }
         }
 
+        // 5. PR Calculation from History (Only completed workouts)
         const allExercises = await getExercisesByProtocol(protocolId);
+        const historicalPRs: Record<string, { weight: number, reps: number }> = {};
 
-        // PR Reconciliation: Ensure all exercises in protocol reflect their true all-time max from history
-        const exerciseIds = allExercises.map(ex => ex.id);
-        const allTimeSets = await db.workoutSets.where('exerciseId').anyOf(exerciseIds).toArray();
-        const bestFromHistory: Record<string, { weight: number; reps: number }> = {};
-        
-        allTimeSets.forEach(s => {
-          if (!bestFromHistory[s.exerciseId] || 
-              s.weight > bestFromHistory[s.exerciseId].weight || 
-              (s.weight === bestFromHistory[s.exerciseId].weight && s.reps > bestFromHistory[s.exerciseId].reps)) {
-            bestFromHistory[s.exerciseId] = { weight: s.weight, reps: s.reps };
-          }
-        });
-
-        // Update any exercises that have a higher PR in history than currently recorded
         for (const ex of allExercises) {
-          const best = bestFromHistory[ex.id];
-          if (best) {
-            const currentWeight = Number(ex.lastWeight || 0);
-            const currentReps = Number(ex.lastReps || 0);
-            if (best.weight > currentWeight || (best.weight === currentWeight && best.reps > currentReps)) {
-              ex.lastWeight = best.weight;
-              ex.lastReps = best.reps;
-              // Update DB silently (background)
-              updateExercise(ex.id, { lastWeight: best.weight, lastReps: best.reps }).catch(console.error);
-            }
+          const truePR = await getExercisePR(ex.id);
+          if (truePR) {
+            historicalPRs[ex.id] = { weight: truePR.weight, reps: truePR.reps };
+          } else {
+            historicalPRs[ex.id] = { weight: 0, reps: 0 };
           }
         }
+        setTruePRs(historicalPRs);
         
         // Find days that have exercises
         const daysWithExercises = WEEK_DAYS.filter(day => 
@@ -140,7 +143,7 @@ export default function WorkoutPage() {
         }
 
         // Filter exercises for selected day and initialize set state
-        const dayExercises = await Promise.all(allExercises
+        const dayExercises = await Promise.all((await getExercisesByProtocol(protocolId, false, active?.id))
           .filter(ex => ex.name.includes(`(${dayLabel})`))
           .map(async (ex) => {
             const setNum = (ex as any).sets || 3;
@@ -162,20 +165,41 @@ export default function WorkoutPage() {
                 .where({ workoutId: active.id, exerciseId: ex.id })
                 .toArray();
               
-              existingSets.forEach((s, idx) => {
-                if (idx < setNum) {
-                  completedSets[idx] = s.completed;
-                  setsData[idx] = { weight: String(s.weight), reps: String(s.reps) };
+              existingSets.forEach(s => {
+                if (s.setIndex < setNum) { // Safety check
+                  completedSets[s.setIndex] = true;
+                  setsData[s.setIndex] = { weight: s.weight.toString(), reps: s.reps.toString() };
                 }
               });
             }
+
+            // Calculate Display PR: max(historicalPR, current session sets)
+            const historicalMax = historicalPRs[ex.id] || { weight: 0, reps: 0 };
+            let sessionMaxWeight = 0;
+            let sessionMaxReps = 0;
+            
+            completedSets.forEach((done, i) => {
+              if (done) {
+                const w = Number(setsData[i].weight);
+                const r = Number(setsData[i].reps);
+                if (w > sessionMaxWeight || (w === sessionMaxWeight && r > sessionMaxReps)) {
+                  sessionMaxWeight = w;
+                  sessionMaxReps = r;
+                }
+              }
+            });
+
+            const isHistoryBetter = historicalMax.weight > sessionMaxWeight || (historicalMax.weight === sessionMaxWeight && historicalMax.reps > sessionMaxReps);
+            const finalPR = isHistoryBetter ? historicalMax : { weight: sessionMaxWeight, reps: sessionMaxReps };
 
             return {
               ...ex,
               category: ex.category || 'weight',
               sets: setNum,
               completedSets,
-              setsData
+              setsData,
+              lastWeight: finalPR.weight,
+              lastReps: finalPR.reps
             };
           }));
 
@@ -194,30 +218,36 @@ export default function WorkoutPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, protocolId, selectedDay, navigate]);
 
-  const checkAndUpdatePR = async (exIdx: number, setIdx: number, currentExercises: WorkoutExercise[]) => {
-    const exercise = currentExercises[exIdx];
-    if (!exercise.completedSets[setIdx]) return; // Only PR if set is completed
-
-    const weight = Number(exercise.setsData[setIdx].weight);
-    const reps = Number(exercise.setsData[setIdx].reps);
-    const currentMaxWeight = Number(exercise.lastWeight || 0);
-    const currentMaxReps = Number(exercise.lastReps || 0);
-
-    if (weight > currentMaxWeight || (weight === currentMaxWeight && reps > currentMaxReps)) {
-      // Update local state first for immediate UI feedback
-      exercise.lastWeight = weight;
-      exercise.lastReps = reps;
-      setExercises([...currentExercises]);
-
-      // Update DB
-      await updateExercise(exercise.id, { 
-        lastWeight: weight, 
-        lastReps: reps 
-      });
-      
-      // Sync
-      syncData().catch(e => console.error('Cloud sync error:', e));
+  useEffect(() => {
+    if (isLibraryOpen && user) {
+      getUniqueExercisesLibrary(user.id).then(setLibrary);
     }
+  }, [isLibraryOpen, user]);
+
+  const checkAndUpdatePR = (exIdx: number, currentExercises: WorkoutExercise[]) => {
+    const exercise = currentExercises[exIdx];
+    const historical = truePRs[exercise.id] || { weight: 0, reps: 0 };
+    
+    let sessionBestWeight = 0;
+    let sessionBestReps = 0;
+
+    exercise.completedSets.forEach((done, i) => {
+      if (done) {
+        const w = Number(exercise.setsData[i].weight);
+        const r = Number(exercise.setsData[i].reps);
+        if (w > sessionBestWeight || (w === sessionBestWeight && r > sessionBestReps)) {
+          sessionBestWeight = w;
+          sessionBestReps = r;
+        }
+      }
+    });
+
+    const isHistoryBetter = historical.weight > sessionBestWeight || (historical.weight === sessionBestWeight && historical.reps > sessionBestReps);
+    const finalPR = isHistoryBetter ? historical : { weight: sessionBestWeight, reps: sessionBestReps };
+    
+    exercise.lastWeight = finalPR.weight;
+    exercise.lastReps = finalPR.reps;
+    setExercises([...currentExercises]);
   };
 
   const handleSetToggle = async (exIdx: number, setIdx: number) => {
@@ -242,41 +272,28 @@ export default function WorkoutPage() {
       }
 
       // 2. Save/Update set in DB
-      // We look for existing set for this exercise and index
-      
-      // This is a bit simplified, usually we'd want a more robust way to match sets
-      // but given the current structure, we'll try to find or create.
-      // For now, let's just add it. If we want real sync, we might need a set index.
-      // However, addWorkoutSet creates a new UUID. 
-      // To keep it simple and real-time:
       if (isNowCompleted) {
-        await addWorkoutSet({
+        await upsertWorkoutSet({
           workoutId: currentWorkoutId,
           exerciseId: exercise.id,
+          setIndex: setIdx,
           weight: Number(exercise.setsData[setIdx].weight),
           reps: Number(exercise.setsData[setIdx].reps),
-          completed: true,
+          completed: true
         });
       } else {
-        // If unchecking, we should ideally delete the set or mark as uncompleted
-        // For now, let's just delete the last matching set for this exercise
-        const setsToDelete = await db.workoutSets
-          .where({ workoutId: currentWorkoutId, exerciseId: exercise.id })
-          .toArray();
-        if (setsToDelete.length > 0) {
-          // Delete all sets for this exercise and index? 
-          // Let's just delete the one we just added (or similar).
-          // Realistically we need a way to identify the specific set.
-          // Let's assume the user doesn't toggle back and forth too fast.
-          await db.workoutSets.where({ workoutId: currentWorkoutId, exerciseId: exercise.id }).delete();
-          // Re-add other completed sets? This is getting complex.
-          // Better: update workoutSets schema to include 'setIndex'.
-          // But I already updated schema once.
-        }
+        // Delete only this set index
+        await db.workoutSets
+          .where({ 
+            workoutId: currentWorkoutId, 
+            exerciseId: exercise.id, 
+            setIndex: setIdx 
+          })
+          .delete();
       }
 
       // 3. Update PR tracking
-      await checkAndUpdatePR(exIdx, setIdx, newExercises);
+      checkAndUpdatePR(exIdx, newExercises);
 
     } catch (err) {
       console.error('Error in real-time sync:', err);
@@ -288,9 +305,74 @@ export default function WorkoutPage() {
     newExercises[exIdx].setsData[setIdx][field] = value;
     setExercises(newExercises);
     
-    // If already completed, check if this new value is a PR
+    const setData = newExercises[exIdx].setsData[setIdx];
     if (newExercises[exIdx].completedSets[setIdx]) {
-      checkAndUpdatePR(exIdx, setIdx, newExercises);
+      upsertWorkoutSet({
+        workoutId: activeWorkoutId!,
+        exerciseId: newExercises[exIdx].id,
+        setIndex: setIdx,
+        weight: Number(setData.weight),
+        reps: Number(setData.reps),
+        completed: true
+      }).catch(console.error);
+      
+      checkAndUpdatePR(exIdx, newExercises);
+    }
+  };
+
+  const handleAddExtraExercise = async (libEx: any) => {
+    if (!user || !protocolId || !selectedDay) return;
+    
+    try {
+      const name = libEx.name.includes('(') ? libEx.name : `${libEx.name} (${selectedDay})`;
+      
+      const newExId = await addExercise({
+        protocolId,
+        name,
+        muscleGroup: libEx.muscleGroup,
+        category: libEx.category || 'weight',
+        multiplier: libEx.multiplier || 1,
+        order: exercises.length,
+        dayOfWeek: selectedDay,
+        sets: 3,
+        reps: 10,
+        isSessionOnly: true,
+      });
+
+      // Update local state to show the new exercise immediately
+      const newEx: WorkoutExercise = {
+        id: newExId,
+        name,
+        category: libEx.category || 'weight',
+        order: exercises.length,
+        sets: 3,
+        completedSets: [false, false, false],
+        setsData: [{ weight: '0', reps: '10' }, { weight: '0', reps: '10' }, { weight: '0', reps: '10' }],
+        lastWeight: 0,
+        lastReps: 0
+      };
+
+      setExercises([...exercises, newEx]);
+      setExpandedExercise(newExId);
+      setIsLibraryOpen(false);
+      setSearchQuery('');
+      
+      // Pin to session by creating an initial uncompleted set
+      if (activeWorkoutId) {
+        await upsertWorkoutSet({
+          workoutId: activeWorkoutId,
+          exerciseId: newExId,
+          setIndex: 0,
+          weight: 0,
+          reps: 10,
+          completed: false
+        });
+      }
+
+      toast.success(`${libEx.name} adicionado!`);
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao adicionar exercício extra.');
     }
   };
 
@@ -303,8 +385,9 @@ export default function WorkoutPage() {
     if (window.confirm('Deseja realmente cancelar este treino? O progresso não será salvo no histórico.')) {
       try {
         await cancelActiveWorkout(activeWorkoutId);
-        await syncData();
-        toast.success('Treino cancelado.');
+        const { deleteWorkoutFromCloud } = await import('../services/syncService');
+        await deleteWorkoutFromCloud(activeWorkoutId);
+        toast.success('Treino excluído.');
         navigate('/');
       } catch (err) {
         console.error(err);
@@ -373,6 +456,36 @@ export default function WorkoutPage() {
         const { error } = await supabase.from('workouts').upsert([workoutData]);
         if (error) {
           throw new Error('Erro ao salvar treino no Supabase: ' + error.message);
+        }
+
+        // 4. Update PRs for all performed exercises
+        for (const ex of exercises) {
+          let sessionBestWeight = 0;
+          let sessionBestReps = 0;
+
+          ex.completedSets.forEach((completed, idx) => {
+            if (completed) {
+              const weight = Number(ex.setsData[idx].weight);
+              const reps = Number(ex.setsData[idx].reps);
+              if (weight > sessionBestWeight || (weight === sessionBestWeight && reps > sessionBestReps)) {
+                sessionBestWeight = weight;
+                sessionBestReps = reps;
+              }
+            }
+          });
+
+          if (sessionBestWeight > 0) {
+            const truePR = await getExercisePR(ex.id);
+            const oldWeight = truePR ? truePR.weight : 0;
+            const oldReps = truePR ? truePR.reps : 0;
+
+            if (sessionBestWeight > oldWeight || (sessionBestWeight === oldWeight && sessionBestReps > oldReps)) {
+              await updateExercise(ex.id, { 
+                lastWeight: sessionBestWeight, 
+                lastReps: sessionBestReps 
+              });
+            }
+          }
         }
       }
 
@@ -519,6 +632,15 @@ export default function WorkoutPage() {
               )}
             </Card>
           ))}
+          
+          <Button
+            variant="outline"
+            onClick={() => setIsLibraryOpen(true)}
+            className="w-full h-16 rounded-2xl border-dashed border-2 border-primary/20 hover:border-primary/40 hover:bg-primary/5 group transition-all"
+          >
+            <PlusCircle className="w-5 h-5 mr-2 text-primary" />
+            <span className="font-black uppercase tracking-widest text-xs">Adicionar Exercício Extra</span>
+          </Button>
         </div>
 
         {/* Action Buttons */}
@@ -539,6 +661,70 @@ export default function WorkoutPage() {
             </Button>
           </div>
         </div>
+
+        {/* Library Modal */}
+        <Dialog open={isLibraryOpen} onOpenChange={setIsLibraryOpen}>
+          <DialogContent className="max-w-md w-[95vw] rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
+            <DialogHeader className="p-6 pb-2 bg-card">
+              <DialogTitle className="text-xl font-black uppercase tracking-tight">Biblioteca</DialogTitle>
+              <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-widest">Sessão: {selectedDay}</p>
+            </DialogHeader>
+            
+            <div className="p-6 pt-2 space-y-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground opacity-50" />
+                <Input
+                  className="pl-10 h-12 bg-muted/30 border-none rounded-xl font-bold placeholder:font-black placeholder:uppercase placeholder:text-[10px]"
+                  placeholder="Procurar exercício..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+
+              <div className="max-h-[50vh] overflow-y-auto pr-2 space-y-2 custom-scrollbar">
+                {searchQuery.trim().length >= 2 && (
+                  <button
+                    className="w-full flex items-center justify-between p-4 rounded-2xl bg-primary/5 hover:bg-primary/10 border border-dashed border-primary/30 transition-all text-left group mb-4"
+                    onClick={() => handleAddExtraExercise({ name: searchQuery.trim(), muscleGroup: 'Outros' })}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-background shadow-sm text-primary group-hover:scale-110 transition-transform">
+                        <PlusCircle className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="font-black text-[11px] uppercase tracking-tight">Criar "{searchQuery.trim()}"</p>
+                        <p className="text-[9px] font-mono text-primary uppercase">Exercício Personalizado</p>
+                      </div>
+                    </div>
+                    <PlusCircle className="w-4 h-4 text-primary" />
+                  </button>
+                )}
+
+                {library
+                  .filter(ex => ex.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .map((ex, idx) => (
+                    <button
+                      key={idx}
+                      className="w-full flex items-center justify-between p-4 rounded-2xl bg-muted/20 hover:bg-primary/10 border border-transparent hover:border-primary/20 transition-all text-left group"
+                      onClick={() => handleAddExtraExercise(ex)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-xl bg-background shadow-sm text-primary group-hover:scale-110 transition-transform">
+                          <Dumbbell className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="font-black text-[11px] uppercase tracking-tight">{ex.name}</p>
+                          <p className="text-[9px] font-mono text-muted-foreground uppercase">{ex.muscleGroup}</p>
+                        </div>
+                      </div>
+                      <PlusCircle className="w-4 h-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+                  ))
+                }
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );

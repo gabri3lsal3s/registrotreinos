@@ -8,6 +8,7 @@ const toSnake = (obj: any) => {
     protocolId: 'protocol_id',
     exerciseId: 'exercise_id',
     workoutId: 'workout_id',
+    setIndex: 'set_index',
     createdAt: 'created_at',
     finishedAt: 'finished_at',
     muscleGroup: 'muscle_group',
@@ -21,11 +22,14 @@ const toSnake = (obj: any) => {
     daysOfWeek: 'days_of_week',
     updatedAt: 'updated_at',
     dayOfWeek: 'day_of_week',
-    isArchived: 'is_archived'
+    isArchived: 'is_archived',
+    category: 'category',
+    multiplier: 'multiplier',
+    isSessionOnly: 'is_session_only'
   };
   const newObj: any = {};
   for (const key in obj) {
-    if (key === 'isSynced') continue;
+    if (key === 'isSynced' || key === 'baseline') continue;
     
     let value = obj[key];
     // Converter timestamps de número (Dexie) para ISO String (Supabase timestamptz)
@@ -43,6 +47,7 @@ const toCamel = (obj: any) => {
     protocol_id: 'protocolId',
     exercise_id: 'exerciseId',
     workout_id: 'workoutId',
+    set_index: 'setIndex',
     created_at: 'createdAt',
     finished_at: 'finishedAt',
     muscle_group: 'muscleGroup',
@@ -56,7 +61,10 @@ const toCamel = (obj: any) => {
     days_of_week: 'daysOfWeek',
     updated_at: 'updatedAt',
     day_of_week: 'dayOfWeek',
-    is_archived: 'isArchived'
+    is_archived: 'isArchived',
+    category: 'category',
+    multiplier: 'multiplier',
+    is_session_only: 'isSessionOnly'
   };
   const newObj: any = {};
   for (const key in obj) {
@@ -291,6 +299,20 @@ export async function deleteExercisesByProtocol(protocolId: string) {
   } catch (err: any) {
     console.error(`[Sync] Erro ao deletar exercícios do protocolo (${protocolId}):`, err.message || err);
     throw err;
+  }
+}
+
+export async function deleteWorkoutFromCloud(workoutId: string) {
+  const { user } = useAuthStore.getState();
+  if (!user) return;
+
+  try {
+    // Delete sets first (cascading equivalent if RLS allows)
+    await supabase.from('workout_sets').delete().eq('workout_id', workoutId).eq('user_id', user.id);
+    // Then delete workout
+    await supabase.from('workouts').delete().eq('id', workoutId).eq('user_id', user.id);
+  } catch (err: any) {
+    console.error(`[Sync] Erro ao deletar treino no cloud (${workoutId}):`, err.message || err);
   }
 }
 

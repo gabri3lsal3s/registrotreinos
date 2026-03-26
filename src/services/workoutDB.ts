@@ -12,6 +12,7 @@ export async function deleteWorkoutSet(id: string) {
   await db.workoutSets.delete(id);
 }
 import Dexie, { type Table } from 'dexie';
+import { getExerciseInfo } from '../utils/exerciseDictionary';
 
 export interface Protocol {
   id: string; // UUID
@@ -25,6 +26,7 @@ export interface Protocol {
   createdAt: number;
   updatedAt: number;
 }
+
 
 export interface Exercise {
   id: string;
@@ -41,6 +43,7 @@ export interface Exercise {
   lastReps?: number;
   isSynced?: boolean;
   isArchived?: boolean;
+  isSessionOnly?: boolean;
 }
 
 export interface Workout {
@@ -62,6 +65,7 @@ export interface WorkoutSet {
   id: string;
   workoutId: string;
   exerciseId: string;
+  setIndex: number;
   weight: number;
   reps: number; // for time-based, this will store seconds down the line, but we keep the column. Or we can use timeInSeconds.
   timeInSeconds?: number;
@@ -103,6 +107,10 @@ class WorkoutDB extends Dexie {
     
     this.version(5).stores({
       bodyWeights: 'id, userId, date, [userId+date]',
+    });
+
+    this.version(6).stores({
+      workoutSets: 'id, workoutId, exerciseId, setIndex, [workoutId+exerciseId+setIndex]',
     });
   }
 }
@@ -162,10 +170,30 @@ export async function addExercise(exercise: Omit<Exercise, 'id'>) {
   return id;
 }
 
-export async function getExercisesByProtocol(protocolId: string, includeArchived = false) {
+export async function getExercisesByProtocol(protocolId: string, includeArchived = false, activeWorkoutId?: string) {
   const collection = db.exercises.where('protocolId').equals(protocolId);
-  if (includeArchived) return collection.sortBy('order');
-  return collection.filter(ex => !ex.isArchived).sortBy('order');
+  const data = await collection.toArray();
+  
+  let results = data;
+
+  if (activeWorkoutId) {
+    // Pegar IDs de exercícios que têm séries NESTE treino ativo
+    const sets = await db.workoutSets.where('workoutId').equals(activeWorkoutId).toArray();
+    const sessionExerciseIds = new Set(sets.map(s => s.exerciseId));
+    
+    // Filtro: manter se não arquivado OU se for parte deste treino ativo
+    results = data.filter(ex => {
+      const isPartOfSession = sessionExerciseIds.has(ex.id);
+      if (includeArchived) return true;
+      return (!ex.isArchived && !ex.isSessionOnly) || isPartOfSession;
+    });
+  } else {
+    if (!includeArchived) {
+      results = data.filter(ex => !ex.isArchived && !ex.isSessionOnly);
+    }
+  }
+
+  return results.sort((a, b) => a.order - b.order);
 }
 
 export async function deleteExercise(id: string) {
@@ -193,11 +221,7 @@ export async function finishActiveWorkout(id: string, updates: Partial<Workout> 
 }
 
 export async function cancelActiveWorkout(id: string) {
-  // Option A: Delete entirely
-  // Option B: Mark as cancelled to keep record but ignore in stats
-  // User asked for "considered as cancelled workout". Mark as cancelled is better.
-  const finishedAt = Date.now();
-  await db.workouts.update(id, { status: 'cancelled', finishedAt, isSynced: false });
+  return deleteWorkout(id);
 }
 
 export async function getActiveWorkout(userId: string, protocolId?: string) {
@@ -216,6 +240,19 @@ export async function addWorkoutSet(set: Omit<WorkoutSet, 'id' | 'timestamp'>) {
   const timestamp = Date.now();
   await db.workoutSets.add({ ...set, id, timestamp, isSynced: false });
   return id;
+}
+
+export async function upsertWorkoutSet(set: Omit<WorkoutSet, 'id' | 'timestamp'>) {
+  const existing = await db.workoutSets
+    .where({ workoutId: set.workoutId, exerciseId: set.exerciseId, setIndex: set.setIndex })
+    .first();
+  
+  if (existing) {
+    await db.workoutSets.update(existing.id, { ...set, isSynced: false });
+    return existing.id;
+  } else {
+    return addWorkoutSet(set);
+  }
 }
 
 export async function getWorkoutSets(workoutId: string) {
@@ -251,4 +288,63 @@ export async function clearAllData(userId: string) {
   await db.workouts.where('userId').equals(userId).delete();
   await db.exercises.where('protocolId').anyOf(protocolIds).delete();
   await db.protocols.where('userId').equals(userId).delete();
+}
+export async function getExercisePR(exerciseId: string) {
+  // 1. Get IDs of all completed workouts
+  const completedWorkouts = await db.workouts
+    .where('status')
+    .equals('completed')
+    .toArray();
+  
+  const workoutIds = new Set(completedWorkouts.map(w => w.id));
+
+  // 2. Get all sets for this exercise and filter by completed workouts
+  const sets = await db.workoutSets
+    .where('exerciseId')
+    .equals(exerciseId)
+    .toArray();
+
+  const completedSets = sets.filter(s => workoutIds.has(s.workoutId));
+
+  if (completedSets.length === 0) return null;
+
+  // 3. Find the best set
+  return completedSets.reduce((best, current) => {
+    if (current.weight > best.weight || (current.weight === best.weight && current.reps > best.reps)) {
+      return current;
+    }
+    return best;
+  });
+}
+
+export async function getUniqueExercisesLibrary(userId: string) {
+  const protocols = await getProtocolsByUser(userId);
+  const protocolIds = protocols.map(p => p.id);
+  
+  if (protocolIds.length === 0) return [];
+
+  const exercises = await db.exercises
+    .where('protocolId')
+    .anyOf(protocolIds)
+    .toArray();
+
+  const unique = new Map<string, any>();
+  
+  exercises.forEach(ex => {
+    // Normalizar para o nome canônico para evitar duplicatas (ex: "Supino Reto" e "Supino Reto Barra")
+    const info = getExerciseInfo(ex.name);
+    const key = info.canonicalName;
+    
+    if (!unique.has(key)) {
+      unique.set(key, {
+        name: info.canonicalName,
+        muscleGroup: info.muscleGroup || ex.muscleGroup,
+        category: info.category || ex.category || 'weight',
+        multiplier: info.multiplier || ex.multiplier
+      });
+    }
+  });
+
+  // Converter para array e ordenar por nome
+  return Array.from(unique.values()).sort((a, b) => a.name.localeCompare(b.name));
 }

@@ -299,9 +299,7 @@ export default function ProtocolsPage() {
   }
 
   async function handleSave() {
-    console.log('[ProtocolsPage] Iniciando handleSave...');
     if (!validateProtocol() || !user) {
-      console.warn('[ProtocolsPage] Falha na validação ou usuário ausente');
       return;
     }
     setSaving(true);
@@ -309,15 +307,10 @@ export default function ProtocolsPage() {
       let protocolId = editingProtocolId;
       const now = Date.now();
       
-      console.log(`[ProtocolsPage] Salvando protocolo: ${protocolId ? 'EDIÇÃO (' + protocolId + ')' : 'NOVO'}`);
-      console.log(`[ProtocolsPage] activeDays: ${JSON.stringify(activeDays)}`);
-      console.log(`[ProtocolsPage] workouts count: ${Object.keys(workouts).length} dias com exercícios`);
-
       let oldExercises: any[] = [];
 
       if (protocolId) {
         // Update existing protocol
-        console.log('[ProtocolsPage] Atualizando protocolo local...');
         oldExercises = await db.exercises.where('protocolId').equals(protocolId).toArray();
         await db.protocols.update(protocolId, { 
           name: protocolName.trim(), 
@@ -327,7 +320,6 @@ export default function ProtocolsPage() {
         });
       } else {
         // Create new protocol
-        console.log('[ProtocolsPage] Criando novo protocolo local...');
         protocolId = await createProtocol({
           name: protocolName.trim(),
           userId: user.id,
@@ -337,7 +329,6 @@ export default function ProtocolsPage() {
       }
 
       // Add/Recreate exercises (Unified for both new and edit)
-      console.log(`[ProtocolsPage] Atualizando exercícios para protocolId: ${protocolId}`);
       let totalExercisesCreated = 0;
       let totalExercisesUpdated = 0;
       const activeExerciseIds = new Set<string>();
@@ -345,7 +336,6 @@ export default function ProtocolsPage() {
       for (const day of activeDays) {
         const dayLabel = WEEK_DAYS.find(d => d.key === day)?.label;
         const dayExercises = workouts[day] || [];
-        console.log(`[ProtocolsPage] Dia ${day}: ${dayExercises.length} exercícios para salvar`);
         
         for (let i = 0; i < dayExercises.length; i++) {
           const ex = dayExercises[i];
@@ -387,22 +377,16 @@ export default function ProtocolsPage() {
          }
       }
 
-      console.log(`[ProtocolsPage] Exercícios -> Criados: ${totalExercisesCreated}, Atualizados: ${totalExercisesUpdated}, Removidos/Arquivados: ${removedExercises.length}`);
-
-      console.log('[ProtocolsPage] Iniciando sincronismo (fullSync)...');
       try {
         await fullSync();
-        console.log('[ProtocolsPage] Sincronismo concluído.');
         toast.success(editingProtocolId ? 'Protocolo atualizado!' : 'Protocolo salvo!');
         setShowBuilder(false);
         resetBuilder();
         loadProtocols();
       } catch (syncErr: any) {
-        console.error('[ProtocolsPage] Erro ao sincronizar com Supabase:', syncErr);
         toast.error('Erro ao sincronizar com o banco de dados. Verifique sua conexão e tente novamente.');
       }
     } catch (error: any) {
-      console.error('[ProtocolsPage] Erro fatal no handleSave:', error);
       toast.error(`Erro ao salvar protocolo: ${error.message || 'Erro desconhecido'}`);
     } finally {
       setSaving(false);
@@ -410,15 +394,12 @@ export default function ProtocolsPage() {
   }
 
   async function handleEditProtocol(id: string) {
-    console.log(`[ProtocolsPage] handleEditProtocol: carregando ID ${id}`);
     const p = await db.protocols.get(id);
     if (!p) {
-      console.error(`[ProtocolsPage] Protocolo ${id} não encontrado no Dexie!`);
       return;
     }
 
     const allExs = await getExercisesByProtocol(id);
-    console.log(`[ProtocolsPage] Total de exercícios encontrados no DB: ${allExs.length}`);
     
     const organizedWorkouts: Record<string, any[]> = {};
     const activeDayKeys: string[] = [];
@@ -446,7 +427,6 @@ export default function ProtocolsPage() {
         }));
       
       if (dayExs.length > 0) {
-        console.log(`[ProtocolsPage] Dia ${day.key}: ${dayExs.length} exercícios mapeados`);
         organizedWorkouts[day.key] = dayExs;
         activeDayKeys.push(day.key);
       }
@@ -457,7 +437,6 @@ export default function ProtocolsPage() {
     const orphans = allExs.filter((ex: any) => !assignedIds.has(ex.id));
     
     if (orphans.length > 0) {
-      console.log(`[ProtocolsPage] Órfãos encontrados (${orphans.length}). Movendo para o primeiro dia.`);
       const firstDay = p.daysOfWeek?.[0] || activeDayKeys[0] || 'mon';
       const existing = organizedWorkouts[firstDay] || [];
       organizedWorkouts[firstDay] = [
@@ -476,7 +455,6 @@ export default function ProtocolsPage() {
       if (!activeDayKeys.includes(firstDay)) activeDayKeys.push(firstDay);
     }
 
-    console.log(`[ProtocolsPage] Builder pronto: ${activeDayKeys.length} dias ativos`);
     setProtocolName(p.name);
     setActiveDays(p.daysOfWeek || activeDayKeys);
     setWorkouts(organizedWorkouts);
@@ -503,11 +481,10 @@ export default function ProtocolsPage() {
           }
         });
         if (inferredDays.length > 0) {
-          console.log(`[ProtocolsPage] Corrigindo dias para protocolo legado: ${inferredDays}`);
           currentDays = inferredDays;
         }
       } catch (e) {
-        console.error('Erro ao inferir dias do protocolo:', e);
+        // Error inferring days, proceed without it
       }
     }
 
@@ -629,10 +606,18 @@ export default function ProtocolsPage() {
         const ex = updatedDay[idx];
         if (ex && ex.id && typeof ex.id === 'string' && ex.id.length > 10) {
           // Só tenta atualizar se já foi salvo no banco (id UUID)
-          const updateObj: any = { [field]: value };
-          // Se alterar sets ou reps, atualiza também lastReps
-          if (field === 'reps') updateObj.lastReps = Number(value) || 0;
-          if (field === 'baseline') updateObj.lastWeight = Number(value) || 0;
+          let updateObj: any = { [field]: value };
+          
+          // Se alterar reps, atualiza também lastReps
+          if (field === 'reps') {
+            updateObj.lastReps = Number(value) || 0;
+          }
+          
+          // Se alterar baseline, traduz para lastWeight e REMOVE baseline do upload
+          if (field === 'baseline') {
+            updateObj = { lastWeight: Number(value) || 0 };
+          }
+
           updateExercise(ex.id, updateObj)
             .then(() => syncData().catch(() => {}))
             .catch(() => {});

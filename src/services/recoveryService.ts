@@ -28,7 +28,7 @@ export async function runHistoryRecovery() {
       return;
     }
 
-    console.log(`[Recovery] Detectados ${orphans.length} sets órfãos. Iniciando reconstrução...`);
+    // Orphan sets reconstruction started
 
     // 3. Agrupar órfãos por Workout e por ID antigo
     // workoutId -> { oldExId -> WorkoutSet[] }
