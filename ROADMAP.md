@@ -51,6 +51,7 @@ Aplicação Web Progressiva (PWA) mobile-first com foco em rastreamento de hiper
 - [ ] **Mirroring Pull**: Update `pullData` to clear local data for the user before applying server data (Symmetry Sync).
 - [ ] **Conflict Resolution**: Ensure local changes are pushed before pulling to avoid data loss.
 - [ ] **Exportation JSON**: Finalize the data sovereignty tool.
+- [ ] **Página de Análise**: Verificar se as análises estão sendo feitas corretamente utilizando os dados dos treinos e sem registros "fantasmas" de treinos excluídos.
 
 ---
 
@@ -88,4 +89,4 @@ Aplicação Web Progressiva (PWA) mobile-first com foco em rastreamento de hiper
 
 ---
 
-Este roadmap reflete a transição de um MVP local para um ecossistema sincronizado e robusto de treinamento.
+Este roadmap reflete a transição de um MVP local para um ecossistema sincronizado e robusto de treinamento.

@@ -34,8 +34,17 @@ import {
   X,
   PlusCircle,
   Search,
-  Dumbbell
+  Dumbbell,
+  Minus,
+  Trash2
 } from "lucide-react"
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select"
 
 const WEEK_DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
@@ -49,6 +58,7 @@ interface WorkoutExercise {
   sets: number;
   completedSets: boolean[];
   setsData: { weight: string; reps: string }[];
+  isSessionOnly?: boolean;
 }
 
 export default function WorkoutPage() {
@@ -70,6 +80,16 @@ export default function WorkoutPage() {
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [library, setLibrary] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Config Extra Exercise State
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [configEx, setConfigEx] = useState<{
+    name: string;
+    category: 'weight' | 'bodyweight' | 'time';
+    sets: number;
+    muscleGroup?: string;
+    multiplier?: number;
+  } | null>(null);
 
   useEffect(() => {
     async function loadWorkoutData() {
@@ -198,6 +218,7 @@ export default function WorkoutPage() {
               sets: setNum,
               completedSets,
               setsData,
+              isSessionOnly: ex.isSessionOnly,
               lastWeight: finalPR.weight,
               lastReps: finalPR.reps
             };
@@ -320,40 +341,56 @@ export default function WorkoutPage() {
     }
   };
 
-  const handleAddExtraExercise = async (libEx: any) => {
-    if (!user || !protocolId || !selectedDay) return;
+  const handleAddExtraExercise = (libEx: any) => {
+    setConfigEx({
+      name: libEx.name,
+      category: libEx.category || 'weight',
+      sets: 3,
+      muscleGroup: libEx.muscleGroup,
+      multiplier: libEx.multiplier
+    });
+    setIsConfigOpen(true);
+  };
+
+  const confirmAddExtraExercise = async () => {
+    if (!user || !protocolId || !selectedDay || !configEx) return;
     
     try {
-      const name = libEx.name.includes('(') ? libEx.name : `${libEx.name} (${selectedDay})`;
+      const name = configEx.name.includes('(') ? configEx.name : `${configEx.name} (${selectedDay})`;
       
       const newExId = await addExercise({
         protocolId,
         name,
-        muscleGroup: libEx.muscleGroup,
-        category: libEx.category || 'weight',
-        multiplier: libEx.multiplier || 1,
+        muscleGroup: configEx.muscleGroup,
+        category: configEx.category,
+        multiplier: configEx.multiplier || 1,
         order: exercises.length,
         dayOfWeek: selectedDay,
-        sets: 3,
+        sets: configEx.sets,
         reps: 10,
         isSessionOnly: true,
       });
+
+      const setsData = new Array(configEx.sets).fill(null).map(() => ({ weight: '0', reps: '10' }));
 
       // Update local state to show the new exercise immediately
       const newEx: WorkoutExercise = {
         id: newExId,
         name,
-        category: libEx.category || 'weight',
+        category: configEx.category,
         order: exercises.length,
-        sets: 3,
-        completedSets: [false, false, false],
-        setsData: [{ weight: '0', reps: '10' }, { weight: '0', reps: '10' }, { weight: '0', reps: '10' }],
+        sets: configEx.sets,
+        completedSets: new Array(configEx.sets).fill(false),
+        setsData,
+        isSessionOnly: true,
         lastWeight: 0,
         lastReps: 0
       };
 
       setExercises([...exercises, newEx]);
       setExpandedExercise(newExId);
+      setIsConfigOpen(false);
+      setConfigEx(null);
       setIsLibraryOpen(false);
       setSearchQuery('');
       
@@ -369,10 +406,41 @@ export default function WorkoutPage() {
         });
       }
 
-      toast.success(`${libEx.name} adicionado!`);
+      toast.success(`${configEx.name} adicionado!`);
     } catch (err) {
       console.error(err);
       toast.error('Erro ao adicionar exercício extra.');
+    }
+  };
+
+  const handleDeleteExtraExercise = async (exId: string, name: string) => {
+    if (!activeWorkoutId) return;
+    
+    if (window.confirm(`Deseja remover "${name.split(' (')[0]}" desta sessão?`)) {
+      try {
+        console.log(`[Delete] Removendo exercício ${exId} (${name})`);
+        
+        // 1. Remove from Cloud (if synced)
+        const { deleteRemoteItem } = await import('../services/syncService');
+        await deleteRemoteItem('exercises', exId).catch(err => {
+          console.warn('[Delete] Erro ao remover do cloud (pode não ter sido sincronizado ainda):', err);
+        });
+
+        // 2. Remove from Local DB (sets and exercise)
+        await db.transaction('rw', [db.exercises, db.workoutSets], async () => {
+          await db.workoutSets.where({ workoutId: activeWorkoutId, exerciseId: exId }).delete();
+          await db.exercises.delete(exId);
+        });
+
+        // 3. Update local state
+        setExercises(prev => prev.filter(ex => ex.id !== exId));
+        if (expandedExercise === exId) setExpandedExercise(null);
+        
+        toast.success('Exercício removido.');
+      } catch (err) {
+        console.error('[Delete] Erro crítico:', err);
+        toast.error('Erro ao remover exercício.');
+      }
     }
   };
 
@@ -551,14 +619,12 @@ export default function WorkoutPage() {
               }`}
               style={{ animationDelay: `${exIdx * 50}ms` }}
             >
-              <header 
-                className="p-4 flex items-center justify-between cursor-pointer"
-                onClick={() => setExpandedExercise(expandedExercise === ex.id ? null : ex.id)}
-              >
-                <div className="flex items-center gap-4 min-w-0">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black transition-colors ${
-                    ex.completedSets.every(Boolean) ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
-                  }`}>
+              <header className="flex items-center justify-between border-b border-border/5">
+                <div 
+                  className="flex-1 p-4 flex items-center gap-3 cursor-pointer"
+                  onClick={() => setExpandedExercise(expandedExercise === ex.id ? null : ex.id)}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center font-black text-xs text-secondary-foreground shrink-0">
                     {exIdx + 1}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -578,7 +644,29 @@ export default function WorkoutPage() {
                     </div>
                   </div>
                 </div>
-                {expandedExercise === ex.id ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+
+                <div className="flex items-center gap-1 pr-4">
+                  {ex.isSessionOnly && (
+                    <button
+                      type="button"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteExtraExercise(ex.id, ex.name);
+                      }}
+                      className="relative z-50 p-3 rounded-lg hover:bg-destructive/10 text-destructive/50 hover:text-destructive transition-colors shrink-0 pointer-events-auto"
+                      title="Remover exercício da sessão"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                  <div 
+                    className="p-3 cursor-pointer text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => setExpandedExercise(expandedExercise === ex.id ? null : ex.id)}
+                  >
+                    {expandedExercise === ex.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </div>
+                </div>
               </header>
 
               {expandedExercise === ex.id && (
@@ -723,6 +811,77 @@ export default function WorkoutPage() {
                 }
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Extra Exercise Config Dialog */}
+        <Dialog open={isConfigOpen} onOpenChange={setIsConfigOpen}>
+          <DialogContent className="max-w-md w-[95vw] rounded-3xl p-6 overflow-hidden border-none shadow-2xl">
+            <DialogHeader className="mb-4">
+              <DialogTitle className="text-xl font-black uppercase tracking-tight">Configurar Exercício</DialogTitle>
+              <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-widest">Ajuste os detalhes antes de adicionar</p>
+            </DialogHeader>
+
+            {configEx && (
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-muted-foreground uppercase tracking-wider ml-1">Nome do Exercício</label>
+                  <Input 
+                    value={configEx.name}
+                    onChange={(e) => setConfigEx({...configEx, name: e.target.value})}
+                    className="h-12 bg-muted/30 border-none rounded-xl font-bold"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-wider ml-1">Categoria</label>
+                    <Select 
+                      value={configEx.category} 
+                      onValueChange={(val: any) => setConfigEx({...configEx, category: val})}
+                    >
+                      <SelectTrigger className="h-12 bg-muted/30 border-none rounded-xl font-bold">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="font-bold uppercase text-[10px]">
+                        <SelectItem value="weight">Carga (Peso)</SelectItem>
+                        <SelectItem value="bodyweight">Peso Corporal</SelectItem>
+                        <SelectItem value="time">Tempo (Timer)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-wider ml-1">Séries</label>
+                    <div className="flex items-center gap-2 bg-muted/30 rounded-xl h-12 px-2">
+                      <button 
+                        className="p-1.5 rounded-lg hover:bg-background/50 text-muted-foreground transition-colors disabled:opacity-20"
+                        onClick={() => setConfigEx({...configEx, sets: Math.max(1, configEx.sets - 1)})}
+                        disabled={configEx.sets <= 1}
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <span className="flex-1 text-center font-black tabular-nums">{configEx.sets}</span>
+                      <button 
+                        className="p-1.5 rounded-lg hover:bg-background/50 text-muted-foreground transition-colors"
+                        onClick={() => setConfigEx({...configEx, sets: configEx.sets + 1})}
+                      >
+                        <PlusCircle className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                  <Button variant="outline" className="flex-1 h-12 rounded-xl font-black uppercase text-xs" onClick={() => setIsConfigOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button className="flex-1 h-12 rounded-xl font-black uppercase text-xs shadow-lg shadow-primary/20" onClick={confirmAddExtraExercise}>
+                    Adicionar
+                  </Button>
+                </div>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>

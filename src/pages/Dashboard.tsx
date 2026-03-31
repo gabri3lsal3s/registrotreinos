@@ -111,10 +111,11 @@ export default function Dashboard() {
           setActiveWorkout(null);
         }
 
-        // 3. Get Stats (last 7 days and current month)
-        // const now já foi declarado acima
-        const nowTs = now.getTime();
-        const sevenDaysAgo = nowTs - 7 * 24 * 60 * 60 * 1000;
+        const startOfWeek = new Date(now);
+        startOfWeek.setHours(0, 0, 0, 0);
+        startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday as start of week
+        const startOfWeekTs = startOfWeek.getTime();
+
         // Primeiro dia do mês atual
         const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
         const allWorkouts = await db.workouts
@@ -122,7 +123,7 @@ export default function Dashboard() {
           .and(w => w.status === 'completed')
           .toArray();
 
-        const weeklyWorkouts = allWorkouts.filter(w => w.date >= sevenDaysAgo).length;
+        const weeklyWorkouts = allWorkouts.filter(w => w.date >= startOfWeekTs).length;
         const monthlyWorkouts = allWorkouts.filter(w => w.date >= firstDayOfMonth).length;
 
         // 4. Calculate Dynamic Goals from Active Protocols

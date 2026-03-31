@@ -25,7 +25,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Plus, ClipboardList, Zap, Dumbbell, ListTodo, Play, Trash2, GripVertical, RefreshCw } from "lucide-react"
+import { Plus, Minus, ClipboardList, Zap, Dumbbell, ListTodo, Play, Trash2, GripVertical, RefreshCw } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import { 
   Select, 
@@ -126,16 +126,31 @@ function DraggableExercise({
           <span className="text-[9px] font-black uppercase text-muted-foreground/70">
             {ex.category === 'time' ? 'Tempo' : 'Séries x Reps'}
           </span>
-          <div className="flex items-center gap-1 bg-background/50 rounded-xl px-2 py-1.5 border border-border/30">
+          <div className="flex items-center gap-1 bg-background/50 rounded-xl px-1 py-1 border border-border/30">
+            <button
+              type="button"
+              className="p-1 rounded-md hover:bg-muted text-muted-foreground/60 hover:text-primary transition-colors disabled:opacity-30"
+              onClick={() => onUpdate(day, idx, 'sets', Math.max(1, (ex.sets || 1) - 1))}
+              disabled={ex.sets <= 1}
+            >
+              <Minus className="w-3.5 h-3.5" />
+            </button>
             <Input
               type="number"
               min={1}
               max={99}
-              className="w-10 bg-transparent border-none text-[clamp(11px,1.2vw,13px)] text-center font-black p-0 h-6 focus-visible:ring-0"
+              className="w-8 bg-transparent border-none text-[clamp(11px,1.2vw,13px)] text-center font-black p-0 h-6 focus-visible:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               value={ex.sets}
               onChange={(e) => onUpdate(day, idx, 'sets', Number(e.target.value))}
             />
-            <span className="text-[10px] font-black opacity-60">X</span>
+            <button
+              type="button"
+              className="p-1 rounded-md hover:bg-muted text-muted-foreground/60 hover:text-primary transition-colors"
+              onClick={() => onUpdate(day, idx, 'sets', (ex.sets || 0) + 1)}
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+            <span className="text-[10px] font-black opacity-60 ml-1">X</span>
             <Input
               type="number"
               min={1}

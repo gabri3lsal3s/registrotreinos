@@ -47,6 +47,9 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='exercises' AND column_name='day_of_week') THEN
     ALTER TABLE exercises ADD COLUMN day_of_week TEXT;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='exercises' AND column_name='is_session_only') THEN
+    ALTER TABLE exercises ADD COLUMN is_session_only BOOLEAN DEFAULT FALSE;
+  END IF;
 END $$;
 
 DO $$

@@ -310,7 +310,7 @@ export default function AnalysisPage() {
                       <div style={{ minWidth: data?.progressData && data.progressData.length > 20 ? `${data.progressData.length * 30}px` : '100%' }}>
                         <ChartContainer config={chartConfig} className="h-[220px] w-full">
                           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                            <BarChart data={data?.progressData}>
+                            <BarChart data={data?.progressData} margin={{ left: 32, right: 32 }}>
                               <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.1} />
                               <XAxis 
                                 dataKey="date" 
@@ -319,6 +319,8 @@ export default function AnalysisPage() {
                                 tickLine={false} 
                                 axisLine={false}
                                 tick={{ fontWeight: 900, fontSize: 9, opacity: 0.6 }}
+                                interval="preserveStartEnd"
+                                minTickGap={5}
                               />
                               <ChartTooltip content={<ChartTooltipContent hideLabel />} />
                               <Bar 
@@ -349,7 +351,7 @@ export default function AnalysisPage() {
                     <CardContent className="p-6">
                       <ChartContainer config={chartConfig} className="h-[220px] w-full">
                         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                          <LineChart data={data.bodyWeightProgression}>
+                          <LineChart data={data.bodyWeightProgression} margin={{ left: 32, right: 32 }}>
                             <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.1} />
                             <XAxis 
                               dataKey="date" 
@@ -357,6 +359,8 @@ export default function AnalysisPage() {
                               tickLine={false} 
                               axisLine={false}
                               tick={{ fontWeight: 900, fontSize: 9, opacity: 0.6 }}
+                              interval="preserveStartEnd"
+                              minTickGap={5}
                             />
                             <YAxis hide domain={['dataMin - 5', 'dataMax + 5']} />
                             <ChartTooltip content={<ChartTooltipContent />} />
@@ -425,7 +429,7 @@ export default function AnalysisPage() {
                           <div style={{ minWidth: mg.data && mg.data.length > 8 ? `${mg.data.length * 40}px` : '100%' }}>
                             <ChartContainer config={chartConfig} className="h-[140px] w-full">
                               <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                                <LineChart data={mg.data}>
+                                <LineChart data={mg.data} margin={{ left: 32, right: 32 }}>
                                   <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.1} />
                                   <XAxis 
                                     dataKey="date" 
@@ -433,6 +437,8 @@ export default function AnalysisPage() {
                                     tickLine={false} 
                                     axisLine={false}
                                     tick={{ fontWeight: 900, fontSize: 8, opacity: 0.5 }}
+                                    interval="preserveStartEnd"
+                                    minTickGap={5}
                                   />
                                   <YAxis yAxisId="left" hide domain={['dataMin - 100', 'dataMax + 100']} />
                                   <YAxis yAxisId="right" hide domain={['dataMin - 0.5', 'dataMax + 0.5']} />
@@ -555,7 +561,7 @@ export default function AnalysisPage() {
                           <div style={{ minWidth: ex.data && ex.data.length > 10 ? `${ex.data.length * 50}px` : '100%' }}>
                             <ChartContainer config={chartConfig} className="h-[300px] w-full">
                               <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                                <LineChart data={ex.data}>
+                                <LineChart data={ex.data} margin={{ left: 32, right: 32 }}>
                                   <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.1} />
                                   <XAxis 
                                     dataKey="date" 
@@ -564,6 +570,8 @@ export default function AnalysisPage() {
                                     axisLine={false}
                                     tick={{ fontWeight: 800, fill: 'currentColor', opacity: 0.5 }}
                                     padding={{ left: 20, right: 20 }}
+                                    interval="preserveStartEnd"
+                                    minTickGap={5}
                                   />
                                   <YAxis hide domain={['dataMin - 10', 'dataMax + 10']} />
                                   <ChartTooltip content={<ChartTooltipContent />} />
