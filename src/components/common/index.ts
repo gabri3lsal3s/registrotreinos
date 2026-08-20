@@ -7,3 +7,5 @@ export * from './EmptyState';
 export * from './MetricCard';
 export * from './ConfirmDialog';
 export * from './ErrorBoundary';
+export * from './MuscleGroupIcon';
+export * from './MuscleGroupBadge';

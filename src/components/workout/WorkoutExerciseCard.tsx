@@ -20,10 +20,12 @@ import {
   History,
   Pin,
   Edit2,
-  ArrowLeftRight
+  ArrowLeftRight,
+  Check
 } from 'lucide-react';
 import type { ExerciseCategory, UniqueExercise, WorkoutSetType } from '../../types';
 import { triggerHaptic, playAudioCue } from '../../utils/sensoryFeedback';
+import { getMuscleGroupMeta } from '../../utils/muscleGroupMetadata';
 import { WorkoutSetRow, type SetInputData } from './WorkoutSetRow';
 import { ExerciseHistoryModal } from './ExerciseHistoryModal';
 import { SwapExerciseModal } from './SwapExerciseModal';
@@ -89,6 +91,8 @@ export function WorkoutExerciseCard({
   const completedCount = exercise.completedSets.filter(Boolean).length;
   const isAllCompleted = completedCount === exercise.sets && exercise.sets > 0;
   const displayName = exercise.name.split(' (')[0] || exercise.name;
+  const muscleMeta = getMuscleGroupMeta(exercise.muscleGroup || exercise.name);
+  const MuscleIcon = muscleMeta.icon;
 
   const handleHeaderClick = () => {
     triggerHaptic('medium');
@@ -134,12 +138,19 @@ export function WorkoutExerciseCard({
             className="flex items-center justify-between p-4 cursor-pointer select-none transition-colors hover:bg-muted/15"
           >
             <div className="flex items-center gap-3 min-w-0 pr-2">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
-                isAllCompleted
-                  ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/20'
-                  : 'bg-muted/60 text-muted-foreground'
-              }`}>
-                <Dumbbell className="w-5 h-5" />
+              <div 
+                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border transition-all duration-300 ${
+                  isAllCompleted
+                    ? 'bg-primary text-primary-foreground border-primary shadow-sm shadow-primary/20'
+                    : `${muscleMeta.bgColor} ${muscleMeta.borderColor} ${muscleMeta.textColor}`
+                }`}
+                title={`Grupo Muscular: ${muscleMeta.label}`}
+              >
+                {isAllCompleted ? (
+                  <Check className="w-5 h-5 stroke-[2.5]" />
+                ) : (
+                  <MuscleIcon className="w-5 h-5" />
+                )}
               </div>
 
               <div className="min-w-0">
@@ -147,13 +158,16 @@ export function WorkoutExerciseCard({
                   <h3 className="font-bold text-sm sm:text-base text-foreground truncate leading-tight">
                     {displayName}
                   </h3>
+                  <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${muscleMeta.badgeClass}`}>
+                    {muscleMeta.label}
+                  </span>
                   {exercise.supersetGroupId && (
                     <span className="px-1.5 py-0.5 rounded-md bg-purple-500/15 text-purple-400 border border-purple-500/30 text-[10px] font-black uppercase tracking-wider">
-                      ⚡ Bi-Set {exercise.supersetGroupId}
+                      Bi-Set {exercise.supersetGroupId}
                     </span>
                   )}
                   {exercise.isSessionOnly && (
-                    <span className="px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 text-[10px] font-bold uppercase tracking-wider">
+                    <span className="px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[10px] font-bold uppercase tracking-wider">
                       Extra
                     </span>
                   )}
