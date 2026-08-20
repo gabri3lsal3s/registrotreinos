@@ -9,7 +9,7 @@ Este documento descreve os componentes da aplicação, seus contratos de props e
 | Componente | Props Principais | Descrição e Comportamento |
 | :--- | :--- | :--- |
 | **`Layout`** | `{ children: ReactNode }` | Shell responsivo que provê **Sidebar Desktop lateral dedicada** (`w-64 fixed`) para telas `md:` e `lg:` e **Bottom Navigation Bar** fluida para telas móveis. Gerencia o status real de conectividade em tempo real. |
-| **`PageHeader`** | `{ title: string, description?: string, action?: ReactNode }` | Cabeçalho unificado com título responsivo (`text-xl sm:text-2xl md:text-3xl`) e slot de ação adaptativo (`w-full sm:w-auto`). |
+| **`PageHeader`** | `{ title: string, description?: ReactNode, icon?: ReactNode, badge?: ReactNode, action?: ReactNode }` | Cabeçalho unificado com ícone semântico destacado, badge de status opcional, título responsivo (`text-xl sm:text-2xl md:text-3xl font-black uppercase tracking-tight`) e slot de ação adaptativo (`w-full sm:w-auto`). |
 | **`MetricCard`** | `{ label, value, subValue?, progressPercent?, deltaPercent?, deltaLabel?, icon? }` | Card analítico com números grandes em `font-mono text-2xl sm:text-3xl`, barra de progresso e badge percentual de variação. |
 | **`ConfirmDialog`** | `{ open, onOpenChange, title, description, confirmLabel, cancelLabel?, variant?, onConfirm }` | Modal acessível baseado em Radix UI com botões de 44px para confirmações críticas (exclusão, cancelamento, logout). Substitui `window.confirm`. |
 | **`EmptyState`** | `{ icon?, title, description?, action? }` | Card com borda tracejada e ícone destacado para listas vazias de treinos, protocolos e histórico. |

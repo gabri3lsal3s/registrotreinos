@@ -11,7 +11,7 @@ import {
 } from '../services/workoutDB';
 import { fullSync } from '../services/syncService';
 import { WEEK_DAYS, getDayKey, getDayLabel } from '../utils/constants';
-import { Calendar, TrendingUp } from "lucide-react";
+import { Calendar, TrendingUp, LayoutDashboard } from "lucide-react";
 
 import { 
   ActiveWorkoutBanner, 
@@ -204,6 +204,7 @@ export default function Dashboard() {
         <PageHeader 
           title="Dashboard" 
           description="Visão geral do seu progresso, consistência e treinos."
+          icon={<LayoutDashboard className="w-5 h-5 text-primary" />}
         />
 
         {/* Banner de Treino Ativo (se houver) */}

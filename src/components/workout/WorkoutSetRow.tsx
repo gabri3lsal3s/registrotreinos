@@ -16,6 +16,7 @@ interface WorkoutSetRowProps {
   setIdx: number;
   setData: SetInputData;
   isCompleted: boolean;
+  isPR?: boolean;
   category?: ExerciseCategory;
   onToggleSet: (setIdx: number) => void;
   onUpdateSetData: (setIdx: number, field: 'weight' | 'reps', value: string) => void;
@@ -35,6 +36,7 @@ export const WorkoutSetRow: React.FC<WorkoutSetRowProps> = ({
   setIdx,
   setData,
   isCompleted,
+  isPR = false,
   category,
   onToggleSet,
   onUpdateSetData,
@@ -79,8 +81,13 @@ export const WorkoutSetRow: React.FC<WorkoutSetRowProps> = ({
 
   const handleToggleClick = () => {
     if (!isCompleted) {
-      triggerHaptic('success');
-      playAudioCue('set_complete');
+      if (isPR) {
+        triggerHaptic('celebration');
+        playAudioCue('pr_celebration');
+      } else {
+        triggerHaptic('success');
+        playAudioCue('set_complete');
+      }
     } else {
       triggerHaptic('light');
       playAudioCue('set_uncomplete');
@@ -95,16 +102,30 @@ export const WorkoutSetRow: React.FC<WorkoutSetRowProps> = ({
       layout
       transition={{ duration: 0.15 }}
       className={`flex items-center justify-between gap-1.5 sm:gap-2 p-2 sm:p-2.5 rounded-xl border transition-colors duration-200 ${
-        isCompleted
+        isCompleted && isPR
+          ? 'bg-amber-500/10 border-amber-500/40 text-foreground ring-1 ring-amber-500/20'
+          : isCompleted
           ? 'bg-primary/5 border-primary/30 text-foreground'
           : 'bg-card border-border/40 hover:border-border/70'
       }`}
     >
       {/* 1. Número da Série & Badge Clicável de Tipo */}
       <div className="flex flex-col items-center justify-center shrink-0 w-10 sm:w-12">
-        <span className="font-mono font-bold text-xs text-foreground leading-none mb-1">
-          #{setIdx + 1}
-        </span>
+        <div className="flex items-center gap-0.5 mb-1">
+          <span className="font-mono font-bold text-xs text-foreground leading-none">
+            #{setIdx + 1}
+          </span>
+          {isCompleted && isPR && (
+            <motion.span
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              className="text-[9px] text-amber-500 font-black leading-none"
+              title="Novo Recorde Pessoal!"
+            >
+              ★
+            </motion.span>
+          )}
+        </div>
         {onUpdateSetType && (
           <motion.button
             whileTap={{ scale: 0.88 }}

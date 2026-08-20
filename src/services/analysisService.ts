@@ -317,6 +317,33 @@ export async function getAnalysisSummary(
     })
     .map(p => ({ id: p.id, name: p.name }));
 
+  // Heatmap: calcular histórico diário completo de treinos do usuário
+  const allWorkoutDaysMap: Record<string, { date: string; volume: number; workoutsCount: number; protocolNames: string[] }> = {};
+  workouts.forEach(w => {
+    const dStr = dayjs(w.date).format('YYYY-MM-DD');
+    const pName = userProtocols.find(p => p.id === w.protocolId)?.name || 'Treino';
+    if (!allWorkoutDaysMap[dStr]) {
+      allWorkoutDaysMap[dStr] = { date: dStr, volume: 0, workoutsCount: 0, protocolNames: [] };
+    }
+    allWorkoutDaysMap[dStr].workoutsCount += 1;
+    if (!allWorkoutDaysMap[dStr].protocolNames.includes(pName)) {
+      allWorkoutDaysMap[dStr].protocolNames.push(pName);
+    }
+  });
+
+  allSets.forEach(s => {
+    const w = workouts.find(wo => wo.id === s.workoutId);
+    if (w && s.completed) {
+      const dStr = dayjs(w.date).format('YYYY-MM-DD');
+      if (allWorkoutDaysMap[dStr]) {
+        const vol = (s.weight || 0) * (s.reps || 0);
+        allWorkoutDaysMap[dStr].volume += vol;
+      }
+    }
+  });
+
+  const allWorkoutDays = Object.values(allWorkoutDaysMap);
+
   return {
     totalVolume,
     frequency,
@@ -328,6 +355,7 @@ export async function getAnalysisSummary(
     bodyWeightProgression,
     muscleBreakdown,
     radarData,
-    hasEnoughRadarData
+    hasEnoughRadarData,
+    allWorkoutDays
   };
 }

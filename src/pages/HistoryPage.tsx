@@ -268,6 +268,7 @@ export default function HistoryPage() {
         <PageHeader 
           title="Histórico de Atividades" 
           description="Linha do tempo de todas as suas sessões e pesagens corporais."
+          icon={<ClipboardList className="w-5 h-5 text-primary" />}
         />
 
         <HistoryFilters

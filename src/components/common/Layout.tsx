@@ -195,8 +195,8 @@ export function Layout({ children }: LayoutProps) {
 
       {/* 3. Bottom Navigation Mobile com Indicador Deslizante */}
       {showNav && (
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-background/85 backdrop-blur-2xl border-t border-border/40 px-3 py-2 z-50 safe-area-bottom">
-          <div className="max-w-md mx-auto flex justify-between items-center gap-1 relative">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-background/90 backdrop-blur-2xl border-t border-border/40 px-1.5 xs:px-3 py-1.5 z-50 safe-area-bottom">
+          <div className="max-w-md mx-auto flex justify-between items-center gap-0.5 xs:gap-1 relative">
             {navItems.map((item) => {
               const isActive = location.pathname === item.path;
               const Icon = item.icon;
@@ -206,7 +206,7 @@ export function Layout({ children }: LayoutProps) {
                   key={item.path}
                   to={item.path}
                   onClick={handleNavClick}
-                  className={`relative flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl flex-1 transition-colors select-none ${
+                  className={`min-w-0 relative flex flex-col items-center justify-center py-1 px-0.5 rounded-xl flex-1 transition-colors select-none ${
                     isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
@@ -217,11 +217,11 @@ export function Layout({ children }: LayoutProps) {
                       transition={{ type: "spring", stiffness: 450, damping: 32 }}
                     />
                   )}
-                  <div className="relative z-10 p-0.5 transition-transform duration-150">
+                  <div className="relative z-10 p-0.5 transition-transform duration-150 shrink-0">
                     <Icon className={`w-5 h-5 transition-transform ${isActive ? 'scale-110 text-primary' : ''}`} />
                   </div>
-                  <span className={`relative z-10 text-[10px] font-bold uppercase tracking-wider leading-none transition-opacity ${
-                    isActive ? 'opacity-100 font-black text-primary' : 'opacity-65'
+                  <span className={`relative z-10 text-[9.5px] xs:text-[10.5px] font-bold uppercase tracking-tight text-center truncate max-w-full leading-tight mt-0.5 px-0.5 transition-opacity ${
+                    isActive ? 'opacity-100 font-black text-primary' : 'opacity-70'
                   }`}>
                     {item.label}
                   </span>

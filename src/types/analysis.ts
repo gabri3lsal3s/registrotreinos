@@ -58,4 +58,5 @@ export interface AnalysisSummary {
   muscleBreakdown: MuscleBreakdownItem[];
   radarData: RadarMetric[];
   hasEnoughRadarData: boolean;
+  allWorkoutDays?: { date: string; volume: number; workoutsCount: number; protocolNames?: string[] }[];
 }

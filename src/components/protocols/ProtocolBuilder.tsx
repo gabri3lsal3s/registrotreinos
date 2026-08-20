@@ -97,8 +97,8 @@ export function ProtocolBuilder({
   return (
     <div className="w-full max-w-4xl mx-auto space-y-6">
       {/* Header do Construtor */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
+      <div className="flex items-center justify-between gap-2.5 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
           <Button
             type="button"
             variant="ghost"
@@ -108,8 +108,8 @@ export function ProtocolBuilder({
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <div className="min-w-0">
-            <h2 className="text-lg sm:text-xl md:text-2xl font-black uppercase text-foreground tracking-tight leading-tight truncate">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base sm:text-xl md:text-2xl font-black uppercase text-foreground tracking-tight leading-tight truncate">
               Construtor de Treino
             </h2>
             <p className="text-xs text-muted-foreground font-medium truncate">
@@ -118,13 +118,13 @@ export function ProtocolBuilder({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <Button
             type="button"
             variant="ghost"
             onClick={onCancel}
             disabled={isSaving}
-            className="h-10 px-3 rounded-xl font-bold text-xs uppercase tracking-wider text-muted-foreground"
+            className="h-9 sm:h-10 px-2.5 sm:px-3 rounded-xl font-bold text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground"
           >
             Cancelar
           </Button>
@@ -133,7 +133,7 @@ export function ProtocolBuilder({
             type="button"
             onClick={onSave}
             disabled={isSaving || !protocolName.trim()}
-            className="h-10 sm:h-11 px-4 sm:px-6 rounded-xl font-black text-xs uppercase tracking-wider bg-primary text-primary-foreground shadow-lg shadow-primary/25 flex items-center gap-2 active:scale-95"
+            className="h-9 sm:h-11 px-3.5 sm:px-5 rounded-xl font-black text-xs uppercase tracking-wider bg-primary text-primary-foreground shadow-md shadow-primary/25 flex items-center gap-1.5 sm:gap-2 active:scale-95 shrink-0"
           >
             {isSaving ? (
               <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />

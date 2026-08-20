@@ -629,8 +629,8 @@ export default function WorkoutPage() {
     <Layout>
       <div className="w-full max-w-3xl mx-auto space-y-6 pb-36 sm:pb-40">
         {/* Header da Sessão */}
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
+        <header className="flex items-center justify-between gap-2.5 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
             <Button 
               type="button"
               variant="ghost" 
@@ -641,27 +641,27 @@ export default function WorkoutPage() {
             >
               <ArrowLeft className="w-5 h-5" />
             </Button>
-            <div className="min-w-0">
-              <h2 className="text-lg sm:text-xl md:text-2xl font-black uppercase text-foreground tracking-tight leading-tight truncate max-w-[200px] sm:max-w-md">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base sm:text-xl md:text-2xl font-black uppercase text-foreground tracking-tight leading-tight truncate">
                 {protocolName}
               </h2>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                <p className="text-[10px] sm:text-xs text-primary font-mono font-bold uppercase tracking-wider">
+                <span className="w-2 h-2 rounded-full bg-primary animate-pulse shrink-0" />
+                <p className="text-[10px] sm:text-xs text-primary font-mono font-bold uppercase tracking-wider truncate">
                   Sessão Ativa
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 ml-auto sm:ml-0 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             {/* Cancelar Treino */}
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={() => setCancelDialogOpen(true)}
-              className="h-10 px-3 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 text-xs font-bold uppercase"
+              className="h-9 sm:h-10 px-2.5 sm:px-3 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 text-xs font-bold uppercase tracking-wider"
             >
               Cancelar
             </Button>

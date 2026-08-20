@@ -16,7 +16,7 @@ Este documento registra a evolução do **Registro de Treinos**, cobrindo todas 
 | **Nível 6** | 🟣 Refinamento Desktop & Responsividade | **Sidebar Desktop lateral dedicada** (`w-64 fixed`), **Bottom Navigation fluida**, padronização de larguras (`max-w-4xl`), componente modular `WorkoutSetRow.tsx` DRY e eliminação total de quebras de layout mobile. | **CONCLUÍDO** ✅ |
 | **Nível 7** | 🎨 Microinterações, Háptica, Áudio & Motion Polish | Feedback tátil customizado (Vibration API), sintetizador Web Audio para micro-ações (bips suaves, conclusão de série, PR), pill deslizante de abas com Framer Motion e transições fluidas de páginas. | **CONCLUÍDO** ✅ |
 | **Nível 8** | ⚡ Gym Floor UX & Agilidade em Sessão | Calculadora de anilhas (*Plate Calculator*), mini-histórico inline nos exercícios, notas fixas (*Pin Notes*), presets de descanso no dock e visualização esquemática de barras. | **CONCLUÍDO** ✅ |
-| **Nível 9** | 📈 Inteligência, Gamificação Sutil & Analytics | Detecção instantânea e celebração de PRs (*Personal Records*), mapa de calor anual de frequência (*Consistency Heatmap*), balanço agonista/antagonista e card de conclusão compartilhável. | **PLANEJADO** 📋 |
+| **Nível 9** | 📈 Inteligência, Gamificação Sutil & Analytics | Detecção instantânea e celebração de PRs (*Personal Records*), mapa de calor anual de frequência (*Consistency Heatmap*), balanço agonista/antagonista e card de conclusão compartilhável. | **CONCLUÍDO** ✅ |
 | **Nível 10** | 🔄 Gestão Ágil de Rotinas & Intercâmbio | Substituição inteligente de exercícios ocupados, compartilhamento de protocolos via Link/QR Code descentralizado, templates consagrados (*Starter Packs*) e suporte a Supersets/Bi-sets. | **PLANEJADO** 📋 |
 
 ---

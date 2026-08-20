@@ -22,7 +22,8 @@ import {
   HardDrive,
   Vibrate,
   Volume2,
-  Dumbbell
+  Dumbbell,
+  Settings as SettingsIcon
 } from "lucide-react";
 import { 
   getSensorySettings, 
@@ -174,7 +175,8 @@ export default function SettingsPage() {
       <div className="w-full max-w-4xl mx-auto space-y-6">
         <PageHeader 
           title="Configurações" 
-          description="Gerencie preferências, backups, sincronização e soberania de dados." 
+          description="Gerencie preferências, backups, sincronização e soberania de dados."
+          icon={<SettingsIcon className="w-5 h-5 text-primary" />}
         />
 
         {/* 1. Interface & Visual */}

@@ -18,7 +18,7 @@ import { parseLocaleNumber } from '../utils/workoutMath';
 import { fullSync, deleteRemoteItem } from '../services/syncService';
 import type { Protocol, Exercise, ExerciseCategory } from '../types';
 import { Button } from "@/components/ui/button";
-import { Plus, ClipboardList, Upload } from "lucide-react";
+import { Plus, ClipboardList, Upload, Dumbbell } from "lucide-react";
 import { 
   ProtocolCard, 
   ProtocolBuilder, 
@@ -410,23 +410,24 @@ export default function ProtocolsPage() {
         <PageHeader 
           title="Planilhas e Protocolos" 
           description="Gerencie seus planos de treino e rotinas semanais."
+          icon={<Dumbbell className="w-5 h-5 text-primary" />}
           action={
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+            <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
               <Button 
                 type="button"
                 variant="outline"
                 onClick={() => setIsImportModalOpen(true)}
-                className="w-full sm:w-auto h-11 px-4 rounded-xl font-bold text-xs uppercase tracking-wider border-border/60 flex items-center justify-center gap-2"
+                className="h-11 px-3 sm:px-4 rounded-xl font-bold text-xs uppercase tracking-wider border-border/60 flex items-center justify-center gap-2"
               >
-                <Upload className="w-4 h-4 text-primary" />
-                Importar
+                <Upload className="w-4 h-4 text-primary shrink-0" />
+                <span className="truncate">Importar</span>
               </Button>
               <Button 
                 onClick={handleOpenNewBuilder}
-                className="w-full sm:w-auto h-11 px-5 rounded-xl font-bold text-xs uppercase tracking-wider bg-primary text-primary-foreground shadow-md shadow-primary/20 flex items-center justify-center gap-2"
+                className="h-11 px-3.5 sm:px-5 rounded-xl font-bold text-xs uppercase tracking-wider bg-primary text-primary-foreground shadow-md shadow-primary/20 flex items-center justify-center gap-2"
               >
-                <Plus className="w-4 h-4" />
-                Novo Protocolo
+                <Plus className="w-4 h-4 shrink-0" />
+                <span className="truncate">Novo Protocolo</span>
               </Button>
             </div>
           }

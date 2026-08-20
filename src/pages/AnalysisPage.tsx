@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { Layout, PageHeader, InfoTooltip } from '../components/common';
+import { ConsistencyHeatmap, AgonistAntagonistBalanceCard } from '../components/analysis';
 import { Card, CardContent } from "@/components/ui/card";
 import { Activity, TrendingUp, LineChart as LineChartIcon, Scale, Dumbbell } from "lucide-react";
 import { getAnalysisSummary, type AnalysisSummary } from '../services/analysisService';
@@ -110,13 +111,14 @@ export default function AnalysisPage() {
         <PageHeader 
           title="Análises e Estatísticas" 
           description="Acompanhe sua progressão de cargas, volume e evolução corporal."
+          icon={<TrendingUp className="w-5 h-5 text-primary" />}
           action={
-            <Tabs value={period} onValueChange={(v) => setPeriod(v as AnalysisPeriod)} className="w-full sm:w-56">
-              <TabsList className="bg-muted/40 p-1 rounded-xl h-10 w-full font-bold text-xs uppercase tracking-wider border border-border/20">
-                <TabsTrigger value="week" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">7D</TabsTrigger>
-                <TabsTrigger value="month" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">30D</TabsTrigger>
-                <TabsTrigger value="year" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">1A</TabsTrigger>
-                <TabsTrigger value="all" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">Total</TabsTrigger>
+            <Tabs value={period} onValueChange={(v) => setPeriod(v as AnalysisPeriod)} className="w-full sm:w-60">
+              <TabsList className="bg-muted/40 p-1 rounded-xl h-10 w-full font-bold text-xs uppercase tracking-wider border border-border/20 grid grid-cols-4">
+                <TabsTrigger value="week" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-xs text-xs">7D</TabsTrigger>
+                <TabsTrigger value="month" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-xs text-xs">30D</TabsTrigger>
+                <TabsTrigger value="year" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-xs text-xs">1A</TabsTrigger>
+                <TabsTrigger value="all" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-xs text-xs">Total</TabsTrigger>
               </TabsList>
             </Tabs>
           }
@@ -131,6 +133,11 @@ export default function AnalysisPage() {
           </div>
         ) : (
           <div className="space-y-6">
+            {/* 0. Mapa Anual de Consistência (Heatmap 52 Semanas) */}
+            {data && data.allWorkoutDays && (
+              <ConsistencyHeatmap workoutDays={data.allWorkoutDays} />
+            )}
+
             {/* 1. Progresso Holístico (Radar) */}
             {data && data.hasEnoughRadarData && data.radarData && data.radarData.length > 0 && (
               <section className="space-y-3">
@@ -265,6 +272,9 @@ export default function AnalysisPage() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* Balanço Agonista / Antagonista */}
+                <AgonistAntagonistBalanceCard muscleBreakdown={data.muscleBreakdown} />
               </section>
             )}
 

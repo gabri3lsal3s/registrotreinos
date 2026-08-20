@@ -8,8 +8,9 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Trophy, Sparkles, CheckCircle2, Smile, Moon, Flame } from 'lucide-react';
+import { Trophy, Sparkles, CheckCircle2, Smile, Moon, Flame, Share2 } from 'lucide-react';
 import { triggerHaptic, playAudioCue } from '../../utils/sensoryFeedback';
+import { toast } from 'sonner';
 
 interface PRDetail {
   exerciseName: string;
@@ -61,6 +62,35 @@ export function WorkoutFinishModal({
       stressLevel,
       notes: notes.trim()
     });
+  };
+
+  const handleShareWorkout = async () => {
+    triggerHaptic('medium');
+    playAudioCue('click');
+    const prsText = brokenPRs.length > 0 
+      ? `\n🔥 Recordes Pessoais (PRs):\n${brokenPRs.map(p => `• ${p.exerciseName}: ${p.weight}kg × ${p.reps}`).join('\n')}` 
+      : '';
+
+    const shareText = `💪 Treino Concluído no Registro de Treinos!\n📊 Volume Total: ${Math.round(totalVolumeKg).toLocaleString('pt-BR')} kg\n⚡ Séries: ${totalSetsCompleted}${prsText}\n📅 ${new Date().toLocaleDateString('pt-BR')}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Resumo do Treino',
+          text: shareText
+        });
+        return;
+      } catch {
+        // Fallback para clipboard caso o usuário cancele ou navegador não suporte
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareText);
+      toast.success('Resumo copiado para a área de transferência!');
+    } catch {
+      toast.error('Não foi possível copiar o resumo.');
+    }
   };
 
   return (
@@ -121,6 +151,19 @@ export function WorkoutFinishModal({
           </div>
         )}
 
+        {/* Botão de Compartilhar Card / Resumo */}
+        <div className="mb-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleShareWorkout}
+            className="w-full rounded-2xl border-dashed border-primary/40 bg-primary/5 hover:bg-primary/10 text-primary text-xs font-bold gap-2 h-11"
+          >
+            <Share2 className="w-4 h-4" />
+            Compartilhar Resumo do Treino
+          </Button>
+        </div>
+
         {/* Avaliação Rápida de Percepção */}
         <div className="space-y-4 py-2 border-t border-border/30">
           <div>
@@ -176,7 +219,7 @@ export function WorkoutFinishModal({
           <div>
             <div className="flex items-center justify-between text-xs font-bold mb-2">
               <span className="flex items-center gap-1.5 text-muted-foreground">
-                <Flame className="w-3.5 h-3.5" /> Nível de Esforço
+                <Flame className="w-3.5 h-3.5" /> Nível de Fadiga / Estresse
               </span>
               <span className="font-mono text-primary font-black">{stressLevel}/5</span>
             </div>

@@ -238,19 +238,28 @@ export function WorkoutExerciseCard({
                     </div>
 
                     {/* Linhas de Séries */}
-                    {exercise.setsData.map((setData, setIdx) => (
-                      <WorkoutSetRow
-                        key={setIdx}
-                        setIdx={setIdx}
-                        setData={setData}
-                        isCompleted={exercise.completedSets[setIdx]}
-                        category={exercise.category}
-                        onToggleSet={(idx) => onToggleSet(exIdx, idx)}
-                        onUpdateSetData={(idx, field, val) => onUpdateSetData(exIdx, idx, field, val)}
-                        onUpdateSetType={onUpdateSetType ? (idx, type) => onUpdateSetType(exIdx, idx, type) : undefined}
-                        onOpenPlateCalculator={onOpenPlateCalculator ? (idx, weight) => onOpenPlateCalculator(exIdx, idx, weight) : undefined}
-                      />
-                    ))}
+                    {exercise.setsData.map((setData, setIdx) => {
+                      const w = parseFloat(setData.weight || '0') || 0;
+                      const r = parseFloat(setData.reps || '0') || 0;
+                      const isPR = truePR && (truePR.weight > 0 || truePR.reps > 0)
+                        ? (w > truePR.weight || (w === truePR.weight && r > truePR.reps && w > 0))
+                        : (w > 0 && r > 0);
+
+                      return (
+                        <WorkoutSetRow
+                          key={setIdx}
+                          setIdx={setIdx}
+                          setData={setData}
+                          isCompleted={exercise.completedSets[setIdx]}
+                          isPR={isPR}
+                          category={exercise.category}
+                          onToggleSet={(idx) => onToggleSet(exIdx, idx)}
+                          onUpdateSetData={(idx, field, val) => onUpdateSetData(exIdx, idx, field, val)}
+                          onUpdateSetType={onUpdateSetType ? (idx, type) => onUpdateSetType(exIdx, idx, type) : undefined}
+                          onOpenPlateCalculator={onOpenPlateCalculator ? (idx, weight) => onOpenPlateCalculator(exIdx, idx, weight) : undefined}
+                        />
+                      );
+                    })}
                   </div>
                 </CardContent>
               </motion.div>
