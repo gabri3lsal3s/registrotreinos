@@ -126,7 +126,17 @@ export async function syncData(): Promise<{ success: boolean }> {
 
     const protocols = protocolsLocal.map(p => toSnake(p as unknown as Record<string, unknown>));
     const workouts = workoutsLocal.map(w => toSnake(w as unknown as Record<string, unknown>));
-    const exercises = exercisesLocal.map(ex => ({ ...ex, userId: user.id })).map(e => toSnake(e as unknown as Record<string, unknown>));
+    const exercises = exercisesLocal.map(ex => ({
+      ...ex,
+      userId: user.id,
+      multiplier: ex.multiplier !== undefined && ex.multiplier !== null ? Number(ex.multiplier) : 1.0,
+      category: ex.category || 'weight',
+      order: ex.order ?? 0,
+      sets: ex.sets ?? 3,
+      reps: ex.reps ?? 10,
+      lastWeight: ex.lastWeight ?? 0,
+      lastReps: ex.lastReps ?? 0
+    })).map(e => toSnake(e as unknown as Record<string, unknown>));
     const workoutSets = workoutSetsLocal.map(set => ({ ...set, userId: user.id })).map(s => toSnake(s as unknown as Record<string, unknown>));
     const bodyWeights = bodyWeightsLocal.map(b => toSnake(b as unknown as Record<string, unknown>));
 

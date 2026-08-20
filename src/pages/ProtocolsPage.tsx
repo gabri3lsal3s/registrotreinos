@@ -314,7 +314,7 @@ export default function ProtocolsPage() {
             name: `${ex.name} (${dayLabel})`,
             muscleGroup: ex.muscleGroup || undefined,
             category: ex.category || 'weight',
-            multiplier: ex.multiplier,
+            multiplier: ex.multiplier !== undefined && ex.multiplier !== null ? Number(ex.multiplier) : 1.0,
             order: i,
             dayOfWeek: day,
             sets: parseLocaleNumber(ex.sets, 3),

@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS public.exercises (
   "order" INT NOT NULL DEFAULT 0,
   muscle_group TEXT NOT NULL DEFAULT 'Outros',
   category TEXT NOT NULL DEFAULT 'weight', -- 'weight' | 'bodyweight' | 'time'
-  multiplier NUMERIC NOT NULL DEFAULT 1.0,
+  multiplier NUMERIC DEFAULT 1.0,
   day TEXT DEFAULT 'Segunda',
   day_of_week TEXT DEFAULT 'Segunda', -- Compatibilidade com payloads 'day_of_week' e 'day'
   sets INT NOT NULL DEFAULT 3,
