@@ -52,25 +52,29 @@ export function ConfigExtraExerciseModal({
               Número de Séries
             </span>
             <div className="flex items-center gap-2">
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon"
                 onClick={() => onChangeSets(-1)}
                 disabled={configEx.sets <= 1}
-                className="w-9 h-9 rounded-xl bg-muted/60 hover:bg-muted text-muted-foreground flex items-center justify-center font-bold disabled:opacity-30 active:scale-95"
+                className="w-9 h-9 rounded-xl bg-muted/60 hover:bg-muted text-muted-foreground"
               >
                 <Minus className="w-4 h-4" />
-              </button>
+              </Button>
               <span className="w-8 text-center font-mono font-black text-base text-foreground">
                 {configEx.sets}
               </span>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon"
                 onClick={() => onChangeSets(1)}
                 disabled={configEx.sets >= 10}
-                className="w-9 h-9 rounded-xl bg-muted/60 hover:bg-muted text-muted-foreground flex items-center justify-center font-bold active:scale-95"
+                className="w-9 h-9 rounded-xl bg-muted/60 hover:bg-muted text-muted-foreground"
               >
                 <Plus className="w-4 h-4" />
-              </button>
+              </Button>
             </div>
           </div>
         </div>

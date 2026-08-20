@@ -190,18 +190,19 @@ export function ProtocolBuilder({
               {WEEK_DAYS.map((day) => {
                 const isActive = activeDays.includes(day.key);
                 return (
-                  <button
+                  <Button
                     key={day.key}
                     type="button"
+                    variant={isActive ? 'default' : 'ghost'}
                     onClick={() => onToggleDay(day.key)}
-                    className={`h-11 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex flex-col items-center justify-center ${
+                    className={`h-11 rounded-xl font-bold text-xs uppercase tracking-wider transition-all p-0 flex flex-col items-center justify-center ${
                       isActive
-                        ? 'bg-primary/15 text-primary border border-primary/40 font-black'
-                        : 'bg-muted/30 hover:bg-muted text-muted-foreground/60 border border-transparent'
+                        ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/20 font-black'
+                        : 'bg-muted/30 hover:bg-muted text-muted-foreground/70 border border-transparent'
                     }`}
                   >
                     <span>{day.label}</span>
-                  </button>
+                  </Button>
                 );
               })}
             </div>
@@ -216,9 +217,10 @@ export function ProtocolBuilder({
           const count = (exercisesByDay[day.key] || []).length;
 
           return (
-            <button
+            <Button
               key={day.key}
               type="button"
+              variant={isSelected ? 'default' : 'outline'}
               onClick={() => onSelectDay(day.key)}
               className={`min-h-11 px-4 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 whitespace-nowrap ${
                 isSelected
@@ -227,12 +229,12 @@ export function ProtocolBuilder({
               }`}
             >
               <span>{day.label}</span>
-              <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono ${
-                isSelected ? 'bg-black/20 text-primary-foreground' : 'bg-muted text-muted-foreground'
+              <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono ${
+                isSelected ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-muted-foreground'
               }`}>
                 {count}
               </span>
-            </button>
+            </Button>
           );
         })}
       </div>

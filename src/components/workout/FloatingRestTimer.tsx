@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Button } from "@/components/ui/button";
 import { Play, Pause, Plus, Minus, X, Timer, Volume2 } from 'lucide-react';
 import { playRestFinishedNotification, playBeep } from '../../utils/audioFeedback';
 
@@ -123,44 +124,52 @@ function FloatingRestTimerModal({
           <div className="flex items-center gap-1.5">
             {!isFinished && (
               <>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => addTime(-15)}
                   disabled={remainingSeconds <= 15}
-                  className="h-9 px-2 rounded-lg bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground font-mono text-xs font-bold transition-all disabled:opacity-30 active:scale-95 flex items-center"
+                  className="h-9 px-2 rounded-lg bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground font-mono text-xs font-bold"
                   title="Diminuir 15 segundos"
                 >
                   <Minus className="w-3 h-3 mr-0.5" />15s
-                </button>
+                </Button>
 
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => addTime(30)}
-                  className="h-9 px-2 rounded-lg bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground font-mono text-xs font-bold transition-all active:scale-95 flex items-center"
+                  className="h-9 px-2 rounded-lg bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground font-mono text-xs font-bold"
                   title="Aumentar 30 segundos"
                 >
                   <Plus className="w-3 h-3 mr-0.5" />30s
-                </button>
+                </Button>
 
-                <button
+                <Button
                   type="button"
+                  variant={isRunning ? 'secondary' : 'default'}
+                  size="icon"
                   onClick={toggleRunning}
-                  className={`h-9 w-9 rounded-lg flex items-center justify-center transition-all active:scale-95 ${isRunning ? 'bg-muted/80 text-foreground hover:bg-muted' : 'bg-primary text-primary-foreground shadow-md shadow-primary/20'}`}
+                  className="h-9 w-9 rounded-lg"
                   title={isRunning ? 'Pausar' : 'Retomar'}
                 >
                   {isRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
-                </button>
+                </Button>
               </>
             )}
 
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={onClose}
-              className="h-9 w-9 rounded-lg bg-muted/40 hover:bg-destructive/20 hover:text-destructive text-muted-foreground flex items-center justify-center transition-all active:scale-95"
+              className="h-9 w-9 rounded-lg bg-muted/40 hover:bg-destructive/20 hover:text-destructive text-muted-foreground"
               title="Fechar timer"
             >
               <X className="w-4 h-4" />
-            </button>
+            </Button>
           </div>
         </div>
       </div>

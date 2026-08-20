@@ -1,5 +1,6 @@
 import { Search, Filter, Dumbbell, Scale, Layers } from 'lucide-react';
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { 
   Select, 
   SelectContent, 
@@ -45,10 +46,12 @@ export function HistoryFilters({
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
         {/* Filtro por Tipo (Pílulas) */}
         <div className="flex items-center gap-1.5 p-1 rounded-xl bg-muted/40 border border-border/30">
-          <button
+          <Button
             type="button"
+            variant={typeFilter === 'all' ? 'default' : 'ghost'}
+            size="sm"
             onClick={() => onTypeFilterChange('all')}
-            className={`flex-1 sm:flex-none h-8 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+            className={`flex-1 sm:flex-none h-8 px-3 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 ${
               typeFilter === 'all'
                 ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/20'
                 : 'text-muted-foreground hover:text-foreground'
@@ -56,12 +59,14 @@ export function HistoryFilters({
           >
             <Layers className="w-3.5 h-3.5" />
             Todos
-          </button>
+          </Button>
 
-          <button
+          <Button
             type="button"
+            variant={typeFilter === 'workout' ? 'default' : 'ghost'}
+            size="sm"
             onClick={() => onTypeFilterChange('workout')}
-            className={`flex-1 sm:flex-none h-8 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+            className={`flex-1 sm:flex-none h-8 px-3 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 ${
               typeFilter === 'workout'
                 ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/20'
                 : 'text-muted-foreground hover:text-foreground'
@@ -69,12 +74,14 @@ export function HistoryFilters({
           >
             <Dumbbell className="w-3.5 h-3.5" />
             Treinos
-          </button>
+          </Button>
 
-          <button
+          <Button
             type="button"
+            variant={typeFilter === 'weight' ? 'default' : 'ghost'}
+            size="sm"
             onClick={() => onTypeFilterChange('weight')}
-            className={`flex-1 sm:flex-none h-8 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+            className={`flex-1 sm:flex-none h-8 px-3 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 ${
               typeFilter === 'weight'
                 ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/20'
                 : 'text-muted-foreground hover:text-foreground'
@@ -82,7 +89,7 @@ export function HistoryFilters({
           >
             <Scale className="w-3.5 h-3.5" />
             Pesagens
-          </button>
+          </Button>
         </div>
 
         {/* Filtro por Protocolo */}

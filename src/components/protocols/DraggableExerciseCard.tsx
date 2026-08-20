@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { 
   Select, 
   SelectContent, 
@@ -130,33 +131,40 @@ export function DraggableExerciseCard({
         <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2.5 sm:gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-border/30 w-full sm:w-auto">
           {/* Séries x Reps */}
           <div className="flex flex-col items-center gap-1">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-muted-foreground">
               {ex.category === 'time' ? 'Tempo' : 'Séries × Reps'}
             </span>
             <div className="flex items-center gap-1 bg-muted/30 rounded-xl p-1 border border-border/40">
-              <button
+              <Button
                 type="button"
-                className="w-7 h-7 rounded-lg hover:bg-muted text-muted-foreground flex items-center justify-center font-bold disabled:opacity-30 active:scale-95"
+                variant="ghost"
+                size="icon"
+                className="w-7 h-7 rounded-lg text-muted-foreground hover:text-foreground"
                 onClick={() => onUpdate(day, idx, 'sets', Math.max(1, (ex.sets || 1) - 1))}
                 disabled={ex.sets <= 1}
               >
                 <Minus className="w-3.5 h-3.5" />
-              </button>
+              </Button>
+              
               <Input
                 type="number"
                 min={1}
                 max={99}
-                className="w-7 bg-transparent border-none text-xs text-center font-bold p-0 h-7 focus-visible:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="w-8 h-7 text-xs text-center font-bold px-0 py-0 border-none bg-transparent shadow-none focus-visible:ring-0"
                 value={ex.sets}
+                onFocus={(e) => e.target.select()}
                 onChange={(e) => onUpdate(day, idx, 'sets', parseLocaleNumber(e.target.value, 1))}
               />
-              <button
+              
+              <Button
                 type="button"
-                className="w-7 h-7 rounded-lg hover:bg-muted text-muted-foreground flex items-center justify-center font-bold active:scale-95"
+                variant="ghost"
+                size="icon"
+                className="w-7 h-7 rounded-lg text-muted-foreground hover:text-foreground"
                 onClick={() => onUpdate(day, idx, 'sets', (ex.sets || 0) + 1)}
               >
                 <Plus className="w-3.5 h-3.5" />
-              </button>
+              </Button>
 
               <span className="text-xs font-bold text-muted-foreground/60 px-0.5">×</span>
 
@@ -164,42 +172,46 @@ export function DraggableExerciseCard({
                 type="number"
                 min={1}
                 max={999}
-                className={`${ex.category === 'time' ? 'w-10' : 'w-8'} bg-transparent border-none text-xs text-center font-bold p-0 h-7 focus-visible:ring-0`}
+                className={`${ex.category === 'time' ? 'w-10' : 'w-8'} h-7 text-xs text-center font-bold px-0 py-0 border-none bg-transparent shadow-none focus-visible:ring-0`}
                 value={ex.reps}
+                onFocus={(e) => e.target.select()}
                 onChange={(e) => onUpdate(day, idx, 'reps', parseLocaleNumber(e.target.value, 10))}
               />
-              {ex.category === 'time' && <span className="text-xs font-bold text-muted-foreground">s</span>}
+              {ex.category === 'time' && <span className="text-xs font-bold text-muted-foreground pr-1">s</span>}
             </div>
           </div>
 
           {/* Carga Inicial (Baseline) */}
           <div className="flex flex-col items-center gap-1">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-muted-foreground">
               {ex.category === 'weight' ? 'Carga Base' : '+ Carga'}
             </span>
-            <div className="flex items-center gap-1 bg-muted/30 rounded-xl px-2.5 h-9 border border-border/40 w-24">
+            <div className="flex items-center gap-1 bg-muted/30 rounded-xl px-2 h-9 border border-border/40 w-24">
               <Input
                 type="text"
                 inputMode="decimal"
-                className="w-full bg-transparent border-none text-xs text-center font-bold p-0 h-full focus-visible:ring-0"
+                className="w-full h-full text-xs text-center font-bold px-0 py-0 border-none bg-transparent shadow-none focus-visible:ring-0"
                 value={ex.baseline}
+                onFocus={(e) => e.target.select()}
                 onChange={(e) => onUpdate(day, idx, 'baseline', e.target.value)}
                 placeholder="0"
               />
-              <span className="text-xs font-bold text-muted-foreground/70">KG</span>
+              <span className="text-[10px] font-bold text-muted-foreground/70">KG</span>
             </div>
           </div>
 
           {/* Botão de Excluir */}
           <div className="flex items-center self-end sm:self-center">
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => setDeleteDialogOpen(true)}
-              className="h-9 w-9 rounded-xl text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 flex items-center justify-center transition-colors active:scale-95"
+              className="h-9 w-9 rounded-xl text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10"
               title="Remover exercício"
             >
               <Trash2 className="w-4 h-4" />
-            </button>
+            </Button>
           </div>
         </div>
       </div>
