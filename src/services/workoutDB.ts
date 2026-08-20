@@ -554,31 +554,41 @@ export async function clearAllData(userId: string): Promise<void> {
 export async function getExercisePR(exerciseId: string, userId?: string): Promise<WorkoutSet | null> {
   const currentUserId = userId || getActiveUserId();
   
-  // 1. Pegar IDs de treinos concluídos e não deletados
-  let completedWorkoutsQuery = db.workouts
-    .where('status')
-    .equals('completed')
-    .filter(w => !w.isDeleted);
-
+  // 1. Pegar todos os treinos válidos (não cancelados e não ativos) do usuário
+  let workoutsQuery = db.workouts.filter(w => !w.isDeleted && w.status !== 'cancelled' && w.status !== 'active');
   if (currentUserId) {
-    completedWorkoutsQuery = completedWorkoutsQuery.and(w => w.userId === currentUserId);
+    workoutsQuery = db.workouts.where('userId').equals(currentUserId).filter(w => !w.isDeleted && w.status !== 'cancelled' && w.status !== 'active');
   }
-  const completedWorkouts = await completedWorkoutsQuery.toArray();
+  const completedWorkouts = await workoutsQuery.toArray();
   const workoutIds = new Set(completedWorkouts.map(w => w.id));
 
-  // 2. Pegar todas as séries deste exercício que não estejam deletadas
+  // 2. Buscar exercício atual para checar nome e categoria
+  const exercise = await db.exercises.get(exerciseId);
+  const targetName = exercise?.name?.trim().toLowerCase();
+  
+  // Buscar IDs correspondentes (mesmo ID ou mesmo nome de exercício histórico)
+  let allTargetExerciseIds = [exerciseId];
+  if (targetName && currentUserId) {
+    const sameNameExercises = await db.exercises
+      .where('userId')
+      .equals(currentUserId)
+      .filter(e => e.name.trim().toLowerCase() === targetName)
+      .toArray();
+    allTargetExerciseIds = [...new Set([...allTargetExerciseIds, ...sameNameExercises.map(e => e.id)])];
+  }
+
+  // 3. Pegar todas as séries deste exercício que não estejam deletadas
   const sets = await db.workoutSets
     .where('exerciseId')
-    .equals(exerciseId)
-    .filter(s => !s.isDeleted && s.completed && workoutIds.has(s.workoutId))
+    .anyOf(allTargetExerciseIds)
+    .filter(s => !s.isDeleted && s.completed && (workoutIds.has(s.workoutId) || s.workoutId !== ''))
     .toArray();
 
   if (sets.length === 0) return null;
 
-  const exercise = await db.exercises.get(exerciseId);
   const category = exercise?.category || 'weight';
 
-  // 3. Encontrar a melhor série considerando a categoria
+  // 4. Encontrar a melhor série considerando a categoria
   return sets.reduce((best, current) => {
     if (category === 'time') {
       if (current.reps > best.reps || (current.reps === best.reps && current.weight > best.weight)) {

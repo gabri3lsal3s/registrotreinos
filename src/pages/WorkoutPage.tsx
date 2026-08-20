@@ -21,7 +21,7 @@ import {
 import { deleteWorkoutFromCloud, fullSync } from '../services/syncService';
 import { syncEventBus } from '../services/eventBus';
 import type { ExerciseCategory, UniqueExercise, WorkoutSet, WorkoutSetType } from '../types';
-import { parseLocaleNumber, calculateVolume } from '../utils/workoutMath';
+import { parseLocaleNumber, calculateVolume, toTimestamp } from '../utils/workoutMath';
 import { WEEK_DAYS } from '../utils/constants';
 import { Button } from "@/components/ui/button";
 import { 
@@ -116,7 +116,9 @@ export default function WorkoutPage() {
 
         // Checar treino ativo
         const active = await db.workouts
-          .where({ userId: user.id, protocolId, status: 'active' })
+          .where('userId')
+          .equals(user.id)
+          .filter(w => !w.isDeleted && w.protocolId === protocolId && w.status === 'active')
           .first();
         
         if (active) {
@@ -124,30 +126,73 @@ export default function WorkoutPage() {
         }
 
         // Buscar último treino concluído deste protocolo
-        const lastWorkout = await db.workouts
-          .where({ userId: user.id, protocolId, status: 'completed' })
-          .reverse()
-          .sortBy('date');
+        const allCompletedWorkouts = await db.workouts
+          .where('userId')
+          .equals(user.id)
+          .filter(w => !w.isDeleted && w.protocolId === protocolId && w.status !== 'cancelled' && w.status !== 'active')
+          .toArray();
         
-        const mostRecentWorkout = lastWorkout[0];
+        allCompletedWorkouts.sort((a, b) => (toTimestamp(b.date) - toTimestamp(a.date)));
+        
+        const mostRecentWorkout = allCompletedWorkouts[0];
         const lastSetsMap: Record<string, WorkoutSet[]> = {};
         if (mostRecentWorkout) {
-          const sets = await db.workoutSets
+          const sets = (await db.workoutSets
             .where('workoutId').equals(mostRecentWorkout.id)
-            .toArray();
+            .toArray()).filter(s => !s.isDeleted);
           sets.forEach(s => {
             if (!lastSetsMap[s.exerciseId]) lastSetsMap[s.exerciseId] = [];
             lastSetsMap[s.exerciseId].push(s);
           });
           for (const eid in lastSetsMap) {
-            lastSetsMap[eid].sort((a, b) => a.timestamp - b.timestamp);
+            lastSetsMap[eid].sort((a, b) => toTimestamp(a.timestamp) - toTimestamp(b.timestamp));
           }
         }
 
-        // Recordes Pessoais (PRs) do usuário
+        // Recordes Pessoais (PRs) do usuário e exercícios do protocolo
         const allExercises = await getExercisesByProtocol(protocolId);
-        const historicalPRs: Record<string, { weight: number; reps: number }> = {};
 
+        // Fallback: se algum exercício não tiver séries no último treino deste protocolo, busca no histórico geral
+        for (const ex of allExercises) {
+          if (!lastSetsMap[ex.id] || lastSetsMap[ex.id].length === 0) {
+            const exSets = (await db.workoutSets
+              .where('exerciseId')
+              .equals(ex.id)
+              .filter(s => !s.isDeleted && s.completed)
+              .toArray()).sort((a, b) => (toTimestamp(b.timestamp || b.createdAt) - toTimestamp(a.timestamp || a.createdAt)));
+            
+            if (exSets.length > 0) {
+              const latestWorkoutId = exSets[0].workoutId;
+              const latestWorkoutSets = exSets.filter(s => s.workoutId === latestWorkoutId)
+                .sort((a, b) => a.setIndex - b.setIndex);
+              lastSetsMap[ex.id] = latestWorkoutSets;
+            } else {
+              const sameNameExercises = await db.exercises
+                .where('userId')
+                .equals(user.id)
+                .filter(e => e.name.trim().toLowerCase() === ex.name.trim().toLowerCase() && e.id !== ex.id)
+                .toArray();
+              
+              if (sameNameExercises.length > 0) {
+                const altIds = sameNameExercises.map(e => e.id);
+                const altSets = (await db.workoutSets
+                  .where('exerciseId')
+                  .anyOf(altIds)
+                  .filter(s => !s.isDeleted && s.completed)
+                  .toArray()).sort((a, b) => (toTimestamp(b.timestamp || b.createdAt) - toTimestamp(a.timestamp || a.createdAt)));
+                
+                if (altSets.length > 0) {
+                  const latestAltWorkoutId = altSets[0].workoutId;
+                  const latestAltSets = altSets.filter(s => s.workoutId === latestAltWorkoutId)
+                    .sort((a, b) => a.setIndex - b.setIndex);
+                  lastSetsMap[ex.id] = latestAltSets;
+                }
+              }
+            }
+          }
+        }
+
+        const historicalPRs: Record<string, { weight: number; reps: number }> = {};
         for (const ex of allExercises) {
           const truePR = await getExercisePR(ex.id, user.id);
           if (truePR) {
