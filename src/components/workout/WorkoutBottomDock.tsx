@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Play, Pause, Plus, Minus, RotateCcw, Timer, Volume2, Save } from 'lucide-react';
-import { playRestFinishedNotification, playBeep } from '../../utils/audioFeedback';
+import { playRestFinishedNotification, playBeep, triggerHaptic, playAudioCue } from '../../utils/sensoryFeedback';
 
 interface WorkoutBottomDockProps {
   totalCompletedSets: number;
@@ -58,6 +58,7 @@ export function WorkoutBottomDock({
       // Bipe curto nos últimos 3 segundos
       if (left <= 3 && left > 0) {
         playBeep(440, 0.05);
+        triggerHaptic('light');
       }
 
       if (left <= 0) {
@@ -74,6 +75,8 @@ export function WorkoutBottomDock({
   }, [isRunning, endTime]);
 
   const startTimer = useCallback(() => {
+    triggerHaptic('medium');
+    playAudioCue('click');
     const duration = remainingSeconds > 0 ? remainingSeconds : totalSeconds;
     setRemainingSeconds(duration);
     setEndTime(Date.now() + duration * 1000);
@@ -81,16 +84,25 @@ export function WorkoutBottomDock({
   }, [remainingSeconds, totalSeconds]);
 
   const pauseTimer = useCallback(() => {
+    triggerHaptic('light');
     setIsRunning(false);
   }, []);
 
   const resetTimer = useCallback(() => {
+    triggerHaptic('medium');
+    playAudioCue('click');
     setIsRunning(false);
     setRemainingSeconds(totalSeconds);
     setEndTime(Date.now() + totalSeconds * 1000);
   }, [totalSeconds]);
 
   const adjustTime = useCallback((seconds: number) => {
+    triggerHaptic('light');
+    if (seconds > 0) {
+      playAudioCue('increment');
+    } else {
+      playAudioCue('decrement');
+    }
     if (isRunning) {
       setRemainingSeconds((prev) => {
         const next = Math.max(0, prev + seconds);

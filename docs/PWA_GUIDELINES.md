@@ -8,12 +8,12 @@ O **Registro de Treinos** é projetado como uma **PWA Standalone de Alta Disponi
 
 ## 2. Ecossistema de Assets e Ícones PWA
 
-A identidade visual adota a paleta **Zinc & Emerald**, com design minimalista e focado nos halteres de musculação:
+A identidade visual do PWA adota o padrão oficial idêntico ao componente de marca da aplicação (`bg-primary text-primary-foreground rounded-2xl`), em tom sólido **Emerald 500 (`#10b981`)** com o haltere estilizado em branco puro (`#ffffff`):
 
 ### 2.1. Arquivos Fontes (SVG Master)
-- **`public/icon.svg`**: Ícone master (512x512) com haltere estilizado em destaque, anilhas em gradiente esmeralda (`#6ee7b7` ➔ `#34d399` ➔ `#10b981` ➔ `#047857`), barra metálica com textura de pegada (knurling) e travas em squircle Dark Zinc 950 (`#09090b`). Utilizado para ícones `purpose: any`.
-- **`public/maskable-icon.svg`**: Ícone maskable (512x512) com safe-zone de 80% (área interna de 410x410 centralizada) e fundo sólido Zinc 950 (`#09090b`), garantindo compatibilidade com qualquer formato de launcher Android (círculo, squircle, lágrima).
-- **`public/favicon.svg`**: Favicon vetorial minimalista de alto contraste para abas de navegadores.
+- **`public/icon.svg`**: Ícone master (512x512) em squircle sólido Esmeralda 500 (`#10b981`) com o haltere diagonal em branco puro (`#ffffff`). Utilizado para ícones `purpose: any` e apple-touch-icons.
+- **`public/maskable-icon.svg`**: Ícone maskable (512x512) com fundo sólido Esmeralda 500 (`#10b981`) contínuo e haltere centralizado no safe-zone de 80%, garantindo encaixe perfeito e sem emendas de cor em qualquer formato de launcher Android (círculo, squircle, lágrima).
+- **`public/favicon.svg`**: Favicon vetorial oficial de alto contraste com fundo Esmeralda 500 (`#10b981`) e haltere branco para abas de navegadores.
 
 ### 2.2. Estrutura de Diretórios de Assets Gerados
 ```

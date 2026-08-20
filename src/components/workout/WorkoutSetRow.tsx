@@ -1,7 +1,9 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import { Input } from "@/components/ui/input";
 import { CheckCircle2, Circle } from 'lucide-react';
 import type { ExerciseCategory, WorkoutSetType } from '../../types';
+import { triggerHaptic, playAudioCue } from '../../utils/sensoryFeedback';
 
 export interface SetInputData {
   weight: string;
@@ -40,12 +42,24 @@ export const WorkoutSetRow: React.FC<WorkoutSetRowProps> = ({
   const currentSetType = setData.type || 'normal';
 
   const handleAdjustWeight = (delta: number) => {
+    triggerHaptic('light');
+    if (delta > 0) {
+      playAudioCue('increment');
+    } else {
+      playAudioCue('decrement');
+    }
     const current = parseFloat(setData.weight || '0') || 0;
     const next = Math.max(0, current + delta);
     onUpdateSetData(setIdx, 'weight', String(next));
   };
 
   const handleAdjustReps = (delta: number) => {
+    triggerHaptic('light');
+    if (delta > 0) {
+      playAudioCue('increment');
+    } else {
+      playAudioCue('decrement');
+    }
     const current = parseInt(setData.reps || '0', 10) || 0;
     const next = Math.max(0, current + delta);
     onUpdateSetData(setIdx, 'reps', String(next));
@@ -54,16 +68,31 @@ export const WorkoutSetRow: React.FC<WorkoutSetRowProps> = ({
   // Alterna ciclicamente entre os tipos de série ao tocar no badge
   const handleCycleSetType = () => {
     if (!onUpdateSetType) return;
+    triggerHaptic('medium');
+    playAudioCue('click');
     const currentIndex = SET_TYPES.findIndex(st => st.type === currentSetType);
     const nextType = SET_TYPES[(currentIndex + 1) % SET_TYPES.length].type;
     onUpdateSetType(setIdx, nextType);
   };
 
+  const handleToggleClick = () => {
+    if (!isCompleted) {
+      triggerHaptic('success');
+      playAudioCue('set_complete');
+    } else {
+      triggerHaptic('light');
+      playAudioCue('set_uncomplete');
+    }
+    onToggleSet(setIdx);
+  };
+
   const currentTypeConfig = SET_TYPES.find(st => st.type === currentSetType) || SET_TYPES[0];
 
   return (
-    <div
-      className={`flex items-center justify-between gap-1.5 sm:gap-2 p-2 sm:p-2.5 rounded-xl border transition-all duration-200 ${
+    <motion.div
+      layout
+      transition={{ duration: 0.15 }}
+      className={`flex items-center justify-between gap-1.5 sm:gap-2 p-2 sm:p-2.5 rounded-xl border transition-colors duration-200 ${
         isCompleted
           ? 'bg-primary/5 border-primary/30 text-foreground'
           : 'bg-card border-border/40 hover:border-border/70'
@@ -75,14 +104,15 @@ export const WorkoutSetRow: React.FC<WorkoutSetRowProps> = ({
           #{setIdx + 1}
         </span>
         {onUpdateSetType && (
-          <button
+          <motion.button
+            whileTap={{ scale: 0.88 }}
             type="button"
             onClick={handleCycleSetType}
-            className={`w-6 h-5 rounded-md text-[10px] font-black uppercase flex items-center justify-center border transition-transform active:scale-95 ${currentTypeConfig.bg} ${currentTypeConfig.text}`}
+            className={`w-6 h-5 rounded-md text-[10px] font-black uppercase flex items-center justify-center border transition-all ${currentTypeConfig.bg} ${currentTypeConfig.text}`}
             title={`Tipo: ${currentTypeConfig.name} (Toque para alternar)`}
           >
             {currentTypeConfig.label}
-          </button>
+          </motion.button>
         )}
       </div>
 
@@ -95,33 +125,36 @@ export const WorkoutSetRow: React.FC<WorkoutSetRowProps> = ({
           onChange={(e) => onUpdateSetData(setIdx, 'weight', e.target.value)}
           onFocus={(e) => e.target.select()}
           placeholder="0"
-          className="h-10 sm:h-11 w-full text-center font-bold text-sm sm:text-base rounded-xl bg-background border-border/60 focus-visible:ring-primary select-all px-1"
+          className="h-10 sm:h-11 w-full text-center font-bold text-sm sm:text-base rounded-xl bg-background border-border/60 focus-visible:ring-primary select-all px-1 transition-all"
         />
         <div className="flex items-center justify-center gap-1 mt-1 w-full">
-          <button
+          <motion.button
+            whileTap={{ scale: 0.85 }}
             type="button"
             onClick={() => handleAdjustWeight(-1)}
-            className="flex-1 h-5 rounded bg-muted/60 hover:bg-muted text-[10px] font-mono text-muted-foreground hover:text-foreground font-bold active:scale-95 transition-all"
+            className="flex-1 h-5 rounded bg-muted/60 hover:bg-muted text-[10px] font-mono text-muted-foreground hover:text-foreground font-bold transition-colors"
             title="-1kg"
           >
             -1
-          </button>
-          <button
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.85 }}
             type="button"
             onClick={() => handleAdjustWeight(1)}
-            className="flex-1 h-5 rounded bg-muted/60 hover:bg-muted text-[10px] font-mono text-muted-foreground hover:text-foreground font-bold active:scale-95 transition-all"
+            className="flex-1 h-5 rounded bg-muted/60 hover:bg-muted text-[10px] font-mono text-muted-foreground hover:text-foreground font-bold transition-colors"
             title="+1kg"
           >
             +1
-          </button>
-          <button
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.85 }}
             type="button"
             onClick={() => handleAdjustWeight(2)}
-            className="flex-1 h-5 rounded bg-muted/60 hover:bg-muted text-[10px] font-mono text-muted-foreground hover:text-foreground font-bold active:scale-95 transition-all"
+            className="flex-1 h-5 rounded bg-muted/60 hover:bg-muted text-[10px] font-mono text-muted-foreground hover:text-foreground font-bold transition-colors"
             title="+2kg"
           >
             +2
-          </button>
+          </motion.button>
         </div>
       </div>
 
@@ -134,34 +167,39 @@ export const WorkoutSetRow: React.FC<WorkoutSetRowProps> = ({
           onChange={(e) => onUpdateSetData(setIdx, 'reps', e.target.value)}
           onFocus={(e) => e.target.select()}
           placeholder={category === 'time' ? '0s' : '0'}
-          className="h-10 sm:h-11 w-full text-center font-bold text-sm sm:text-base rounded-xl bg-background border-border/60 focus-visible:ring-primary select-all px-1"
+          className="h-10 sm:h-11 w-full text-center font-bold text-sm sm:text-base rounded-xl bg-background border-border/60 focus-visible:ring-primary select-all px-1 transition-all"
         />
         <div className="flex items-center justify-center gap-1 mt-1 w-full">
-          <button
+          <motion.button
+            whileTap={{ scale: 0.85 }}
             type="button"
             onClick={() => handleAdjustReps(-1)}
-            className="flex-1 h-5 rounded bg-muted/60 hover:bg-muted text-[10px] font-mono text-muted-foreground hover:text-foreground font-bold active:scale-95 transition-all"
+            className="flex-1 h-5 rounded bg-muted/60 hover:bg-muted text-[10px] font-mono text-muted-foreground hover:text-foreground font-bold transition-colors"
             title="-1 rep"
           >
             -1
-          </button>
-          <button
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.85 }}
             type="button"
             onClick={() => handleAdjustReps(1)}
-            className="flex-1 h-5 rounded bg-muted/60 hover:bg-muted text-[10px] font-mono text-muted-foreground hover:text-foreground font-bold active:scale-95 transition-all"
+            className="flex-1 h-5 rounded bg-muted/60 hover:bg-muted text-[10px] font-mono text-muted-foreground hover:text-foreground font-bold transition-colors"
             title="+1 rep"
           >
             +1
-          </button>
+          </motion.button>
         </div>
       </div>
 
-      {/* 4. Botão de Conclusão da Série (44px touch target) */}
+      {/* 4. Botão de Conclusão da Série com Spring Bounce */}
       <div className="flex items-center justify-center shrink-0 pl-0.5">
-        <button
+        <motion.button
+          whileTap={{ scale: 0.78 }}
+          whileHover={{ scale: 1.05 }}
+          transition={{ type: "spring", stiffness: 500, damping: 25 }}
           type="button"
-          onClick={() => onToggleSet(setIdx)}
-          className={`h-10 w-10 sm:h-11 sm:w-11 rounded-xl flex items-center justify-center transition-all duration-200 active:scale-90 ${
+          onClick={handleToggleClick}
+          className={`h-10 w-10 sm:h-11 sm:w-11 rounded-xl flex items-center justify-center transition-colors duration-200 ${
             isCompleted
               ? 'bg-primary text-primary-foreground shadow-md shadow-primary/25'
               : 'bg-muted/40 text-muted-foreground/50 hover:text-foreground hover:bg-muted/80'
@@ -169,12 +207,18 @@ export const WorkoutSetRow: React.FC<WorkoutSetRowProps> = ({
           title={isCompleted ? 'Marcar como não concluída' : 'Concluir série'}
         >
           {isCompleted ? (
-            <CheckCircle2 className="w-5 h-5" />
+            <motion.div
+              initial={{ scale: 0.5, rotate: -20 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ type: "spring", stiffness: 500, damping: 20 }}
+            >
+              <CheckCircle2 className="w-5 h-5" />
+            </motion.div>
           ) : (
             <Circle className="w-5 h-5" />
           )}
-        </button>
+        </motion.button>
       </div>
-    </div>
+    </motion.div>
   );
 };

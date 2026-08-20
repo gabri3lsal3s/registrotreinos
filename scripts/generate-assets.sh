@@ -8,8 +8,8 @@
 # Requer: ImageMagick (convert / magick)
 #
 # Regenera os PNGs a partir dos SVGs mestres:
-#   public/icon.svg          → Ícone principal (Haltere + Pulso Zinc & Emerald)
-#   public/maskable-icon.svg → Ícone com 80% safe-zone para Android Maskable
+#   public/icon.svg          → Ícone principal (Badge Esmeralda + Haltere Branco)
+#   public/maskable-icon.svg → Ícone com safe-zone contínuo para Android Maskable
 #
 # ═══════════════════════════════════════════════════════════════
 
@@ -21,7 +21,6 @@ SPLASH_DIR="$ROOT_DIR/public/splash"
 SVG_ICON="$ROOT_DIR/public/icon.svg"
 SVG_MASKABLE="$ROOT_DIR/public/maskable-icon.svg"
 
-# Cores oficiais da paleta Zinc & Emerald
 BG_COLOR='#09090b'
 MAGICK_CMD="magick"
 
@@ -46,7 +45,7 @@ fi
 mkdir -p "$ICONS_DIR" "$SPLASH_DIR"
 
 # ═══════════════════════════════════════════════════════════════
-# 1. APPLE TOUCH ICONS (PNG, fundo Zinc 950 com safe padding)
+# 1. APPLE TOUCH ICONS (PNG, fundo transparente / squircle nativo)
 # ═══════════════════════════════════════════════════════════════
 echo ""
 echo "📱 Gerando apple-touch-icons..."
@@ -54,10 +53,8 @@ echo "📱 Gerando apple-touch-icons..."
 generate_apple_icon() {
   local size="$1"
   local output="$2"
-  local inner_size=$(( size * 84 / 100 ))
   echo "   → ${size}px  →  $output"
-  $MAGICK_CMD "$SVG_ICON" -resize "${inner_size}x${inner_size}" \
-    -background "$BG_COLOR" -gravity center -extent "${size}x${size}" "$output"
+  $MAGICK_CMD -background none "$SVG_ICON" -resize "${size}x${size}" "$output"
 }
 
 generate_apple_icon 180 "$ICONS_DIR/apple-touch-icon-180x180.png"

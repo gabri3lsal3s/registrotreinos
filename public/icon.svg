@@ -1,100 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <defs>
-    <!-- Background Zinc 950 Gradient -->
-    <linearGradient id="zincBg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#18181b"/>
-      <stop offset="50%" stop-color="#09090b"/>
-      <stop offset="100%" stop-color="#040405"/>
-    </linearGradient>
+  <!-- Solid Emerald 500 (bg-primary) Squircle -->
+  <rect width="512" height="512" rx="128" fill="#10b981"/>
 
-    <!-- Radial Emerald Ambience -->
-    <radialGradient id="emeraldGlow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#10b981" stop-opacity="0.25"/>
-      <stop offset="50%" stop-color="#059669" stop-opacity="0.08"/>
-      <stop offset="100%" stop-color="#09090b" stop-opacity="0"/>
-    </radialGradient>
-
-    <!-- Border Glow Gradient -->
-    <linearGradient id="borderGlow" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#34d399" stop-opacity="0.6"/>
-      <stop offset="35%" stop-color="#10b981" stop-opacity="0.2"/>
-      <stop offset="70%" stop-color="#27272a" stop-opacity="0.4"/>
-      <stop offset="100%" stop-color="#059669" stop-opacity="0.5"/>
-    </linearGradient>
-
-    <!-- Primary Emerald Plate Gradient -->
-    <linearGradient id="emeraldPlate" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#6ee7b7"/>
-      <stop offset="25%" stop-color="#34d399"/>
-      <stop offset="70%" stop-color="#10b981"/>
-      <stop offset="100%" stop-color="#047857"/>
-    </linearGradient>
-
-    <!-- Metallic Shaft Gradient -->
-    <linearGradient id="barMetal" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#a1a1aa"/>
-      <stop offset="35%" stop-color="#f4f4f5"/>
-      <stop offset="65%" stop-color="#d4d4d8"/>
-      <stop offset="100%" stop-color="#52525b"/>
-    </linearGradient>
-
-    <!-- Collar Gradient -->
-    <linearGradient id="collarMetal" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#71717a"/>
-      <stop offset="50%" stop-color="#e4e4e7"/>
-      <stop offset="100%" stop-color="#3f3f46"/>
-    </linearGradient>
-
-    <!-- Drop Shadow -->
-    <filter id="dumbbellShadow" x="-15%" y="-15%" width="130%" height="130%">
-      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#000000" flood-opacity="0.75"/>
-      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#10b981" flood-opacity="0.25"/>
-    </filter>
-  </defs>
-
-  <!-- 1. Background Squircle Base -->
-  <rect width="512" height="512" rx="124" fill="url(#zincBg)"/>
-  <rect width="512" height="512" rx="124" fill="url(#emeraldGlow)"/>
-  <rect x="6" y="6" width="500" height="500" rx="120" fill="none" stroke="url(#borderGlow)" stroke-width="5"/>
-
-  <!-- 2. Minimalist Gym Dumbbell Iconography -->
-  <g filter="url(#dumbbellShadow)" transform="translate(0, 0)">
-    <!-- Central Barbell Grip Shaft -->
-    <rect x="130" y="238" width="252" height="36" rx="18" fill="url(#barMetal)"/>
-
-    <!-- Knurling Texture Details -->
-    <g opacity="0.30" stroke="#18181b" stroke-width="3" stroke-linecap="round">
-      <line x1="216" y1="243" x2="216" y2="269"/>
-      <line x1="230" y1="243" x2="230" y2="269"/>
-      <line x1="244" y1="243" x2="244" y2="269"/>
-      <line x1="256" y1="243" x2="256" y2="269"/>
-      <line x1="268" y1="243" x2="268" y2="269"/>
-      <line x1="282" y1="243" x2="282" y2="269"/>
-      <line x1="296" y1="243" x2="296" y2="269"/>
-    </g>
-
-    <!-- LEFT WEIGHT PLATES -->
-    <!-- Outer Small Plate Left -->
-    <rect x="52" y="176" width="34" height="160" rx="17" fill="url(#emeraldPlate)" stroke="#047857" stroke-width="2.5"/>
-    <rect x="60" y="188" width="8" height="136" rx="4" fill="#ffffff" opacity="0.35"/>
-
-    <!-- Inner Big Plate Left -->
-    <rect x="96" y="128" width="44" height="256" rx="22" fill="url(#emeraldPlate)" stroke="#047857" stroke-width="2.5"/>
-    <rect x="106" y="142" width="10" height="228" rx="5" fill="#ffffff" opacity="0.4"/>
-
-    <!-- Collar Lock Left -->
-    <rect x="146" y="222" width="20" height="68" rx="10" fill="url(#collarMetal)" stroke="#27272a" stroke-width="2"/>
-
-    <!-- RIGHT WEIGHT PLATES -->
-    <!-- Collar Lock Right -->
-    <rect x="346" y="222" width="20" height="68" rx="10" fill="url(#collarMetal)" stroke="#27272a" stroke-width="2"/>
-
-    <!-- Inner Big Plate Right -->
-    <rect x="372" y="128" width="44" height="256" rx="22" fill="url(#emeraldPlate)" stroke="#047857" stroke-width="2.5"/>
-    <rect x="382" y="142" width="10" height="228" rx="5" fill="#ffffff" opacity="0.4"/>
-
-    <!-- Outer Small Plate Right -->
-    <rect x="426" y="176" width="34" height="160" rx="17" fill="url(#emeraldPlate)" stroke="#047857" stroke-width="2.5"/>
-    <rect x="434" y="188" width="8" height="136" rx="4" fill="#ffffff" opacity="0.35"/>
+  <!-- Centered Minimalist Lucide Dumbbell in Pure White -->
+  <g transform="translate(116, 116) scale(11.6667)" 
+     fill="none" 
+     stroke="#ffffff" 
+     stroke-width="2.2" 
+     stroke-linecap="round" 
+     stroke-linejoin="round">
+    <path d="M17.596 12.768a2 2 0 1 0 2.829-2.829l-1.768-1.767a2 2 0 0 0 2.828-2.829l-2.828-2.828a2 2 0 0 0-2.829 2.828l-1.767-1.768a2 2 0 1 0-2.829 2.829z"/>
+    <path d="m2.5 21.5 1.4-1.4"/>
+    <path d="m20.1 3.9 1.4-1.4"/>
+    <path d="M5.343 21.485a2 2 0 1 0 2.829-2.828l1.767 1.768a2 2 0 1 0 2.829-2.829l-6.364-6.364a2 2 0 1 0-2.829 2.829l1.768 1.767a2 2 0 0 0-2.828 2.829z"/>
+    <path d="m9.6 14.4 4.8-4.8"/>
   </g>
 </svg>

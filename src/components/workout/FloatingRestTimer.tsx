@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from "@/components/ui/button";
 import { Play, Pause, Plus, Minus, X, Timer, Volume2 } from 'lucide-react';
-import { playRestFinishedNotification, playBeep } from '../../utils/audioFeedback';
+import { playRestFinishedNotification, playBeep, triggerHaptic, playAudioCue } from '../../utils/sensoryFeedback';
 
 interface FloatingRestTimerProps {
   initialSeconds?: number;
@@ -16,15 +17,17 @@ export function FloatingRestTimer({
   onClose,
   onComplete
 }: FloatingRestTimerProps) {
-  if (!isOpen) return null;
-
   return (
-    <FloatingRestTimerModal
-      key={`${isOpen}-${initialSeconds}`}
-      initialSeconds={initialSeconds}
-      onClose={onClose}
-      onComplete={onComplete}
-    />
+    <AnimatePresence>
+      {isOpen && (
+        <FloatingRestTimerModal
+          key={`${isOpen}-${initialSeconds}`}
+          initialSeconds={initialSeconds}
+          onClose={onClose}
+          onComplete={onComplete}
+        />
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -58,6 +61,7 @@ function FloatingRestTimerModal({
       // Bipe curto nos últimos 3 segundos
       if (left <= 3 && left > 0) {
         playBeep(440, 0.05);
+        triggerHaptic('light');
       }
 
       if (left <= 0) {
@@ -71,6 +75,12 @@ function FloatingRestTimerModal({
   }, [isRunning, endTime, onComplete]);
 
   const addTime = useCallback((seconds: number) => {
+    triggerHaptic('light');
+    if (seconds > 0) {
+      playAudioCue('increment');
+    } else {
+      playAudioCue('decrement');
+    }
     setRemainingSeconds((prev) => {
       const next = Math.max(0, prev + seconds);
       setEndTime(Date.now() + next * 1000);
@@ -80,6 +90,8 @@ function FloatingRestTimerModal({
   }, []);
 
   const toggleRunning = useCallback(() => {
+    triggerHaptic('medium');
+    playAudioCue('click');
     setIsRunning((prev) => {
       if (!prev) {
         // Ao retomar, recalcula o endTime a partir dos segundos restantes
@@ -89,6 +101,11 @@ function FloatingRestTimerModal({
     });
   }, [remainingSeconds]);
 
+  const handleClose = () => {
+    triggerHaptic('light');
+    onClose();
+  };
+
   const minutes = Math.floor(remainingSeconds / 60);
   const seconds = remainingSeconds % 60;
   const formattedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
@@ -96,7 +113,13 @@ function FloatingRestTimerModal({
   const isFinished = remainingSeconds === 0;
 
   return (
-    <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-sm animate-in fade-in slide-in-from-bottom-6 duration-300">
+    <motion.div
+      initial={{ opacity: 0, y: 30, scale: 0.94 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 30, scale: 0.94 }}
+      transition={{ type: "spring", stiffness: 420, damping: 28 }}
+      className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-sm"
+    >
       <div className={`relative overflow-hidden rounded-2xl border ${isFinished ? 'border-primary bg-primary/20 shadow-primary/20' : 'border-border/60 bg-card/95 shadow-2xl backdrop-blur-xl'} p-3.5 shadow-2xl transition-all`}>
         {/* Barra de progresso de fundo */}
         <div 
@@ -130,7 +153,7 @@ function FloatingRestTimerModal({
                   size="sm"
                   onClick={() => addTime(-15)}
                   disabled={remainingSeconds <= 15}
-                  className="h-9 px-2 rounded-lg bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground font-mono text-xs font-bold"
+                  className="h-9 px-2 rounded-lg bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground font-mono text-xs font-bold active:scale-95"
                   title="Diminuir 15 segundos"
                 >
                   <Minus className="w-3 h-3 mr-0.5" />15s
@@ -141,7 +164,7 @@ function FloatingRestTimerModal({
                   variant="ghost"
                   size="sm"
                   onClick={() => addTime(30)}
-                  className="h-9 px-2 rounded-lg bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground font-mono text-xs font-bold"
+                  className="h-9 px-2 rounded-lg bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground font-mono text-xs font-bold active:scale-95"
                   title="Aumentar 30 segundos"
                 >
                   <Plus className="w-3 h-3 mr-0.5" />30s
@@ -152,7 +175,7 @@ function FloatingRestTimerModal({
                   variant={isRunning ? 'secondary' : 'default'}
                   size="icon"
                   onClick={toggleRunning}
-                  className="h-9 w-9 rounded-lg"
+                  className="h-9 w-9 rounded-lg active:scale-90"
                   title={isRunning ? 'Pausar' : 'Retomar'}
                 >
                   {isRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
@@ -164,8 +187,8 @@ function FloatingRestTimerModal({
               type="button"
               variant="ghost"
               size="icon"
-              onClick={onClose}
-              className="h-9 w-9 rounded-lg bg-muted/40 hover:bg-destructive/20 hover:text-destructive text-muted-foreground"
+              onClick={handleClose}
+              className="h-9 w-9 rounded-lg bg-muted/40 hover:bg-destructive/20 hover:text-destructive text-muted-foreground active:scale-90"
               title="Fechar timer"
             >
               <X className="w-4 h-4" />
@@ -173,6 +196,6 @@ function FloatingRestTimerModal({
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

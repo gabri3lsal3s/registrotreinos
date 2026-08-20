@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Dialog,
   DialogContent,
@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trophy, Sparkles, CheckCircle2, Smile, Moon, Flame } from 'lucide-react';
+import { triggerHaptic, playAudioCue } from '../../utils/sensoryFeedback';
 
 interface PRDetail {
   exerciseName: string;
@@ -40,6 +41,18 @@ export function WorkoutFinishModal({
   const [sleepQuality, setSleepQuality] = useState(4); // 1-5
   const [stressLevel, setStressLevel] = useState(2); // 1-5
   const [notes, setNotes] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      if (brokenPRs && brokenPRs.length > 0) {
+        triggerHaptic('celebration');
+        playAudioCue('pr_celebration');
+      } else {
+        triggerHaptic('success');
+        playAudioCue('workout_finished');
+      }
+    }
+  }, [isOpen, brokenPRs]);
 
   const handleFinish = () => {
     onConfirm({
