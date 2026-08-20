@@ -303,13 +303,44 @@ async function recordRemoteTombstone(userId: string, table: string, recordId: st
   }
 }
 
+async function fetchAllPaginated<T = Record<string, unknown>>(
+  table: string,
+  userId: string,
+  chunkSize = 1000
+): Promise<T[]> {
+  let allRows: T[] = [];
+  let from = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const to = from + chunkSize - 1;
+    const { data, error } = await supabase
+      .from(table)
+      .select('*')
+      .eq('user_id', userId)
+      .range(from, to);
+
+    if (error) throw new Error(`PULL ${table} (${from}-${to}): ${error.message}`);
+    const rows = (data || []) as T[];
+    allRows = allRows.concat(rows);
+
+    if (rows.length < chunkSize) {
+      hasMore = false;
+    } else {
+      from += chunkSize;
+    }
+  }
+
+  return allRows;
+}
+
 async function fetchDeletedRecords(userId: string): Promise<{ table_name: string; record_id: string }[]> {
   try {
     const res = await supabase
       .from('deleted_records')
       .select('table_name, record_id')
       .eq('user_id', userId)
-      .gte('deleted_at', new Date(Date.now() - 30 * 86400000).toISOString());
+      .gte('deleted_at', new Date(Date.now() - 60 * 86400000).toISOString());
     return (res.data || []) as { table_name: string; record_id: string }[];
   } catch {
     return [];
@@ -541,21 +572,15 @@ export async function pullData(): Promise<{ success: boolean }> {
   setSyncStatus('syncing');
 
   try {
-    const [pRes, eRes, wRes, sRes, bwRes, remoteDeletedList, pendingDeletions] = await Promise.all([
-      withRetry(async () => await supabase.from('protocols').select('*').eq('user_id', user.id)),
-      withRetry(async () => await supabase.from('exercises').select('*').eq('user_id', user.id)),
-      withRetry(async () => await supabase.from('workouts').select('*').eq('user_id', user.id)),
-      withRetry(async () => await supabase.from('workout_sets').select('*').eq('user_id', user.id)),
-      withRetry(async () => await supabase.from('body_weights').select('*').eq('user_id', user.id)),
+    const [rawRemoteP, rawRemoteE, rawRemoteW, rawRemoteS, rawRemoteBW, remoteDeletedList, pendingDeletions] = await Promise.all([
+      withRetry(async () => await fetchAllPaginated<Record<string, unknown>>('protocols', user.id)),
+      withRetry(async () => await fetchAllPaginated<Record<string, unknown>>('exercises', user.id)),
+      withRetry(async () => await fetchAllPaginated<Record<string, unknown>>('workouts', user.id)),
+      withRetry(async () => await fetchAllPaginated<Record<string, unknown>>('workout_sets', user.id)),
+      withRetry(async () => await fetchAllPaginated<Record<string, unknown>>('body_weights', user.id)),
       fetchDeletedRecords(user.id),
       db.pendingDeletions.where('userId').equals(user.id).toArray()
     ]);
-
-    if (pRes.error) throw new Error(`PULL Protocols: ${pRes.error.message}`);
-    if (eRes.error) throw new Error(`PULL Exercises: ${eRes.error.message}`);
-    if (wRes.error) throw new Error(`PULL Workouts: ${wRes.error.message}`);
-    if (sRes.error) throw new Error(`PULL WorkoutSets: ${sRes.error.message}`);
-    if (bwRes.error) throw new Error(`PULL BodyWeights: ${bwRes.error.message}`);
 
     // Processar deleções remotas propagadas de outros dispositivos
     const remoteDeletedKeys = new Set(remoteDeletedList.map(d => `${d.table_name}_${d.record_id}`));
@@ -584,12 +609,6 @@ export async function pullData(): Promise<{ success: boolean }> {
       });
     }
 
-    const rawRemoteP = (pRes.data || []) as Record<string, unknown>[];
-    const rawRemoteE = (eRes.data || []) as Record<string, unknown>[];
-    const rawRemoteW = (wRes.data || []) as Record<string, unknown>[];
-    const rawRemoteS = (sRes.data || []) as Record<string, unknown>[];
-    const rawRemoteBW = (bwRes.data || []) as Record<string, unknown>[];
-
     const isExcluded = (table: string, id: string) => 
       pendingDeletionKeys.has(`${table}_${id}`) || remoteDeletedKeys.has(`${table}_${id}`);
 
@@ -600,11 +619,13 @@ export async function pullData(): Promise<{ success: boolean }> {
     const remoteBW = rawRemoteBW.filter(item => !isExcluded('body_weights', item.id as string));
 
     await db.transaction('rw', [db.protocols, db.exercises, db.workouts, db.workoutSets, db.bodyWeights], async () => {
-      // Mapeamento e Persistência Não-Destrutiva preservando metadados locais
+      // Mapeamento e Persistência Não-Destrutiva com Last-Write-Wins (LWW)
       for (const item of remoteP) {
         const camel = toCamel<Protocol>(item);
         const local = await db.protocols.get(camel.id);
-        if (!local || local.isSynced) {
+        const remoteUpdated = Number(camel.updatedAt) || Number(camel.createdAt) || 0;
+        const localUpdated = Number(local?.updatedAt) || Number(local?.createdAt) || 0;
+        if (!local || local.isSynced || remoteUpdated >= localUpdated) {
           await db.protocols.put({ ...camel, userId: user.id, isSynced: true });
         }
       }
@@ -616,7 +637,6 @@ export async function pullData(): Promise<{ success: boolean }> {
           await db.exercises.put({
             ...camel,
             dayOfWeek: camel.dayOfWeek || (item as Record<string, unknown>).day as string || 'Segunda',
-            // Preservar notas fixas e grupo de bi-set locais se não existirem no payload remoto
             pinnedNotes: camel.pinnedNotes || local?.pinnedNotes,
             supersetGroupId: camel.supersetGroupId || local?.supersetGroupId,
             isSynced: true
@@ -627,7 +647,9 @@ export async function pullData(): Promise<{ success: boolean }> {
       for (const item of remoteW) {
         const camel = toCamel<Workout>(item);
         const local = await db.workouts.get(camel.id);
-        if (!local || local.isSynced) {
+        const remoteUpdated = Number(camel.date) || 0;
+        const localUpdated = Number(local?.date) || 0;
+        if (!local || local.isSynced || remoteUpdated >= localUpdated) {
           await db.workouts.put({ ...camel, userId: user.id, isSynced: true });
         }
       }
@@ -635,7 +657,9 @@ export async function pullData(): Promise<{ success: boolean }> {
       for (const item of remoteS) {
         const camel = toCamel<WorkoutSet>(item);
         const local = await db.workoutSets.get(camel.id);
-        if (!local || local.isSynced) {
+        const remoteUpdated = Number(camel.timestamp) || 0;
+        const localUpdated = Number(local?.timestamp) || 0;
+        if (!local || local.isSynced || remoteUpdated >= localUpdated) {
           await db.workoutSets.put({ ...camel, isSynced: true });
         }
       }
@@ -643,7 +667,9 @@ export async function pullData(): Promise<{ success: boolean }> {
       for (const item of remoteBW) {
         const camel = toCamel<BodyWeight>(item);
         const local = await db.bodyWeights.get(camel.id);
-        if (!local || local.isSynced) {
+        const remoteUpdated = Number(camel.date) || 0;
+        const localUpdated = Number(local?.date) || 0;
+        if (!local || local.isSynced || remoteUpdated >= localUpdated) {
           await db.bodyWeights.put({ ...camel, userId: user.id, isSynced: true });
         }
       }
