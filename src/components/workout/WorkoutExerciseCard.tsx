@@ -320,6 +320,8 @@ export function WorkoutExerciseCard({
           onClose={() => setHistoryModalOpen(false)}
           userId={userId}
           exerciseName={exercise.name}
+          exerciseId={exercise.id}
+          muscleGroup={exercise.muscleGroup}
           truePR={truePR}
         />
       )}

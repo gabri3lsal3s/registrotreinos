@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import { getExerciseInfo } from '../utils/exerciseDictionary';
+import { toTimestamp } from '../utils/workoutMath';
 import { useAuthStore } from './authStore';
 import type {
   Protocol,
@@ -661,58 +662,75 @@ export interface ExerciseSessionHistoryItem {
 export async function getExerciseSessionHistory(
   userId: string,
   exerciseName: string,
-  limit = 5
+  limit = 5,
+  exerciseId?: string
 ): Promise<ExerciseSessionHistoryItem[]> {
+  const rawCleanName = exerciseName.split(' (')[0].trim().toLowerCase();
   const canonicalName = getExerciseInfo(exerciseName).canonicalName.toLowerCase();
 
-  const userProtocols = await db.protocols
+  // 1. Mapear todos os protocolos do usuário para exibir os nomes
+  const allUserProtocols = await db.protocols
     .where('userId')
     .equals(userId)
-    .filter(p => !p.isDeleted)
     .toArray();
   const protocolMap = new Map<string, string>();
-  userProtocols.forEach(p => protocolMap.set(p.id, p.name));
-  const protocolIds = Array.from(protocolMap.keys());
+  allUserProtocols.forEach(p => protocolMap.set(p.id, p.name));
 
-  if (protocolIds.length === 0) return [];
-
-  const matchingExercises = await db.exercises
-    .where('protocolId')
-    .anyOf(protocolIds)
-    .filter(ex => !ex.isDeleted && getExerciseInfo(ex.name).canonicalName.toLowerCase() === canonicalName)
+  // 2. Buscar todos os exercícios do usuário para mapear IDs equivalentes
+  const allUserExercises = await db.exercises
+    .where('userId')
+    .equals(userId)
     .toArray();
 
-  const matchingExerciseIds = new Set(matchingExercises.map(ex => ex.id));
+  const matchingExerciseIds = new Set<string>();
+  if (exerciseId) matchingExerciseIds.add(exerciseId);
+
+  allUserExercises.forEach(ex => {
+    const exCleanName = ex.name.split(' (')[0].trim().toLowerCase();
+    const exCanonical = getExerciseInfo(ex.name).canonicalName.toLowerCase();
+    if (
+      exCleanName === rawCleanName ||
+      exCanonical === canonicalName ||
+      ex.name.toLowerCase().includes(rawCleanName) ||
+      rawCleanName.includes(exCleanName)
+    ) {
+      matchingExerciseIds.add(ex.id);
+    }
+  });
 
   if (matchingExerciseIds.size === 0) return [];
 
-  const completedWorkouts = await db.workouts
+  // 3. Buscar todos os treinos concluídos/não-ativos do usuário
+  const rawWorkouts = await db.workouts
     .where('userId')
     .equals(userId)
-    .filter(w => !w.isDeleted && w.status === 'completed')
-    .reverse()
-    .sortBy('date');
+    .filter(w => !w.isDeleted && w.status !== 'cancelled' && w.status !== 'active')
+    .toArray();
+
+  rawWorkouts.sort((a, b) => (toTimestamp(b.date) - toTimestamp(a.date)));
 
   const historyItems: ExerciseSessionHistoryItem[] = [];
 
-  for (const workout of completedWorkouts) {
+  for (const workout of rawWorkouts) {
     if (historyItems.length >= limit) break;
 
-    const sets = await db.workoutSets
+    const rawSets = (await db.workoutSets
       .where('workoutId')
       .equals(workout.id)
-      .filter(s => !s.isDeleted && matchingExerciseIds.has(s.exerciseId) && s.completed)
-      .toArray();
+      .filter(s => !s.isDeleted && s.completed)
+      .toArray());
 
-    if (sets.length > 0) {
-      sets.sort((a, b) => a.setIndex - b.setIndex);
+    const matchingSets = rawSets.filter(s => matchingExerciseIds.has(s.exerciseId));
+
+    if (matchingSets.length > 0) {
+      matchingSets.sort((a, b) => a.setIndex - b.setIndex);
 
       let bestWeight = 0;
       let bestReps = 0;
       let maxE1RM = 0;
       let totalVolume = 0;
 
-      for (const s of sets) {
+      for (const s of matchingSets) {
         if (s.weight > bestWeight || (s.weight === bestWeight && s.reps > bestReps)) {
           bestWeight = s.weight;
           bestReps = s.reps;
@@ -724,9 +742,9 @@ export async function getExerciseSessionHistory(
 
       historyItems.push({
         workoutId: workout.id,
-        date: workout.date,
+        date: toTimestamp(workout.date),
         protocolName: protocolMap.get(workout.protocolId) || 'Treino',
-        sets,
+        sets: matchingSets,
         bestWeight,
         bestReps,
         estimated1RM: Math.round(maxE1RM * 10) / 10,

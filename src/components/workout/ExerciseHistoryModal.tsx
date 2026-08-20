@@ -24,6 +24,7 @@ interface ExerciseHistoryModalProps {
   onClose: () => void;
   userId: string;
   exerciseName: string;
+  exerciseId?: string;
   muscleGroup?: string;
   truePR?: { weight: number; reps: number };
 }
@@ -33,6 +34,7 @@ export function ExerciseHistoryModal({
   onClose,
   userId,
   exerciseName,
+  exerciseId,
   muscleGroup,
   truePR
 }: ExerciseHistoryModalProps) {
@@ -46,7 +48,7 @@ export function ExerciseHistoryModal({
       if (!isOpen || !userId || !exerciseName) return;
       setLoading(true);
       try {
-        const data = await getExerciseSessionHistory(userId, exerciseName, 5);
+        const data = await getExerciseSessionHistory(userId, exerciseName, 5, exerciseId);
         setHistory(data);
       } catch (err) {
         console.error('Erro ao carregar histórico do exercício:', err);
@@ -55,7 +57,7 @@ export function ExerciseHistoryModal({
       }
     }
     loadHistory();
-  }, [isOpen, userId, exerciseName]);
+  }, [isOpen, userId, exerciseName, exerciseId]);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
