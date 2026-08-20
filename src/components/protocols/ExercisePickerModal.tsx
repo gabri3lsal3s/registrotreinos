@@ -7,9 +7,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Dumbbell, Plus } from 'lucide-react';
+import { Search, Plus, Sparkles } from 'lucide-react';
 import { getExerciseInfo } from '../../utils/exerciseDictionary';
 import type { ExerciseCategory } from '../../types';
+import { MuscleGroupIcon, MuscleGroupBadge } from '../common';
 
 interface ExercisePickerModalProps {
   isOpen: boolean;
@@ -92,7 +93,7 @@ export function ExercisePickerModal({
       <DialogContent className="max-w-md w-[92vw] max-h-[85vh] flex flex-col p-6 rounded-3xl bg-card border-border/60 shadow-2xl">
         <DialogHeader>
           <DialogTitle className="text-lg font-black uppercase tracking-wider text-foreground flex items-center gap-2">
-            <Dumbbell className="w-5 h-5 text-primary" />
+            <Sparkles className="w-5 h-5 text-primary" />
             Adicionar Exercício ao Treino
           </DialogTitle>
         </DialogHeader>
@@ -117,12 +118,18 @@ export function ExercisePickerModal({
               key={muscle}
               type="button"
               onClick={() => setSelectedMuscle(muscle)}
-              className={`h-8 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+              className={`h-8 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-1.5 ${
                 selectedMuscle === muscle
                   ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/20'
                   : 'bg-muted/40 hover:bg-muted text-muted-foreground'
               }`}
             >
+              {muscle !== 'Todos' && (
+                <MuscleGroupIcon 
+                  muscleGroup={muscle} 
+                  className={`w-3.5 h-3.5 ${selectedMuscle === muscle ? 'text-primary-foreground' : ''}`} 
+                />
+              )}
               {muscle}
             </button>
           ))}
@@ -138,13 +145,20 @@ export function ExercisePickerModal({
                 onClick={() => handleSelectPredefined(ex)}
                 className="w-full flex items-center justify-between p-3 rounded-xl border border-border/30 bg-muted/10 hover:bg-muted/30 hover:border-primary/30 transition-all text-left group"
               >
-                <div className="min-w-0 pr-2">
-                  <p className="font-bold text-sm text-foreground truncate group-hover:text-primary transition-colors">
-                    {ex.name}
-                  </p>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-                    {ex.muscleGroup}
-                  </span>
+                <div className="flex items-center gap-3 min-w-0 pr-2">
+                  <MuscleGroupIcon
+                    muscleGroup={ex.muscleGroup}
+                    exerciseName={ex.name}
+                    withContainer
+                    className="w-4 h-4"
+                    containerClassName="w-9 h-9 shrink-0"
+                  />
+                  <div className="min-w-0">
+                    <p className="font-bold text-sm text-foreground truncate group-hover:text-primary transition-colors">
+                      {ex.name}
+                    </p>
+                    <MuscleGroupBadge muscleGroup={ex.muscleGroup} size="sm" className="mt-0.5" />
+                  </div>
                 </div>
                 <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 group-hover:bg-primary group-hover:text-primary-foreground transition-all">
                   <Plus className="w-4 h-4" />
