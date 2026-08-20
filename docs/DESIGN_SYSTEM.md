@@ -34,11 +34,11 @@ O design system do **Registro de Treinos** é fundamentado na paleta semântica 
 
 ## 3. Identidade de Marca e Iconografia Oficial (Logo PWA)
 
-1. **Símbolo Oficial**: Squircle em Esmeralda Primário de alto contraste (`#34d399` ➔ `#10b981` ➔ `#059669`) contendo o haltere diagonal em branco puro (`#ffffff`), reproduzindo exatamente o componente visual (`bg-primary text-primary-foreground rounded-2xl`) do topo da barra lateral e cabeçalho de login.
+1. **Símbolo Oficial**: Squircle sólido em tom unificado **Emerald 500 (`#10b981`)** contendo o haltere diagonal em branco puro (`#ffffff`), reproduzindo perfeitamente o componente visual (`bg-primary text-primary-foreground rounded-2xl`) do topo da barra lateral e cabeçalho de login.
 2. **Formatos Oficiais**:
-   - `public/icon.svg` (Vetor Master oficial da marca)
-   - `public/maskable-icon.svg` (Vetor com safe zone de 80% e fundo esmeralda contínuo)
-   - `public/favicon.svg` (Favicon vetorial oficial para abas)
+   - `public/icon.svg` (Vetor Master com fundo sólido Emerald 500 e haltere branco)
+   - `public/maskable-icon.svg` (Vetor com safe zone de 80% e fundo sólido esmeralda contínuo)
+   - `public/favicon.svg` (Favicon vetorial sólido para abas)
    - `public/icons/` e `public/splash/` (Assets PNG gerados para todas as resoluções Android e iOS)
 
 ---
