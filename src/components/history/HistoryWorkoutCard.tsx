@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import type { Workout, WorkoutSet, Exercise } from '../../types';
 import { calculateVolume } from '../../utils/workoutMath';
+import { MuscleGroupIcon, MuscleGroupBadge } from '../common';
 
 interface HistoryWorkoutCardProps {
   workout: Workout;
@@ -168,14 +169,19 @@ export function HistoryWorkoutCard({
               {groupedSets.map(([exerciseId, sets]) => {
                 const exercise = exercisesMap[exerciseId];
                 const displayName = exercise?.name ? exercise.name.split(' (')[0] : 'Exercício';
+                const muscleGroup = exercise?.muscleGroup;
 
                 return (
                   <div key={exerciseId} className="p-3 rounded-xl bg-card border border-border/40 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h5 className="font-bold text-xs sm:text-sm text-foreground">
-                        {displayName}
-                      </h5>
-                      <span className="text-[10px] font-mono text-muted-foreground">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <MuscleGroupIcon muscleGroup={muscleGroup} exerciseName={displayName} className="w-4 h-4 shrink-0" />
+                        <h5 className="font-bold text-xs sm:text-sm text-foreground truncate">
+                          {displayName}
+                        </h5>
+                        <MuscleGroupBadge muscleGroup={muscleGroup} exerciseName={displayName} size="sm" />
+                      </div>
+                      <span className="text-[10px] font-mono text-muted-foreground shrink-0">
                         {sets.length} séries
                       </span>
                     </div>
