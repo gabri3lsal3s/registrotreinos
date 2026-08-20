@@ -106,7 +106,11 @@ export function sanitizeExerciseForRemote(ex: Exercise, userId: string): Record<
   };
 }
 
-export function sanitizeWorkoutForRemote(w: Workout, userId: string): Record<string, unknown> {
+export function sanitizeWorkoutForRemote(
+  w: Workout,
+  userId: string,
+  defaultProtocolId?: string
+): Record<string, unknown> {
   let moodVal: string | number | null = null;
   const rawMood = w.mood as unknown;
   if (typeof rawMood === 'number' && !isNaN(rawMood)) moodVal = rawMood;
@@ -115,45 +119,62 @@ export function sanitizeWorkoutForRemote(w: Workout, userId: string): Record<str
     moodVal = isNaN(parsed) ? rawMood : parsed;
   }
 
-  return {
+  const protocolId = w.protocolId && isValidUUID(w.protocolId)
+    ? w.protocolId
+    : (defaultProtocolId && isValidUUID(defaultProtocolId) ? defaultProtocolId : null);
+
+  const payload: Record<string, unknown> = {
     id: w.id,
     user_id: userId,
-    protocol_id: w.protocolId && isValidUUID(w.protocolId) ? w.protocolId : null,
     date: toSafeISOString(w.date),
-    status: w.status || 'completed',
-    finished_at: toNullableSafeISOString(w.finishedAt),
-    mood: moodVal,
-    sleep_quality: typeof w.sleepQuality === 'number' && !isNaN(w.sleepQuality) ? w.sleepQuality : null,
-    stress_level: typeof w.stressLevel === 'number' && !isNaN(w.stressLevel) ? w.stressLevel : null,
-    recovery: w.recovery || null,
-    notes: w.notes || null,
-    created_at: toSafeISOString(w.date),
-    updated_at: toSafeISOString(w.finishedAt || w.date)
+    status: w.status || 'completed'
   };
+
+  if (protocolId) payload.protocol_id = protocolId;
+  if (w.finishedAt) payload.finished_at = toNullableSafeISOString(w.finishedAt);
+  if (moodVal !== null) payload.mood = moodVal;
+  if (typeof w.sleepQuality === 'number' && !isNaN(w.sleepQuality)) payload.sleep_quality = w.sleepQuality;
+  if (typeof w.stressLevel === 'number' && !isNaN(w.stressLevel)) payload.stress_level = w.stressLevel;
+  if (w.recovery) payload.recovery = w.recovery;
+  if (w.notes) payload.notes = w.notes;
+  const rawDuration = (w as unknown as Record<string, unknown>).duration;
+  if (typeof rawDuration === 'number' && !isNaN(rawDuration)) payload.duration = rawDuration;
+  payload.created_at = toSafeISOString(w.date);
+  payload.updated_at = toSafeISOString(w.finishedAt || w.date);
+
+  return payload;
 }
 
 export function sanitizeWorkoutSetForRemote(
   set: WorkoutSet,
   userId: string,
-  validExerciseIds: Set<string>
+  validExerciseIds: Set<string>,
+  defaultExerciseId?: string
 ): Record<string, unknown> {
-  return {
+  const exerciseId = set.exerciseId && validExerciseIds.has(set.exerciseId)
+    ? set.exerciseId
+    : (defaultExerciseId && validExerciseIds.has(defaultExerciseId) ? defaultExerciseId : null);
+
+  const payload: Record<string, unknown> = {
     id: set.id,
     user_id: userId,
     workout_id: set.workoutId,
-    exercise_id: set.exerciseId && validExerciseIds.has(set.exerciseId) ? set.exerciseId : null,
     set_index: typeof set.setIndex === 'number' && !isNaN(set.setIndex) ? set.setIndex : 0,
     weight: typeof set.weight === 'number' && !isNaN(set.weight) ? set.weight : 0,
     reps: typeof set.reps === 'number' && !isNaN(set.reps) ? set.reps : 0,
-    type: set.type || 'normal',
-    notes: set.notes || null,
-    time_in_seconds: typeof set.timeInSeconds === 'number' && !isNaN(set.timeInSeconds) ? set.timeInSeconds : null,
-    rpe: typeof set.rpe === 'number' && !isNaN(set.rpe) ? set.rpe : null,
-    completed: Boolean(set.completed),
+    completed: set.completed !== undefined ? Boolean(set.completed) : true,
     timestamp: toSafeISOString(set.timestamp),
     created_at: toSafeISOString(set.timestamp),
     updated_at: toSafeISOString(set.timestamp)
   };
+
+  if (exerciseId) payload.exercise_id = exerciseId;
+  if (set.type) payload.type = set.type;
+  if (set.notes) payload.notes = set.notes;
+  if (typeof set.timeInSeconds === 'number' && !isNaN(set.timeInSeconds)) payload.time_in_seconds = set.timeInSeconds;
+  if (typeof set.rpe === 'number' && !isNaN(set.rpe)) payload.rpe = set.rpe;
+
+  return payload;
 }
 
 export function sanitizeBodyWeightForRemote(bw: BodyWeight, userId: string): Record<string, unknown> {
@@ -171,7 +192,12 @@ export function sanitizeBodyWeightForRemote(bw: BodyWeight, userId: string): Rec
 // UPSERT AUTO-REPARÁVEL EM CHUNKS (PARTICIONAMENTO E AUTO-HEALING DE SCHEMA)
 // ============================================================================
 
-async function batchUpsert(table: string, items: Record<string, unknown>[], chunkSize = 100): Promise<void> {
+async function batchUpsert(
+  table: string, 
+  items: Record<string, unknown>[], 
+  chunkSize = 100,
+  fallbackIds?: { defaultProtocolId?: string; defaultExerciseId?: string }
+): Promise<void> {
   if (items.length === 0) return;
 
   for (let i = 0; i < items.length; i += chunkSize) {
@@ -203,22 +229,24 @@ async function batchUpsert(table: string, items: Record<string, unknown>[], chun
           continue; // Retenta o upsert imediatamente sem a coluna incompatível
         }
 
-        // 2. Tratamento de chave estrangeira em workout_sets
-        if (table === 'workout_sets' && (msg.includes('foreign key constraint') || msg.includes('violates foreign key'))) {
-          console.warn(`[Sync] Foreign Key em workout_sets. Salvando séries com exercise_id nulo para preservar dados...`);
+        // 2. Tratamento de chave estrangeira / not-null em workout_sets
+        if (table === 'workout_sets' && (msg.includes('foreign key constraint') || msg.includes('violates foreign key') || msg.includes('exercise_id'))) {
+          console.warn(`[Sync] Ajustando exercise_id em workout_sets para contornar restrição de FK/not-null...`);
+          const fallbackEx = fallbackIds?.defaultExerciseId || null;
           chunk = chunk.map(item => ({
             ...item,
-            exercise_id: null
+            exercise_id: fallbackEx
           }));
           continue;
         }
 
-        // 3. Tratamento de chave estrangeira em workouts
-        if (table === 'workouts' && (msg.includes('foreign key constraint') || msg.includes('violates foreign key'))) {
-          console.warn(`[Sync] Foreign Key em workouts. Salvando treinos com protocol_id nulo para preservar dados...`);
+        // 3. Tratamento de chave estrangeira / not-null em workouts
+        if (table === 'workouts' && (msg.includes('foreign key constraint') || msg.includes('violates foreign key') || msg.includes('protocol_id'))) {
+          console.warn(`[Sync] Ajustando protocol_id em workouts para contornar restrição de FK/not-null...`);
+          const fallbackProt = fallbackIds?.defaultProtocolId || null;
           chunk = chunk.map(item => ({
             ...item,
-            protocol_id: null
+            protocol_id: fallbackProt
           }));
           continue;
         }
@@ -333,6 +361,7 @@ export async function syncData(): Promise<{ success: boolean }> {
     // Obter todos os protocolos do usuário para garantir isolamento e integridade de FK
     const userProtocols = await db.protocols.where('userId').equals(user.id).toArray();
     const userProtocolIds = new Set(userProtocols.map(p => p.id));
+    const defaultProtocolId = userProtocols[0]?.id;
     const exercisesLocal = await db.exercises.filter(ex => userProtocolIds.has(ex.protocolId) && !ex.isSynced).toArray();
 
     // Obter todos os treinos do usuário para garantir isolamento de séries
@@ -359,6 +388,7 @@ export async function syncData(): Promise<{ success: boolean }> {
     // Obter todos os IDs de exercícios para validar FK em workoutSets
     const allUserExercises = await db.exercises.filter(ex => userProtocolIds.has(ex.protocolId)).toArray();
     const validExerciseIds = new Set(allUserExercises.map(e => e.id));
+    const defaultExerciseId = allUserExercises[0]?.id;
 
     // Garantir que todos os treinos referenciados pelas séries sejam enviados
     const referencedWorkoutIds = new Set(workoutSetsLocal.map(s => s.workoutId));
@@ -372,41 +402,41 @@ export async function syncData(): Promise<{ success: boolean }> {
     // 3. Sanitização estrita (apenas colunas permitidas no schema Supabase)
     const protocolsPayload = finalProtocols.map(p => sanitizeProtocolForRemote(p, user.id));
     const exercisesPayload = exercisesLocal.map(e => sanitizeExerciseForRemote(e, user.id));
-    const workoutsPayload = finalWorkouts.map(w => sanitizeWorkoutForRemote(w, user.id));
-    const workoutSetsPayload = workoutSetsLocal.map(s => sanitizeWorkoutSetForRemote(s, user.id, validExerciseIds));
+    const workoutsPayload = finalWorkouts.map(w => sanitizeWorkoutForRemote(w, user.id, defaultProtocolId));
+    const workoutSetsPayload = workoutSetsLocal.map(s => sanitizeWorkoutSetForRemote(s, user.id, validExerciseIds, defaultExerciseId));
     const bodyWeightsPayload = bodyWeightsLocal.map(b => sanitizeBodyWeightForRemote(b, user.id));
 
     // 4. PUSH sequencial progressivo: cada tabela que sobe é marcada imediatamente como sincronizada
     if (protocolsPayload.length > 0) {
-      await batchUpsert('protocols', protocolsPayload);
+      await batchUpsert('protocols', protocolsPayload, 100);
       if (protocolsLocal.length > 0) {
         await db.protocols.where('id').anyOf(protocolsLocal.map(p => p.id)).modify({ isSynced: true });
       }
     }
     
     if (exercisesPayload.length > 0) {
-      await batchUpsert('exercises', exercisesPayload);
+      await batchUpsert('exercises', exercisesPayload, 100);
       if (exercisesLocal.length > 0) {
         await db.exercises.where('id').anyOf(exercisesLocal.map(e => e.id)).modify({ isSynced: true });
       }
     }
     
     if (workoutsPayload.length > 0) {
-      await batchUpsert('workouts', workoutsPayload);
+      await batchUpsert('workouts', workoutsPayload, 100, { defaultProtocolId });
       if (workoutsLocal.length > 0) {
         await db.workouts.where('id').anyOf(workoutsLocal.map(w => w.id)).modify({ isSynced: true });
       }
     }
     
     if (workoutSetsPayload.length > 0) {
-      await batchUpsert('workout_sets', workoutSetsPayload);
+      await batchUpsert('workout_sets', workoutSetsPayload, 100, { defaultExerciseId });
       if (workoutSetsLocal.length > 0) {
         await db.workoutSets.where('id').anyOf(workoutSetsLocal.map(s => s.id)).modify({ isSynced: true });
       }
     }
 
     if (bodyWeightsPayload.length > 0) {
-      await batchUpsert('body_weights', bodyWeightsPayload);
+      await batchUpsert('body_weights', bodyWeightsPayload, 100);
       if (bodyWeightsLocal.length > 0) {
         await db.bodyWeights.where('id').anyOf(bodyWeightsLocal.map(b => b.id)).modify({ isSynced: true });
       }
