@@ -78,8 +78,9 @@ export function WorkoutBottomDock({
     triggerHaptic('medium');
     playAudioCue('click');
     const duration = remainingSeconds > 0 ? remainingSeconds : totalSeconds;
+    const now = Date.now();
     setRemainingSeconds(duration);
-    setEndTime(Date.now() + duration * 1000);
+    setEndTime(now + duration * 1000);
     setIsRunning(true);
   }, [remainingSeconds, totalSeconds]);
 
@@ -91,9 +92,10 @@ export function WorkoutBottomDock({
   const resetTimer = useCallback(() => {
     triggerHaptic('medium');
     playAudioCue('click');
+    const now = Date.now();
     setIsRunning(false);
     setRemainingSeconds(totalSeconds);
-    setEndTime(Date.now() + totalSeconds * 1000);
+    setEndTime(now + totalSeconds * 1000);
   }, [totalSeconds]);
 
   const adjustTime = useCallback((seconds: number) => {
@@ -103,30 +105,28 @@ export function WorkoutBottomDock({
     } else {
       playAudioCue('decrement');
     }
+    const now = Date.now();
     if (isRunning) {
-      setRemainingSeconds((prev) => {
-        const next = Math.max(0, prev + seconds);
-        setEndTime(Date.now() + next * 1000);
-        setTotalSeconds((tot) => Math.max(tot, next));
-        return next;
-      });
+      const next = Math.max(0, remainingSeconds + seconds);
+      setRemainingSeconds(next);
+      setEndTime(now + next * 1000);
+      setTotalSeconds((tot) => Math.max(tot, next));
     } else {
-      setTotalSeconds((prev) => {
-        const next = Math.max(15, prev + seconds);
-        setRemainingSeconds(next);
-        return next;
-      });
+      const next = Math.max(15, totalSeconds + seconds);
+      setTotalSeconds(next);
+      setRemainingSeconds(next);
     }
-  }, [isRunning]);
+  }, [isRunning, remainingSeconds, totalSeconds]);
 
-  const handleSelectPreset = (sec: number) => {
+  const handleSelectPreset = useCallback((sec: number) => {
     triggerHaptic('medium');
     playAudioCue('click');
+    const now = Date.now();
     setTotalSeconds(sec);
     setRemainingSeconds(sec);
-    setEndTime(Date.now() + sec * 1000);
+    setEndTime(now + sec * 1000);
     setIsRunning(true);
-  };
+  }, []);
 
   const minutes = Math.floor(remainingSeconds / 60);
   const seconds = remainingSeconds % 60;

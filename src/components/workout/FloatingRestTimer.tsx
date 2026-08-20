@@ -81,34 +81,32 @@ function FloatingRestTimerModal({
     } else {
       playAudioCue('decrement');
     }
-    setRemainingSeconds((prev) => {
-      const next = Math.max(0, prev + seconds);
-      setEndTime(Date.now() + next * 1000);
-      setTotalSeconds((tot) => Math.max(tot, next));
-      return next;
-    });
-  }, []);
-
-  const toggleRunning = useCallback(() => {
-    triggerHaptic('medium');
-    playAudioCue('click');
-    setIsRunning((prev) => {
-      if (!prev) {
-        // Ao retomar, recalcula o endTime a partir dos segundos restantes
-        setEndTime(Date.now() + remainingSeconds * 1000);
-      }
-      return !prev;
-    });
+    const next = Math.max(0, remainingSeconds + seconds);
+    setRemainingSeconds(next);
+    setEndTime(Date.now() + next * 1000);
+    setTotalSeconds((tot) => Math.max(tot, next));
   }, [remainingSeconds]);
 
-  const handleSelectPreset = (sec: number) => {
+  const toggleRunning = useCallback(() => {
+    triggerHaptic('light');
+    playAudioCue('click');
+    if (!isRunning) {
+      setEndTime(Date.now() + remainingSeconds * 1000);
+      setIsRunning(true);
+    } else {
+      setIsRunning(false);
+    }
+  }, [isRunning, remainingSeconds]);
+
+  const handleSelectPreset = useCallback((sec: number) => {
     triggerHaptic('medium');
     playAudioCue('click');
+    const now = Date.now();
     setTotalSeconds(sec);
     setRemainingSeconds(sec);
-    setEndTime(Date.now() + sec * 1000);
+    setEndTime(now + sec * 1000);
     setIsRunning(true);
-  };
+  }, []);
 
   const handleClose = () => {
     triggerHaptic('light');
