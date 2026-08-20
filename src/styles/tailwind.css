@@ -132,6 +132,17 @@
   html::-webkit-scrollbar, body::-webkit-scrollbar {
     display: none;
   }
+
+  /* Remove setas nativas de inputs numéricos — usar botões +/- customizados */
+  input[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
 }
 
 @layer utilities {
