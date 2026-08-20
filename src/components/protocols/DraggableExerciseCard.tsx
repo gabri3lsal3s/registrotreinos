@@ -14,6 +14,8 @@ import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { GripVertical, Minus, Plus, Trash2, Pin } from 'lucide-react';
 import type { ExerciseCategory } from '../../types';
 import { parseLocaleNumber } from '../../utils/workoutMath';
+import { MuscleGroupIcon } from '../common/MuscleGroupIcon';
+import { getMuscleGroupMeta } from '../../utils/muscleGroupMetadata';
 
 export interface BuilderExerciseItem {
   id: string;
@@ -60,6 +62,8 @@ export function DraggableExerciseCard({
     opacity: isDragging ? 0.4 : 1,
     zIndex: isDragging ? 20 : 'auto',
   };
+
+  const muscleMeta = getMuscleGroupMeta(ex.muscleGroup || ex.name);
 
   return (
     <>
@@ -111,18 +115,22 @@ export function DraggableExerciseCard({
                 value={ex.muscleGroup || 'Outros'} 
                 onValueChange={(val: string) => onUpdate(day, idx, 'muscleGroup', val)}
               >
-                <SelectTrigger className="h-7 text-xs w-auto border-none bg-primary/10 hover:bg-primary/20 text-primary font-bold rounded-lg px-2.5 shadow-none">
+                <SelectTrigger className={`h-7 text-xs w-auto border font-bold rounded-lg px-2.5 shadow-none flex items-center gap-1.5 ${muscleMeta.badgeClass}`}>
+                  <MuscleGroupIcon muscleGroup={ex.muscleGroup || ex.name} className="w-3.5 h-3.5 shrink-0" />
                   <SelectValue placeholder="Músculo" />
                 </SelectTrigger>
                 <SelectContent className="text-xs font-bold">
-                  <SelectItem value="Peito">Peito</SelectItem>
-                  <SelectItem value="Costas">Costas</SelectItem>
-                  <SelectItem value="Pernas">Pernas</SelectItem>
-                  <SelectItem value="Ombros">Ombros</SelectItem>
-                  <SelectItem value="Bíceps">Bíceps</SelectItem>
-                  <SelectItem value="Tríceps">Tríceps</SelectItem>
-                  <SelectItem value="Core">Core</SelectItem>
-                  <SelectItem value="Outros">Outros</SelectItem>
+                  <SelectItem value="Peito"><span className="flex items-center gap-2"><MuscleGroupIcon muscleGroup="Peito" className="w-3.5 h-3.5" /> Peito</span></SelectItem>
+                  <SelectItem value="Costas"><span className="flex items-center gap-2"><MuscleGroupIcon muscleGroup="Costas" className="w-3.5 h-3.5" /> Costas</span></SelectItem>
+                  <SelectItem value="Quadríceps"><span className="flex items-center gap-2"><MuscleGroupIcon muscleGroup="Quadríceps" className="w-3.5 h-3.5" /> Quadríceps</span></SelectItem>
+                  <SelectItem value="Isquiotibiais"><span className="flex items-center gap-2"><MuscleGroupIcon muscleGroup="Isquiotibiais" className="w-3.5 h-3.5" /> Isquiotibiais</span></SelectItem>
+                  <SelectItem value="Glúteos"><span className="flex items-center gap-2"><MuscleGroupIcon muscleGroup="Glúteos" className="w-3.5 h-3.5" /> Glúteos</span></SelectItem>
+                  <SelectItem value="Panturrilhas"><span className="flex items-center gap-2"><MuscleGroupIcon muscleGroup="Panturrilhas" className="w-3.5 h-3.5" /> Panturrilhas</span></SelectItem>
+                  <SelectItem value="Ombros"><span className="flex items-center gap-2"><MuscleGroupIcon muscleGroup="Ombros" className="w-3.5 h-3.5" /> Ombros</span></SelectItem>
+                  <SelectItem value="Bíceps"><span className="flex items-center gap-2"><MuscleGroupIcon muscleGroup="Bíceps" className="w-3.5 h-3.5" /> Bíceps</span></SelectItem>
+                  <SelectItem value="Tríceps"><span className="flex items-center gap-2"><MuscleGroupIcon muscleGroup="Tríceps" className="w-3.5 h-3.5" /> Tríceps</span></SelectItem>
+                  <SelectItem value="Core"><span className="flex items-center gap-2"><MuscleGroupIcon muscleGroup="Core" className="w-3.5 h-3.5" /> Core</span></SelectItem>
+                  <SelectItem value="Outros"><span className="flex items-center gap-2"><MuscleGroupIcon muscleGroup="Outros" className="w-3.5 h-3.5" /> Outros</span></SelectItem>
                 </SelectContent>
               </Select>
 
