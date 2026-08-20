@@ -1,0 +1,17 @@
+# Regras de Governança para Agentes (Windsurf Rules)
+
+## Diretrizes do Projeto "Registro de Treinos"
+- **Arquitetura**: PWA Offline-First construído com React 19, TypeScript, Tailwind CSS v4, Dexie (IndexedDB) e Supabase.
+- **Estrutura de Pastas**:
+  - `docs/`: Documentação técnica centralizada em formato Markdown (`UPPER_SNAKE_CASE.md`).
+  - `src/components/common/`: Componentes globais de layout e navegação.
+  - `src/components/ui/`: Primitivas atômicas desacopladas.
+  - `src/services/`: Lógica de banco local e sincronização remota.
+  - `src/types/`: Interfaces e tipos canônicos.
+  - `supabase/migrations/`: Scripts SQL versionados.
+- **Convenções**:
+  - `PascalCase` para componentes.
+  - `camelCase` com prefixo `use` para hooks.
+  - `camelCase` para funções e serviços.
+- **Documentação Viva**: Ao adicionar ou alterar recursos, atualize a documentação correspondente em `docs/`.
+- **Qualidade e Build**: Verifique a integridade do projeto rodando `npm run build`.

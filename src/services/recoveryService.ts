@@ -1,6 +1,7 @@
 import { db } from './workoutDB';
 import { syncData } from './syncService';
 import { toast } from 'sonner';
+import type { WorkoutSet } from '../types';
 
 /**
  * recoveryService.ts
@@ -9,30 +10,25 @@ import { toast } from 'sonner';
  * reconstruir essas pontes usando o "Matching" por ordem de execução.
  */
 
-export async function runHistoryRecovery() {
-  
+export async function runHistoryRecovery(): Promise<void> {
   // 1. Fix corrupted protocolIds from previous soft-delete implementation
   await fixArchivedExercises();
 
   // 2. Fix orphaned workoutSets
   try {
-    // 1. Buscar todos os sets
     const allSets = await db.workoutSets.toArray();
     const allExercises = await db.exercises.toArray();
     const exerciseIds = new Set(allExercises.map(ex => ex.id));
 
-    // 2. Identificar sets órfãos (não encontram seu exerciseId)
+    // Identificar sets órfãos (não encontram seu exerciseId)
     const orphans = allSets.filter(s => !exerciseIds.has(s.exerciseId));
 
     if (orphans.length === 0) {
       return;
     }
 
-    // Orphan sets reconstruction started
-
-    // 3. Agrupar órfãos por Workout e por ID antigo
     // workoutId -> { oldExId -> WorkoutSet[] }
-    const orphansByWorkout: Record<string, Record<string, any[]>> = {};
+    const orphansByWorkout: Record<string, Record<string, WorkoutSet[]>> = {};
 
     for (const orphan of orphans) {
       if (!orphansByWorkout[orphan.workoutId]) {
@@ -46,19 +42,17 @@ export async function runHistoryRecovery() {
 
     let recoveredCount = 0;
 
-    // 4. Para cada treino afetado, tentar o remendo
+    // Para cada treino afetado, tentar o remendo
     for (const workoutId of Object.keys(orphansByWorkout)) {
       const workout = await db.workouts.get(workoutId);
       if (!workout) continue;
 
-      // Pegar os exercícios atuais deste protocolo
       const currentExercises = await db.exercises
         .where('protocolId')
         .equals(workout.protocolId)
         .sortBy('order');
 
       if (currentExercises.length === 0) {
-         // Se o protocolo também sumiu ou não tem exercícios, tentamos o "arquivamento" (lookup em archived_*)
          const archivedExercises = await db.exercises
             .where('protocolId')
             .equals(workout.protocolId)
@@ -72,9 +66,6 @@ export async function runHistoryRecovery() {
          }
       }
 
-      // Precisamos mapear os OLD IDs pros NEW IDs.
-      // Heurística: Ordenamos os OLD IDs pela média de timestamp das séries
-      // e comparamos com a ordem (index) dos exercícios atuais.
       const oldExIdsInWorkout = Object.keys(orphansByWorkout[workoutId]);
       
       const oldExSortedByTime = oldExIdsInWorkout.map(oldId => {
@@ -83,12 +74,8 @@ export async function runHistoryRecovery() {
         return { oldId, avgTimestamp };
       }).sort((a, b) => a.avgTimestamp - b.avgTimestamp);
 
-      // Agora fazemos o ZIP (OldId[0] -> NewId[0])
       for (let i = 0; i < oldExSortedByTime.length; i++) {
         const { oldId } = oldExSortedByTime[i];
-        
-        // Se temos um exercício atual na mesma posição de ordem, usamos ele
-        // Caso tenhamos menos exercícios novos do que velhos, prendemos no último conhecido
         const targetEx = currentExercises[i] || currentExercises[currentExercises.length - 1];
         
         if (targetEx) {
@@ -109,7 +96,6 @@ export async function runHistoryRecovery() {
         description: 'Seus nomes de exercícios foram restaurados.',
         duration: 5000
       });
-      // Tenta sincronizar a correção com o Supabase
       await syncData().catch(() => {});
     }
 
@@ -118,9 +104,7 @@ export async function runHistoryRecovery() {
   }
 }
 
-async function fixArchivedExercises() {
-  // Buscar todos os exercícios que tenham o prefixo 'archived_' no protocolId
-  // Nota: protocolId em Supabase é UUID, então 'archived_' quebra o sync.
+async function fixArchivedExercises(): Promise<void> {
   const corrupted = await db.exercises
     .toCollection()
     .filter(ex => typeof ex.protocolId === 'string' && ex.protocolId.startsWith('archived_'))
@@ -132,7 +116,7 @@ async function fixArchivedExercises() {
       await db.exercises.update(ex.id, {
         protocolId: realId,
         isArchived: true,
-        isSynced: false // Forçar PUSH com o dado corrigido
+        isSynced: false
       });
     }
   }

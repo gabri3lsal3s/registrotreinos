@@ -14,9 +14,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       try {
         const parsed = JSON.parse(saved);
         if (typeof parsed.isDarkMode === 'boolean') return parsed.isDarkMode;
-      } catch {}
+      } catch (_e) {
+        // Fallback silencioso
+      }
     }
-    // fallback: prefers-color-scheme
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
 
@@ -27,11 +28,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } else {
       html.classList.remove('dark');
     }
-    // persist in localStorage
     const saved = localStorage.getItem('app_settings');
     let settings = {};
     if (saved) {
-      try { settings = JSON.parse(saved); } catch {}
+      try {
+        settings = JSON.parse(saved);
+      } catch (_e) {
+        // Fallback silencioso
+      }
     }
     localStorage.setItem('app_settings', JSON.stringify({ ...settings, isDarkMode }));
   }, [isDarkMode]);

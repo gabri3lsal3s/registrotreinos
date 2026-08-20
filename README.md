@@ -34,12 +34,20 @@ npm run dev
 npm run build
 ```
 
-## 📱 Configuração PWA
+## 📚 Documentação Técnica Completa
 
-Para instalar no celular:
-1. Acesse a URL do app via Chrome (Android) ou Safari (iOS).
-2. Vá em opções e selecione "Adicionar à tela de início" ou "Instalar Aplicativo".
+Toda a documentação técnica, decisões de engenharia, catálogo de componentes e guias de governança estão centralizados na pasta [`docs/`](file:///home/gabrielsales/meus_apps/registrotreinos/docs/README.md):
+
+- 📖 **[Índice Geral de Documentação](file:///home/gabrielsales/meus_apps/registrotreinos/docs/README.md)**: Mapa completo e ordem de leitura.
+- 📋 **[Especificações & Regras de Negócio](file:///home/gabrielsales/meus_apps/registrotreinos/docs/SPECIFICATION.md)**: Fórmulas de volume, 1RM, consistência e fluxo de treinos.
+- 🏗️ **[Arquitetura do Sistema](file:///home/gabrielsales/meus_apps/registrotreinos/docs/ARCHITECTURE.md)**: Estrutura Local-First, IndexedDB v6 e Cloud Sync.
+- 🎨 **[Design System](file:///home/gabrielsales/meus_apps/registrotreinos/docs/DESIGN_SYSTEM.md)**: Paleta Zinc & Emerald, tokens de tema e microinterações.
+- 🧩 **[Catálogo de Componentes](file:///home/gabrielsales/meus_apps/registrotreinos/docs/COMPONENTS.md)**: Hierarquia DRY e contratos de props TypeScript.
+- 📱 **[Diretrizes PWA](file:///home/gabrielsales/meus_apps/registrotreinos/docs/PWA_GUIDELINES.md)**: Configurações de Service Worker, cache offline e instalação.
+- 🗺️ **[Roadmap de Desenvolvimento](file:///home/gabrielsales/meus_apps/registrotreinos/docs/ROADMAP.md)**: Fases do projeto e próximos marcos.
+- ⚖️ **[Governança de Código](file:///home/gabrielsales/meus_apps/registrotreinos/docs/GOVERNANCE.md)**: Padrões de nomenclatura e regra da documentação viva.
+- 🤖 **[Diretrizes para Agentes de IA](file:///home/gabrielsales/meus_apps/registrotreinos/AGENTS.md)**: Instruções para agentes autônomos.
 
 ---
 
-Desenvolvido com foco em agilidade e precisão para entusiastas da musculação.
+Desenvolvido com foco em agilidade, precisão e soberania de dados para entusiastas da musculação.

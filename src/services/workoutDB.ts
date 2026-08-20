@@ -1,87 +1,15 @@
-// Edita um exercício existente (Exercise)
-export async function updateExercise(id: string, updates: Partial<Exercise>) {
-  await db.exercises.update(id, { ...updates, isSynced: false });
-}
-// Edita um set de exercício (WorkoutSet)
-export async function updateWorkoutSet(id: string, updates: Partial<WorkoutSet>) {
-  await db.workoutSets.update(id, { ...updates, isSynced: false });
-}
-
-// Exclui um set de exercício (WorkoutSet)
-export async function deleteWorkoutSet(id: string) {
-  await db.workoutSets.delete(id);
-}
 import Dexie, { type Table } from 'dexie';
 import { getExerciseInfo } from '../utils/exerciseDictionary';
+import type {
+  Protocol,
+  Exercise,
+  Workout,
+  WorkoutSet,
+  BodyWeight,
+  UniqueExercise
+} from '../types';
 
-export interface Protocol {
-  id: string; // UUID
-  userId: string;
-  name: string;
-  description?: string;
-  isEnabled: boolean;
-  daysOfWeek: string[];
-  isSynced?: boolean;
-  isArchived?: boolean;
-  createdAt: number;
-  updatedAt: number;
-}
-
-
-export interface Exercise {
-  id: string;
-  protocolId: string;
-  name: string;
-  muscleGroup?: string;
-  category?: 'weight' | 'bodyweight' | 'time'; // New
-  multiplier?: number; // Base multiplier K for bodyweight/time (New)
-  order: number;
-  sets?: number;
-  reps?: number;
-  dayOfWeek?: string;
-  lastWeight?: number;
-  lastReps?: number;
-  isSynced?: boolean;
-  isArchived?: boolean;
-  isSessionOnly?: boolean;
-}
-
-export interface Workout {
-  id: string;
-  userId: string;
-  protocolId: string;
-  date: number;
-  status: 'active' | 'completed' | 'cancelled';
-  finishedAt?: number;
-  mood?: number; // 1-5
-  sleepQuality?: number; // 1-5
-  stressLevel?: number; // 1-5
-  recovery?: string;
-  notes?: string;
-  isSynced?: boolean;
-}
-
-export interface WorkoutSet {
-  id: string;
-  workoutId: string;
-  exerciseId: string;
-  setIndex: number;
-  weight: number;
-  reps: number; // for time-based, this will store seconds down the line, but we keep the column. Or we can use timeInSeconds.
-  timeInSeconds?: number;
-  rpe?: number;
-  completed: boolean;
-  timestamp: number;
-  isSynced?: boolean;
-}
-
-export interface BodyWeight {
-  id: string;
-  userId: string;
-  weight: number;
-  date: number;
-  isSynced?: boolean;
-}
+export type { Protocol, Exercise, Workout, WorkoutSet, BodyWeight, UniqueExercise };
 
 class WorkoutDB extends Dexie {
   protocols!: Table<Protocol, string>;
@@ -118,18 +46,22 @@ class WorkoutDB extends Dexie {
 export const db = new WorkoutDB();
 
 // Protocol Services
-export async function createProtocol(protocol: Omit<Protocol, 'id' | 'createdAt' | 'updatedAt'>) {
+export async function createProtocol(protocol: Omit<Protocol, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
   const id = crypto.randomUUID();
   const now = Date.now();
   await db.protocols.add({ ...protocol, id, createdAt: now, updatedAt: now, isSynced: false });
   return id;
 }
 
-export async function getProtocolsByUser(userId: string) {
+export async function getProtocolsByUser(userId: string): Promise<Protocol[]> {
   return db.protocols.where('userId').equals(userId).toArray();
 }
 
-export async function deleteProtocol(id: string) {
+export async function updateProtocol(id: string, updates: Partial<Protocol>): Promise<void> {
+  await db.protocols.update(id, { ...updates, updatedAt: Date.now(), isSynced: false });
+}
+
+export async function deleteProtocol(id: string): Promise<void> {
   const workoutsCount = await db.workouts.where('protocolId').equals(id).count();
   
   if (workoutsCount > 0) {
@@ -144,33 +76,78 @@ export async function deleteProtocol(id: string) {
   }
 }
 
+export async function duplicateProtocol(protocolId: string, userId: string, customName?: string): Promise<string> {
+  const original = await db.protocols.get(protocolId);
+  if (!original) throw new Error('Protocolo original não encontrado.');
+
+  const newProtocolId = crypto.randomUUID();
+  const now = Date.now();
+  const newName = customName || `${original.name} (Cópia)`;
+
+  // Obter todos os exercícios do protocolo original
+  const exercises = await db.exercises.where('protocolId').equals(protocolId).toArray();
+
+  await db.transaction('rw', [db.protocols, db.exercises], async () => {
+    await db.protocols.add({
+      ...original,
+      id: newProtocolId,
+      userId,
+      name: newName,
+      createdAt: now,
+      updatedAt: now,
+      isSynced: false
+    });
+
+    for (const ex of exercises) {
+      if (ex.isArchived || ex.isSessionOnly) continue;
+      const newExId = crypto.randomUUID();
+      await db.exercises.add({
+        ...ex,
+        id: newExId,
+        protocolId: newProtocolId,
+        isSynced: false
+      });
+    }
+  });
+
+  return newProtocolId;
+}
+
 // Body Weight Services
-export async function addBodyWeight(entry: Omit<BodyWeight, 'id' | 'isSynced'>) {
+export async function addBodyWeight(entry: Omit<BodyWeight, 'id' | 'isSynced'>): Promise<string> {
   const id = crypto.randomUUID();
   await db.bodyWeights.put({ ...entry, id, isSynced: false });
   return id;
 }
 
-export async function getBodyWeightsByUser(userId: string) {
+export async function getBodyWeightsByUser(userId: string): Promise<BodyWeight[]> {
   return db.bodyWeights.where('userId').equals(userId).sortBy('date');
 }
 
-export async function updateBodyWeight(id: string, updates: Partial<BodyWeight>) {
+export async function updateBodyWeight(id: string, updates: Partial<BodyWeight>): Promise<void> {
   await db.bodyWeights.update(id, { ...updates, isSynced: false });
 }
 
-export async function deleteBodyWeight(id: string) {
+export async function deleteBodyWeight(id: string): Promise<void> {
   await db.bodyWeights.delete(id);
 }
 
 // Exercise Services
-export async function addExercise(exercise: Omit<Exercise, 'id'>) {
+export async function addExercise(exercise: Omit<Exercise, 'id'>): Promise<string> {
   const id = crypto.randomUUID();
   await db.exercises.add({ ...exercise, id, isSynced: false });
   return id;
 }
 
-export async function getExercisesByProtocol(protocolId: string, includeArchived = false, activeWorkoutId?: string) {
+export async function updateExercise(id: string, updates: Partial<Exercise>): Promise<void> {
+  await db.exercises.update(id, { ...updates, isSynced: false });
+}
+
+export async function getExercisesByProtocol(
+  protocolId: string, 
+  includeArchived = false, 
+  activeWorkoutId?: string
+): Promise<Exercise[]> {
   const collection = db.exercises.where('protocolId').equals(protocolId);
   const data = await collection.toArray();
   
@@ -196,7 +173,7 @@ export async function getExercisesByProtocol(protocolId: string, includeArchived
   return results.sort((a, b) => a.order - b.order);
 }
 
-export async function deleteExercise(id: string) {
+export async function deleteExercise(id: string): Promise<void> {
   const setsCount = await db.workoutSets.where('exerciseId').equals(id).count();
   
   if (setsCount > 0) {
@@ -208,23 +185,23 @@ export async function deleteExercise(id: string) {
 }
 
 // Workout Services
-export async function startWorkout(workout: Omit<Workout, 'id' | 'date' | 'status'>) {
+export async function startWorkout(workout: Omit<Workout, 'id' | 'date' | 'status'>): Promise<string> {
   const id = crypto.randomUUID();
   const date = Date.now();
   await db.workouts.add({ ...workout, id, date, status: 'active', isSynced: false });
   return id;
 }
 
-export async function finishActiveWorkout(id: string, updates: Partial<Workout> = {}) {
+export async function finishActiveWorkout(id: string, updates: Partial<Workout> = {}): Promise<void> {
   const finishedAt = Date.now();
   await db.workouts.update(id, { ...updates, status: 'completed', finishedAt, isSynced: false });
 }
 
-export async function cancelActiveWorkout(id: string) {
+export async function cancelActiveWorkout(id: string): Promise<void> {
   return deleteWorkout(id);
 }
 
-export async function getActiveWorkout(userId: string, protocolId?: string) {
+export async function getActiveWorkout(userId: string, protocolId?: string): Promise<Workout | undefined> {
   if (protocolId) {
     return db.workouts
       .where({ userId, protocolId, status: 'active' })
@@ -235,14 +212,22 @@ export async function getActiveWorkout(userId: string, protocolId?: string) {
     .first();
 }
 
-export async function addWorkoutSet(set: Omit<WorkoutSet, 'id' | 'timestamp'>) {
+export async function addWorkoutSet(set: Omit<WorkoutSet, 'id' | 'timestamp'>): Promise<string> {
   const id = crypto.randomUUID();
   const timestamp = Date.now();
   await db.workoutSets.add({ ...set, id, timestamp, isSynced: false });
   return id;
 }
 
-export async function upsertWorkoutSet(set: Omit<WorkoutSet, 'id' | 'timestamp'>) {
+export async function updateWorkoutSet(id: string, updates: Partial<WorkoutSet>): Promise<void> {
+  await db.workoutSets.update(id, { ...updates, isSynced: false });
+}
+
+export async function deleteWorkoutSet(id: string): Promise<void> {
+  await db.workoutSets.delete(id);
+}
+
+export async function upsertWorkoutSet(set: Omit<WorkoutSet, 'id' | 'timestamp'>): Promise<string> {
   const existing = await db.workoutSets
     .where({ workoutId: set.workoutId, exerciseId: set.exerciseId, setIndex: set.setIndex })
     .first();
@@ -255,11 +240,11 @@ export async function upsertWorkoutSet(set: Omit<WorkoutSet, 'id' | 'timestamp'>
   }
 }
 
-export async function getWorkoutSets(workoutId: string) {
+export async function getWorkoutSets(workoutId: string): Promise<WorkoutSet[]> {
   return db.workoutSets.where('workoutId').equals(workoutId).toArray();
 }
 
-export async function getWorkoutHistory(userId: string) {
+export async function getWorkoutHistory(userId: string): Promise<Workout[]> {
   return db.workouts
     .where('userId').equals(userId)
     .filter(w => w.status === 'completed')
@@ -267,38 +252,47 @@ export async function getWorkoutHistory(userId: string) {
     .sortBy('date');
 }
 
-export async function deleteWorkout(workoutId: string) {
+export async function deleteWorkout(workoutId: string): Promise<void> {
   return db.transaction('rw', [db.workouts, db.workoutSets], async () => {
     await db.workoutSets.where('workoutId').equals(workoutId).delete();
     await db.workouts.delete(workoutId);
   });
 }
 
-export async function clearAllData(userId: string) {
-  // 1. Get all protocols for the user
-  const protocols = await db.protocols.where('userId').equals(userId).toArray();
-  const protocolIds = protocols.map(p => p.id);
+export async function clearAllData(userId: string): Promise<void> {
+  await db.transaction('rw', [db.protocols, db.exercises, db.workouts, db.workoutSets, db.bodyWeights], async () => {
+    // 1. Obter todos os protocolos do usuário
+    const protocols = await db.protocols.where('userId').equals(userId).toArray();
+    const protocolIds = protocols.map(p => p.id);
 
-  // 2. Get all workouts for the user
-  const workouts = await db.workouts.where('userId').equals(userId).toArray();
-  const workoutIds = workouts.map(w => w.id);
+    // 2. Obter todos os treinos do usuário
+    const workouts = await db.workouts.where('userId').equals(userId).toArray();
+    const workoutIds = workouts.map(w => w.id);
 
-  // 3. Delete based on IDs or userId
-  await db.workoutSets.where('workoutId').anyOf(workoutIds).delete();
-  await db.workouts.where('userId').equals(userId).delete();
-  await db.exercises.where('protocolId').anyOf(protocolIds).delete();
-  await db.protocols.where('userId').equals(userId).delete();
+    // 3. Deletar com integridade referencial atômica
+    if (workoutIds.length > 0) {
+      await db.workoutSets.where('workoutId').anyOf(workoutIds).delete();
+    }
+    await db.workouts.where('userId').equals(userId).delete();
+    if (protocolIds.length > 0) {
+      await db.exercises.where('protocolId').anyOf(protocolIds).delete();
+    }
+    await db.protocols.where('userId').equals(userId).delete();
+    await db.bodyWeights.where('userId').equals(userId).delete();
+  });
 }
-export async function getExercisePR(exerciseId: string) {
-  // 1. Get IDs of all completed workouts
-  const completedWorkouts = await db.workouts
-    .where('status')
-    .equals('completed')
-    .toArray();
+
+export async function getExercisePR(exerciseId: string, userId?: string): Promise<WorkoutSet | null> {
+  // 1. Pegar IDs de treinos concluídos (filtrando por userId se fornecido)
+  let completedWorkoutsQuery = db.workouts.where('status').equals('completed');
+  if (userId) {
+    completedWorkoutsQuery = completedWorkoutsQuery.and(w => w.userId === userId);
+  }
+  const completedWorkouts = await completedWorkoutsQuery.toArray();
   
   const workoutIds = new Set(completedWorkouts.map(w => w.id));
 
-  // 2. Get all sets for this exercise and filter by completed workouts
+  // 2. Pegar todas as séries deste exercício e filtrar apenas treinos concluídos
   const sets = await db.workoutSets
     .where('exerciseId')
     .equals(exerciseId)
@@ -308,8 +302,30 @@ export async function getExercisePR(exerciseId: string) {
 
   if (completedSets.length === 0) return null;
 
-  // 3. Find the best set
+  const exercise = await db.exercises.get(exerciseId);
+  const category = exercise?.category || 'weight';
+
+  // 3. Encontrar a melhor série considerando a categoria do exercício
   return completedSets.reduce((best, current) => {
+    if (category === 'time') {
+      // Para exercícios de tempo: maior tempo de execução (reps) e maior peso adicional
+      if (current.reps > best.reps || (current.reps === best.reps && current.weight > best.weight)) {
+        return current;
+      }
+      return best;
+    }
+
+    if (category === 'bodyweight') {
+      // Para exercícios de peso corporal: avaliar 1RM equivalente
+      const scoreCurrent = (75 + current.weight) * (1 + current.reps / 30);
+      const scoreBest = (75 + best.weight) * (1 + best.reps / 30);
+      if (scoreCurrent > scoreBest) {
+        return current;
+      }
+      return best;
+    }
+
+    // Para pesos livres convencionais: maior carga ou maiores repetições na mesma carga
     if (current.weight > best.weight || (current.weight === best.weight && current.reps > best.reps)) {
       return current;
     }
@@ -317,7 +333,7 @@ export async function getExercisePR(exerciseId: string) {
   });
 }
 
-export async function getUniqueExercisesLibrary(userId: string) {
+export async function getUniqueExercisesLibrary(userId: string): Promise<UniqueExercise[]> {
   const protocols = await getProtocolsByUser(userId);
   const protocolIds = protocols.map(p => p.id);
   
@@ -328,10 +344,9 @@ export async function getUniqueExercisesLibrary(userId: string) {
     .anyOf(protocolIds)
     .toArray();
 
-  const unique = new Map<string, any>();
+  const unique = new Map<string, UniqueExercise>();
   
   exercises.forEach(ex => {
-    // Normalizar para o nome canônico para evitar duplicatas (ex: "Supino Reto" e "Supino Reto Barra")
     const info = getExerciseInfo(ex.name);
     const key = info.canonicalName;
     
@@ -345,6 +360,5 @@ export async function getUniqueExercisesLibrary(userId: string) {
     }
   });
 
-  // Converter para array e ordenar por nome
   return Array.from(unique.values()).sort((a, b) => a.name.localeCompare(b.name));
 }

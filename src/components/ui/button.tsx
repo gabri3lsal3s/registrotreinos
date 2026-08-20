@@ -1,34 +1,28 @@
-import { Button as ButtonPrimitive } from "@base-ui/react/button"
+import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
-
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-xl border border-transparent bg-clip-padding font-black whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 hover:scale-105 active:scale-95 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 uppercase tracking-[0.2em] shadow-sm",
+  "inline-flex items-center justify-center whitespace-nowrap rounded-xl font-bold transition-all outline-none select-none disabled:pointer-events-none disabled:opacity-50 uppercase tracking-wider active:scale-[0.98]",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow-md shadow-primary/10 hover:bg-primary/90",
-        outline:
-          "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
-        secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
-        ghost:
-          "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 shadow-none",
-        destructive:
-          "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
-        link: "text-primary underline-offset-4 hover:underline shadow-none hover:scale-100",
+        default: "bg-primary text-primary-foreground shadow-md shadow-primary/20 hover:bg-primary/90",
+        outline: "border border-border/60 bg-background hover:bg-muted text-foreground",
+        secondary: "bg-muted text-foreground hover:bg-muted/80",
+        ghost: "hover:bg-muted/60 text-muted-foreground hover:text-foreground",
+        destructive: "bg-destructive/10 text-destructive hover:bg-destructive/20",
+        link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default:
-          "h-11 gap-2.5 px-6 text-[clamp(10px,1.2vw,12px)]",
-        xs: "h-8 gap-1 rounded-lg px-3 text-[clamp(8px,1vw,10px)] [&_svg]:size-3.5",
-        sm: "h-9 gap-1.5 rounded-xl px-4 text-[clamp(9px,1.1vw,11px)] [&_svg]:size-4",
-        lg: "h-14 gap-3 px-8 text-[clamp(12px,1.5vw,16px)] [&_svg]:size-6",
-        icon: "size-11 [&_svg]:size-5",
-        "icon-xs": "size-8 rounded-lg [&_svg]:size-3.5",
-        "icon-sm": "size-9 rounded-xl [&_svg]:size-4",
-        "icon-lg": "size-14 [&_svg]:size-7",
+        default: "h-11 px-5 text-xs",
+        xs: "h-7 px-2.5 text-[10px] rounded-lg",
+        sm: "h-9 px-3 text-xs rounded-xl",
+        lg: "h-13 px-7 text-sm rounded-2xl",
+        icon: "h-11 w-11 p-0",
+        "icon-xs": "h-7 w-7 p-0 rounded-lg",
+        "icon-sm": "h-9 w-9 p-0 rounded-xl",
+        "icon-lg": "h-13 w-13 p-0 rounded-2xl",
       },
     },
     defaultVariants: {
@@ -38,19 +32,21 @@ const buttonVariants = cva(
   }
 )
 
-function Button({
-  className,
-  variant = "default",
-  size = "default",
-  ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
-  return (
-    <ButtonPrimitive
-      data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
-      {...props}
-    />
-  )
-}
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {}
+
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, size, ...props }, ref) => {
+    return (
+      <button
+        className={cn(buttonVariants({ variant, size, className }))}
+        ref={ref}
+        {...props}
+      />
+    )
+  }
+)
+Button.displayName = "Button"
 
 export { Button, buttonVariants }

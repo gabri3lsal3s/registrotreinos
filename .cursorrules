@@ -1,0 +1,32 @@
+# Diretrizes para Agentes de IA (Cursor Rules)
+
+Você está trabalhando no projeto **Registro de Treinos**, uma Progressive Web App (PWA) de alta performance focada em registro ágil de treinos de musculação e calistenia.
+
+## 1. Stack e Arquitetura
+- **Framework**: React 19 + Vite 7 + TypeScript 5 (Strict).
+- **Estilização**: Tailwind CSS v4 (`@tailwindcss/vite`) com tokens semânticos Zinc & Emerald em `src/styles/tailwind.css`.
+- **Persistência Local**: Dexie.js (IndexedDB `WorkoutDB`). Arquitetura 100% Offline-First.
+- **Nuvem**: Supabase (PostgreSQL + RLS + Auth).
+- **Componentes**: Radix UI / Base UI / Shadcn.
+
+## 2. Regras de Governança de Código
+- **Componentes Reutilizáveis**: Utilize `src/components/common` para estruturas compartilhadas (`Layout`, `PageHeader`, `ProtectedRoute`, `LoadingScreen`) e `src/components/ui/` para componentes atômicos.
+- **Nomenclatura**:
+  - Pastas em `kebab-case`.
+  - Componentes React em `PascalCase`.
+  - Custom Hooks em `camelCase` iniciando em `use`.
+  - Utilitários e serviços em `camelCase`.
+- **Proibição de Código Órfão**: Nunca deixe arquivos temporários, scripts de teste avulsos ou exports não utilizados na raiz ou no código.
+- **TypeScript Estrito**: Nunca use `any` descuidado. Respeite todas as tipagens definidas em `src/types/`.
+
+## 3. Regra da Documentação Viva
+- Toda e qualquer alteração de arquitetura, contrato de banco de dados ou novos componentes exige atualização imediata dos respectivos arquivos na pasta `docs/`:
+  - `docs/SPECIFICATION.md`: Regras de negócio e fórmulas.
+  - `docs/ARCHITECTURE.md`: Estrutura técnica e fluxo de sincronização.
+  - `docs/COMPONENTS.md`: Catálogo de componentes e props.
+  - `docs/DESIGN_SYSTEM.md`: Tokens visuais e estilos.
+  - `docs/ROADMAP.md`: Status de tarefas e marcos.
+  - `docs/GOVERNANCE.md`: Regras de manutenção.
+
+## 4. Validação Obrigatória
+Antes de considerar qualquer tarefa concluída, execute `npm run build` e certifique-se de que não há erros de tipagem ou empacotamento.

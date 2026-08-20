@@ -1,0 +1,69 @@
+export type ExerciseCategory = 'weight' | 'bodyweight' | 'time';
+
+export interface Exercise {
+  id: string;
+  protocolId: string;
+  name: string;
+  muscleGroup?: string;
+  category?: ExerciseCategory;
+  multiplier?: number; // Fator multiplicador base K para calistenia/tempo
+  order: number;
+  sets?: number;
+  reps?: number;
+  dayOfWeek?: string;
+  lastWeight?: number;
+  lastReps?: number;
+  isSynced?: boolean;
+  isArchived?: boolean;
+  isSessionOnly?: boolean;
+}
+
+export type WorkoutStatus = 'active' | 'completed' | 'cancelled';
+
+export interface Workout {
+  id: string;
+  userId: string;
+  protocolId: string;
+  date: number;
+  status: WorkoutStatus;
+  finishedAt?: number;
+  mood?: number; // 1-5
+  sleepQuality?: number; // 1-5
+  stressLevel?: number; // 1-5
+  recovery?: string;
+  notes?: string;
+  isSynced?: boolean;
+}
+
+export type WorkoutSetType = 'normal' | 'warmup' | 'feeder' | 'top' | 'drop';
+
+export interface WorkoutSet {
+  id: string;
+  workoutId: string;
+  exerciseId: string;
+  setIndex: number;
+  weight: number;
+  reps: number;
+  type?: WorkoutSetType;
+  notes?: string;
+  timeInSeconds?: number;
+  rpe?: number;
+  completed: boolean;
+  timestamp: number;
+  isSynced?: boolean;
+}
+
+export interface BodyWeight {
+  id: string;
+  userId: string;
+  weight: number;
+  date: number;
+  isSynced?: boolean;
+}
+
+export interface UniqueExercise {
+  name: string;
+  muscleGroup?: string;
+  category?: ExerciseCategory;
+  multiplier?: number;
+}

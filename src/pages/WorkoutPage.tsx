@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
-import Layout from '../components/Layout';
+import { useWakeLock } from '../hooks/useWakeLock';
+import { Layout } from '../components/common';
+import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { 
   db, 
   getExercisesByProtocol, 
@@ -14,52 +16,28 @@ import {
   addExercise,
   getUniqueExercisesLibrary
 } from '../services/workoutDB';
-import { syncData } from '../services/syncService';
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { deleteRemoteItem, deleteWorkoutFromCloud, fullSync } from '../services/syncService';
+import type { ExerciseCategory, UniqueExercise, WorkoutSet, WorkoutSetType } from '../types';
+import { parseLocaleNumber, calculateVolume } from '../utils/workoutMath';
+import { WEEK_DAYS } from '../utils/constants';
+import { Button } from "@/components/ui/button";
 import { 
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { 
-  CheckCircle2, 
-  Circle, 
   ArrowLeft, 
-  Save,
-  ChevronDown,
-  ChevronUp,
-  X,
-  PlusCircle,
-  Search,
-  Dumbbell,
-  Minus,
-  Trash2
-} from "lucide-react"
+  Save, 
+  PlusCircle, 
+  Timer as TimerIcon
+} from "lucide-react";
+
 import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select"
-
-const WEEK_DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-
-interface WorkoutExercise {
-  id: string;
-  name: string;
-  category?: 'weight' | 'bodyweight' | 'time';
-  order: number;
-  lastWeight?: number;
-  lastReps?: number;
-  sets: number;
-  completedSets: boolean[];
-  setsData: { weight: string; reps: string }[];
-  isSessionOnly?: boolean;
-}
+  FloatingRestTimer,
+  WorkoutDayTabs,
+  WorkoutExerciseCard,
+  ExerciseLibraryModal,
+  ConfigExtraExerciseModal,
+  WorkoutFinishModal,
+  type WorkoutExerciseData,
+  type ConfigExerciseState
+} from '../components/workout';
 
 export default function WorkoutPage() {
   const { protocolId } = useParams<{ protocolId: string }>();
@@ -67,8 +45,8 @@ export default function WorkoutPage() {
   const navigate = useNavigate();
   
   const [protocolName, setProtocolName] = useState('');
-  const [exercises, setExercises] = useState<WorkoutExercise[]>([]);
-  const [truePRs, setTruePRs] = useState<Record<string, { weight: number, reps: number }>>({});
+  const [exercises, setExercises] = useState<WorkoutExerciseData[]>([]);
+  const [truePRs, setTruePRs] = useState<Record<string, { weight: number; reps: number }>>({});
   const [loading, setLoading] = useState(true);
   const [expandedExercise, setExpandedExercise] = useState<string | null>(null);
   const [activeWorkoutId, setActiveWorkoutId] = useState<string | null>(null);
@@ -76,20 +54,27 @@ export default function WorkoutPage() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [availableDays, setAvailableDays] = useState<string[]>([]);
   
-  // Library State
+  // Library Modal State
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
-  const [library, setLibrary] = useState<any[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [library, setLibrary] = useState<UniqueExercise[]>([]);
 
   // Config Extra Exercise State
   const [isConfigOpen, setIsConfigOpen] = useState(false);
-  const [configEx, setConfigEx] = useState<{
-    name: string;
-    category: 'weight' | 'bodyweight' | 'time';
-    sets: number;
-    muscleGroup?: string;
-    multiplier?: number;
-  } | null>(null);
+  const [configEx, setConfigEx] = useState<ConfigExerciseState | null>(null);
+
+  // Rest Timer State
+  const [isTimerOpen, setIsTimerOpen] = useState(false);
+  const [timerSeconds] = useState(90);
+
+  // Finish Modal State
+  const [isFinishModalOpen, setIsFinishModalOpen] = useState(false);
+  const [isFinishing, setIsFinishing] = useState(false);
+
+  // Cancel Dialog State
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+
+  // Screen Wake Lock ativo enquanto houver treino
+  useWakeLock(!!activeWorkoutId);
 
   useEffect(() => {
     async function loadWorkoutData() {
@@ -103,7 +88,7 @@ export default function WorkoutPage() {
         }
         setProtocolName(protocol.name);
 
-        // Check for active workout
+        // Checar treino ativo
         const active = await db.workouts
           .where({ userId: user.id, protocolId, status: 'active' })
           .first();
@@ -112,14 +97,14 @@ export default function WorkoutPage() {
           setActiveWorkoutId(active.id);
         }
 
-        // Get last completed workout for this protocol
+        // Buscar último treino concluído deste protocolo
         const lastWorkout = await db.workouts
           .where({ userId: user.id, protocolId, status: 'completed' })
           .reverse()
           .sortBy('date');
         
         const mostRecentWorkout = lastWorkout[0];
-        const lastSetsMap: Record<string, any[]> = {};
+        const lastSetsMap: Record<string, WorkoutSet[]> = {};
         if (mostRecentWorkout) {
           const sets = await db.workoutSets
             .where('workoutId').equals(mostRecentWorkout.id)
@@ -128,18 +113,17 @@ export default function WorkoutPage() {
             if (!lastSetsMap[s.exerciseId]) lastSetsMap[s.exerciseId] = [];
             lastSetsMap[s.exerciseId].push(s);
           });
-          // Ensuring order within each exercise
           for (const eid in lastSetsMap) {
             lastSetsMap[eid].sort((a, b) => a.timestamp - b.timestamp);
           }
         }
 
-        // 5. PR Calculation from History (Only completed workouts)
+        // Recordes Pessoais (PRs) do usuário
         const allExercises = await getExercisesByProtocol(protocolId);
-        const historicalPRs: Record<string, { weight: number, reps: number }> = {};
+        const historicalPRs: Record<string, { weight: number; reps: number }> = {};
 
         for (const ex of allExercises) {
-          const truePR = await getExercisePR(ex.id);
+          const truePR = await getExercisePR(ex.id, user.id);
           if (truePR) {
             historicalPRs[ex.id] = { weight: truePR.weight, reps: truePR.reps };
           } else {
@@ -148,35 +132,34 @@ export default function WorkoutPage() {
         }
         setTruePRs(historicalPRs);
         
-        // Find days that have exercises
-        const daysWithExercises = WEEK_DAYS.filter(day => 
+        // Dias que possuem exercícios agendados
+        const weekDayLabels = WEEK_DAYS.map(d => d.label);
+        const daysWithExercises = weekDayLabels.filter(day => 
           allExercises.some(ex => ex.name.includes(`(${day})`))
         );
         setAvailableDays(daysWithExercises);
 
         let dayLabel = selectedDay;
         if (!dayLabel) {
-          const today = WEEK_DAYS[new Date().getDay()];
-          // If today has no exercises, pick the first available day
+          const today = WEEK_DAYS[new Date().getDay()]?.label || 'Seg';
           dayLabel = daysWithExercises.includes(today) ? today : (daysWithExercises[0] || today);
           setSelectedDay(dayLabel);
         }
 
-        // Filter exercises for selected day and initialize set state
+        // Montar exercícios do dia selecionado
         const dayExercises = await Promise.all((await getExercisesByProtocol(protocolId, false, active?.id))
           .filter(ex => ex.name.includes(`(${dayLabel})`))
           .map(async (ex) => {
-            const setNum = (ex as any).sets || 3;
-            
-            // Pre-fill logic: Use previous session's sets if available, fallback to PR/Target
+            const setNum = ex.sets || 3;
             const prevSets = lastSetsMap[ex.id] || [];
-            let completedSets = new Array(setNum).fill(false);
-            let setsData = new Array(setNum).fill(null).map((_, idx) => {
+            const completedSets: boolean[] = new Array(setNum).fill(false);
+            const setsData = new Array(setNum).fill(null).map((_, idx) => {
               const prevSet = prevSets[idx];
-              // Fallback priority: Previous Session Set > Protocol definition (lastWeight/reps) > default constants
               return { 
                 weight: String(prevSet ? prevSet.weight : (ex.lastWeight || 0)), 
-                reps: String(prevSet ? prevSet.reps : (ex.lastReps || (ex as any).reps || 10)) 
+                reps: String(prevSet ? prevSet.reps : (ex.lastReps || ex.reps || 10)),
+                type: (prevSet?.type || 'normal') as WorkoutSetType,
+                notes: prevSet?.notes || ''
               };
             });
 
@@ -186,22 +169,26 @@ export default function WorkoutPage() {
                 .toArray();
               
               existingSets.forEach(s => {
-                if (s.setIndex < setNum) { // Safety check
+                if (s.setIndex < setNum) {
                   completedSets[s.setIndex] = true;
-                  setsData[s.setIndex] = { weight: s.weight.toString(), reps: s.reps.toString() };
+                  setsData[s.setIndex] = { 
+                    weight: s.weight.toString(), 
+                    reps: s.reps.toString(),
+                    type: s.type || 'normal',
+                    notes: s.notes || ''
+                  };
                 }
               });
             }
 
-            // Calculate Display PR: max(historicalPR, current session sets)
             const historicalMax = historicalPRs[ex.id] || { weight: 0, reps: 0 };
             let sessionMaxWeight = 0;
             let sessionMaxReps = 0;
             
             completedSets.forEach((done, i) => {
               if (done) {
-                const w = Number(setsData[i].weight);
-                const r = Number(setsData[i].reps);
+                const w = parseLocaleNumber(setsData[i].weight);
+                const r = parseLocaleNumber(setsData[i].reps);
                 if (w > sessionMaxWeight || (w === sessionMaxWeight && r > sessionMaxReps)) {
                   sessionMaxWeight = w;
                   sessionMaxReps = r;
@@ -236,7 +223,6 @@ export default function WorkoutPage() {
       }
     }
     loadWorkoutData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, protocolId, selectedDay, navigate]);
 
   useEffect(() => {
@@ -245,7 +231,7 @@ export default function WorkoutPage() {
     }
   }, [isLibraryOpen, user]);
 
-  const checkAndUpdatePR = (exIdx: number, currentExercises: WorkoutExercise[]) => {
+  const checkAndUpdatePR = useCallback((exIdx: number, currentExercises: WorkoutExerciseData[]) => {
     const exercise = currentExercises[exIdx];
     const historical = truePRs[exercise.id] || { weight: 0, reps: 0 };
     
@@ -254,8 +240,8 @@ export default function WorkoutPage() {
 
     exercise.completedSets.forEach((done, i) => {
       if (done) {
-        const w = Number(exercise.setsData[i].weight);
-        const r = Number(exercise.setsData[i].reps);
+        const w = parseLocaleNumber(exercise.setsData[i].weight);
+        const r = parseLocaleNumber(exercise.setsData[i].reps);
         if (w > sessionBestWeight || (w === sessionBestWeight && r > sessionBestReps)) {
           sessionBestWeight = w;
           sessionBestReps = r;
@@ -269,7 +255,7 @@ export default function WorkoutPage() {
     exercise.lastWeight = finalPR.weight;
     exercise.lastReps = finalPR.reps;
     setExercises([...currentExercises]);
-  };
+  }, [truePRs]);
 
   const handleSetToggle = async (exIdx: number, setIdx: number) => {
     if (!user || !protocolId) return;
@@ -283,7 +269,6 @@ export default function WorkoutPage() {
     try {
       let currentWorkoutId = activeWorkoutId;
       
-      // 1. Create workout if it doesn't exist
       if (!currentWorkoutId) {
         currentWorkoutId = await startWorkout({
           userId: user.id,
@@ -292,28 +277,38 @@ export default function WorkoutPage() {
         setActiveWorkoutId(currentWorkoutId);
       }
 
-      // 2. Save/Update set in DB
       if (isNowCompleted) {
+        const setData = exercise.setsData[setIdx];
         await upsertWorkoutSet({
           workoutId: currentWorkoutId,
           exerciseId: exercise.id,
           setIndex: setIdx,
-          weight: Number(exercise.setsData[setIdx].weight),
-          reps: Number(exercise.setsData[setIdx].reps),
+          weight: parseLocaleNumber(setData.weight),
+          reps: parseLocaleNumber(setData.reps),
+          type: setData.type || 'normal',
+          notes: setData.notes,
           completed: true
         });
+
+        // Dispara o Rest Timer flutuante automaticamente
+        setIsTimerOpen(true);
       } else {
-        // Delete only this set index
-        await db.workoutSets
+        const existingSet = await db.workoutSets
           .where({ 
             workoutId: currentWorkoutId, 
             exerciseId: exercise.id, 
             setIndex: setIdx 
           })
-          .delete();
+          .first();
+
+        if (existingSet) {
+          await db.workoutSets.delete(existingSet.id);
+          deleteRemoteItem('workout_sets', existingSet.id).catch(err => {
+            console.warn('[Sync] Erro ao deletar set remoto:', err);
+          });
+        }
       }
 
-      // 3. Update PR tracking
       checkAndUpdatePR(exIdx, newExercises);
 
     } catch (err) {
@@ -327,13 +322,15 @@ export default function WorkoutPage() {
     setExercises(newExercises);
     
     const setData = newExercises[exIdx].setsData[setIdx];
-    if (newExercises[exIdx].completedSets[setIdx]) {
+    if (newExercises[exIdx].completedSets[setIdx] && activeWorkoutId) {
       upsertWorkoutSet({
-        workoutId: activeWorkoutId!,
+        workoutId: activeWorkoutId,
         exerciseId: newExercises[exIdx].id,
         setIndex: setIdx,
-        weight: Number(setData.weight),
-        reps: Number(setData.reps),
+        weight: parseLocaleNumber(setData.weight),
+        reps: parseLocaleNumber(setData.reps),
+        type: setData.type || 'normal',
+        notes: setData.notes,
         completed: true
       }).catch(console.error);
       
@@ -341,7 +338,27 @@ export default function WorkoutPage() {
     }
   };
 
-  const handleAddExtraExercise = (libEx: any) => {
+  const updateSetType = (exIdx: number, setIdx: number, type: WorkoutSetType) => {
+    const newExercises = [...exercises];
+    newExercises[exIdx].setsData[setIdx].type = type;
+    setExercises(newExercises);
+
+    const setData = newExercises[exIdx].setsData[setIdx];
+    if (newExercises[exIdx].completedSets[setIdx] && activeWorkoutId) {
+      upsertWorkoutSet({
+        workoutId: activeWorkoutId,
+        exerciseId: newExercises[exIdx].id,
+        setIndex: setIdx,
+        weight: parseLocaleNumber(setData.weight),
+        reps: parseLocaleNumber(setData.reps),
+        type,
+        notes: setData.notes,
+        completed: true
+      }).catch(console.error);
+    }
+  };
+
+  const handleAddExtraExercise = (libEx: { name: string; category?: ExerciseCategory; muscleGroup?: string; multiplier?: number }) => {
     setConfigEx({
       name: libEx.name,
       category: libEx.category || 'weight',
@@ -371,10 +388,13 @@ export default function WorkoutPage() {
         isSessionOnly: true,
       });
 
-      const setsData = new Array(configEx.sets).fill(null).map(() => ({ weight: '0', reps: '10' }));
+      const setsData = new Array(configEx.sets).fill(null).map(() => ({ 
+        weight: '0', 
+        reps: '10',
+        type: 'normal' as WorkoutSetType 
+      }));
 
-      // Update local state to show the new exercise immediately
-      const newEx: WorkoutExercise = {
+      const newEx: WorkoutExerciseData = {
         id: newExId,
         name,
         category: configEx.category,
@@ -392,9 +412,7 @@ export default function WorkoutPage() {
       setIsConfigOpen(false);
       setConfigEx(null);
       setIsLibraryOpen(false);
-      setSearchQuery('');
       
-      // Pin to session by creating an initial uncompleted set
       if (activeWorkoutId) {
         await upsertWorkoutSet({
           workoutId: activeWorkoutId,
@@ -402,170 +420,175 @@ export default function WorkoutPage() {
           setIndex: 0,
           weight: 0,
           reps: 10,
+          type: 'normal',
           completed: false
         });
       }
 
-      toast.success(`${configEx.name} adicionado!`);
+      toast.success(`${configEx.name.split(' (')[0]} adicionado!`);
     } catch (err) {
       console.error(err);
       toast.error('Erro ao adicionar exercício extra.');
     }
   };
 
-  const handleDeleteExtraExercise = async (exId: string, name: string) => {
+  const handleDeleteExtraExercise = async (exId: string, _name: string) => {
     if (!activeWorkoutId) return;
     
-    if (window.confirm(`Deseja remover "${name.split(' (')[0]}" desta sessão?`)) {
-      try {
-        console.log(`[Delete] Removendo exercício ${exId} (${name})`);
-        
-        // 1. Remove from Cloud (if synced)
-        const { deleteRemoteItem } = await import('../services/syncService');
-        await deleteRemoteItem('exercises', exId).catch(err => {
-          console.warn('[Delete] Erro ao remover do cloud (pode não ter sido sincronizado ainda):', err);
-        });
+    try {
+      await deleteRemoteItem('exercises', exId).catch(err => {
+        console.warn('[Delete] Erro ao remover do cloud:', err);
+      });
 
-        // 2. Remove from Local DB (sets and exercise)
-        await db.transaction('rw', [db.exercises, db.workoutSets], async () => {
-          await db.workoutSets.where({ workoutId: activeWorkoutId, exerciseId: exId }).delete();
-          await db.exercises.delete(exId);
-        });
+      await db.transaction('rw', [db.exercises, db.workoutSets], async () => {
+        await db.workoutSets.where({ workoutId: activeWorkoutId, exerciseId: exId }).delete();
+        await db.exercises.delete(exId);
+      });
 
-        // 3. Update local state
-        setExercises(prev => prev.filter(ex => ex.id !== exId));
-        if (expandedExercise === exId) setExpandedExercise(null);
-        
-        toast.success('Exercício removido.');
-      } catch (err) {
-        console.error('[Delete] Erro crítico:', err);
-        toast.error('Erro ao remover exercício.');
-      }
+      setExercises(prev => prev.filter(ex => ex.id !== exId));
+      if (expandedExercise === exId) setExpandedExercise(null);
+      
+      toast.success('Exercício removido.');
+    } catch (err) {
+      console.error('[Delete] Erro:', err);
+      toast.error('Erro ao remover exercício.');
     }
   };
 
-  const handleCancelWorkout = async () => {
+  const confirmCancelWorkout = async () => {
     if (!activeWorkoutId) {
       navigate(-1);
       return;
     }
 
-    if (window.confirm('Deseja realmente cancelar este treino? O progresso não será salvo no histórico.')) {
-      try {
-        await cancelActiveWorkout(activeWorkoutId);
-        const { deleteWorkoutFromCloud } = await import('../services/syncService');
-        await deleteWorkoutFromCloud(activeWorkoutId);
-        toast.success('Treino excluído.');
-        navigate('/');
-      } catch (err) {
-        console.error(err);
-        toast.error('Erro ao cancelar treino.');
-      }
+    try {
+      await cancelActiveWorkout(activeWorkoutId);
+      await deleteWorkoutFromCloud(activeWorkoutId);
+      toast.success('Treino cancelado.');
+      navigate('/');
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao cancelar treino.');
     }
   };
 
-  const finishWorkout = async () => {
-    if (!user || !protocolId) return;
+  // Métricas para o FinishModal
+  const totalCompletedSets = useMemo(() => {
+    return exercises.reduce((acc, ex) => acc + ex.completedSets.filter(Boolean).length, 0);
+  }, [exercises]);
 
-    const totalCompleted = exercises.reduce((acc, ex) =>
-      acc + ex.completedSets.filter(Boolean).length, 0);
+  const totalCalculatedVolume = useMemo(() => {
+    let volume = 0;
+    exercises.forEach(ex => {
+      ex.completedSets.forEach((done, idx) => {
+        if (done) {
+          const w = parseLocaleNumber(ex.setsData[idx]?.weight);
+          const r = parseLocaleNumber(ex.setsData[idx]?.reps);
+          volume += calculateVolume(w, r, ex.category);
+        }
+      });
+    });
+    return volume;
+  }, [exercises]);
 
-    if (totalCompleted === 0) {
+  const brokenPRsList = useMemo(() => {
+    const prs: { exerciseName: string; weight: number; reps: number; previousWeight?: number }[] = [];
+    exercises.forEach(ex => {
+      let sessionBestWeight = 0;
+      let sessionBestReps = 0;
+      ex.completedSets.forEach((done, idx) => {
+        if (done) {
+          const w = parseLocaleNumber(ex.setsData[idx]?.weight);
+          const r = parseLocaleNumber(ex.setsData[idx]?.reps);
+          if (w > sessionBestWeight || (w === sessionBestWeight && r > sessionBestReps)) {
+            sessionBestWeight = w;
+            sessionBestReps = r;
+          }
+        }
+      });
+
+      const truePR = truePRs[ex.id];
+      const oldW = truePR ? truePR.weight : 0;
+      const oldR = truePR ? truePR.reps : 0;
+
+      if (sessionBestWeight > oldW || (sessionBestWeight === oldW && sessionBestReps > oldR && sessionBestWeight > 0)) {
+        prs.push({
+          exerciseName: ex.name.split(' (')[0],
+          weight: sessionBestWeight,
+          reps: sessionBestReps,
+          previousWeight: oldW
+        });
+      }
+    });
+    return prs;
+  }, [exercises, truePRs]);
+
+  const handleOpenFinishModal = () => {
+    if (totalCompletedSets === 0) {
       toast.error('Complete pelo menos uma série antes de finalizar.');
       return;
     }
+    setIsFinishModalOpen(true);
+  };
 
-    if (!activeWorkoutId) return;
+  const handleConfirmFinishWorkout = async (metrics: { mood: number; sleepQuality: number; stressLevel: number; notes: string }) => {
+    if (!user || !protocolId || !activeWorkoutId) return;
 
+    setIsFinishing(true);
     try {
-      // Atualiza local
       await db.workouts.update(activeWorkoutId, {
         status: 'completed',
         finishedAt: Date.now(),
+        mood: metrics.mood,
+        sleepQuality: metrics.sleepQuality,
+        stressLevel: metrics.stressLevel,
+        notes: metrics.notes,
         isSynced: false
       });
 
-      // Busca o treino atualizado
-      const workout = await db.workouts.get(activeWorkoutId);
-      if (workout) {
-        // Salva imediatamente no Supabase
-        const { supabase } = await import('../services/supabaseClient');
-        // Conversão para snake_case (sem isSynced/is_synced)
-        const toSnake = (obj: any) => {
-          const mapping: Record<string, string> = {
-            userId: 'user_id',
-            protocolId: 'protocol_id',
-            date: 'date',
-            status: 'status',
-            finishedAt: 'finished_at',
-            mood: 'mood',
-            sleepQuality: 'sleep_quality',
-            stressLevel: 'stress_level',
-            recovery: 'recovery',
-            notes: 'notes',
-            createdAt: 'created_at',
-            updatedAt: 'updated_at',
-            id: 'id'
-          };
-          const newObj: any = {};
-          for (const key in obj) {
-            if (key === 'isSynced') continue;
-            let value = obj[key];
-            if ([
-              'createdAt', 'finishedAt', 'date', 'updatedAt'
-            ].includes(key) && typeof value === 'number') {
-              value = new Date(value).toISOString();
+      // Atualizar lastWeight e lastReps dos exercícios se superados
+      for (const ex of exercises) {
+        let sessionBestWeight = 0;
+        let sessionBestReps = 0;
+
+        ex.completedSets.forEach((completed, idx) => {
+          if (completed) {
+            const weight = parseLocaleNumber(ex.setsData[idx].weight);
+            const reps = parseLocaleNumber(ex.setsData[idx].reps);
+            if (weight > sessionBestWeight || (weight === sessionBestWeight && reps > sessionBestReps)) {
+              sessionBestWeight = weight;
+              sessionBestReps = reps;
             }
-            newObj[mapping[key] || key] = value;
           }
-          return newObj;
-        };
-        const workoutData = toSnake(workout);
-        const { error } = await supabase.from('workouts').upsert([workoutData]);
-        if (error) {
-          throw new Error('Erro ao salvar treino no Supabase: ' + error.message);
-        }
+        });
 
-        // 4. Update PRs for all performed exercises
-        for (const ex of exercises) {
-          let sessionBestWeight = 0;
-          let sessionBestReps = 0;
+        if (sessionBestWeight > 0) {
+          const truePR = await getExercisePR(ex.id, user.id);
+          const oldWeight = truePR ? truePR.weight : 0;
+          const oldReps = truePR ? truePR.reps : 0;
 
-          ex.completedSets.forEach((completed, idx) => {
-            if (completed) {
-              const weight = Number(ex.setsData[idx].weight);
-              const reps = Number(ex.setsData[idx].reps);
-              if (weight > sessionBestWeight || (weight === sessionBestWeight && reps > sessionBestReps)) {
-                sessionBestWeight = weight;
-                sessionBestReps = reps;
-              }
-            }
-          });
-
-          if (sessionBestWeight > 0) {
-            const truePR = await getExercisePR(ex.id);
-            const oldWeight = truePR ? truePR.weight : 0;
-            const oldReps = truePR ? truePR.reps : 0;
-
-            if (sessionBestWeight > oldWeight || (sessionBestWeight === oldWeight && sessionBestReps > oldReps)) {
-              await updateExercise(ex.id, { 
-                lastWeight: sessionBestWeight, 
-                lastReps: sessionBestReps 
-              });
-            }
+          if (sessionBestWeight > oldWeight || (sessionBestWeight === oldWeight && sessionBestReps > oldReps)) {
+            await updateExercise(ex.id, { 
+              lastWeight: sessionBestWeight, 
+              lastReps: sessionBestReps 
+            });
           }
         }
       }
 
-      await syncData();
-      // Garante que o IndexedDB local será atualizado com dados do Supabase
-      const { fullSync } = await import('../services/syncService');
-      await fullSync();
-      toast.success('Treino finalizado e salvo!');
+      // Sincronização em segundo plano não-bloqueante
+      fullSync().catch((err) => {
+        console.warn('[Sync] Sincronização em background adiada:', err);
+      });
+
+      toast.success('Treino finalizado e salvo com sucesso!');
+      setIsFinishModalOpen(false);
       navigate('/history');
     } catch (err) {
-      console.error(err);
-      toast.error('Erro ao salvar treino.');
+      console.error('[WorkoutPage] Erro ao finalizar treino:', err);
+      toast.error('Erro ao finalizar treino localmente.');
+    } finally {
+      setIsFinishing(false);
     }
   };
 
@@ -581,309 +604,163 @@ export default function WorkoutPage() {
 
   return (
     <Layout>
-      <div className="space-y-8 pb-40">
-        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="gap-2 text-muted-foreground">
-              <ArrowLeft className="w-4 h-4" /> Voltar
+      <div className="w-full max-w-3xl mx-auto space-y-6">
+        {/* Header da Sessão */}
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Button 
+              type="button"
+              variant="ghost" 
+              size="icon"
+              onClick={() => navigate('/')}
+              className="h-10 w-10 rounded-xl text-muted-foreground hover:text-foreground shrink-0"
+              title="Voltar ao Painel"
+            >
+              <ArrowLeft className="w-5 h-5" />
             </Button>
-            <div>
-              <h2 className="text-[clamp(18px,4vw,22px)] font-black uppercase text-foreground leading-tight">{protocolName}</h2>
-              <p className="text-[clamp(9px,2vw,10px)] text-primary font-mono uppercase tracking-wider mt-0.5">Sessão Ativa</p>
+            <div className="min-w-0">
+              <h2 className="text-lg sm:text-xl md:text-2xl font-black uppercase text-foreground tracking-tight leading-tight truncate max-w-[200px] sm:max-w-md">
+                {protocolName}
+              </h2>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                <p className="text-[10px] sm:text-xs text-primary font-mono font-bold uppercase tracking-wider">
+                  Sessão Ativa
+                </p>
+              </div>
             </div>
           </div>
-          <div className="flex flex-wrap gap-1.5 items-center">
-            <span className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase mr-1">Dia:</span>
-            <div className="flex flex-wrap gap-1.5">
-              {availableDays.map((d) => (
-                <Button
-                  key={d}
-                  size="sm"
-                  variant={selectedDay === d ? 'default' : 'outline'}
-                  className="px-2.5 py-1 text-[10px] h-8 font-black uppercase tracking-tight"
-                  onClick={() => setSelectedDay(d)}
-                >
-                  {d}
-                </Button>
-              ))}
-            </div>
+
+          <div className="flex items-center gap-2 ml-auto sm:ml-0 shrink-0">
+            {/* Botão rápido para abrir Rest Timer */}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsTimerOpen(true)}
+              className="h-10 px-3 rounded-xl border-border/50 bg-card/60 text-muted-foreground hover:text-foreground font-mono text-xs font-bold flex items-center gap-1.5"
+            >
+              <TimerIcon className="w-4 h-4 text-primary" />
+              <span>Descanso</span>
+            </Button>
+
+            {/* Cancelar Treino */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setCancelDialogOpen(true)}
+              className="h-10 px-3 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 text-xs font-bold uppercase"
+            >
+              Cancelar
+            </Button>
           </div>
         </header>
 
-        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150 fill-mode-both">
+        {/* Abas dos Dias da Semana */}
+        <WorkoutDayTabs
+          availableDays={availableDays}
+          selectedDay={selectedDay}
+          onSelectDay={(day) => setSelectedDay(day)}
+        />
+
+        {/* Lista Ergonômica de Exercícios */}
+        <div className="space-y-3.5">
           {exercises.map((ex, exIdx) => (
-            <Card 
-              key={ex.id} 
-              className={`rounded-2xl border transition-all duration-300 ${
-                expandedExercise === ex.id ? 'border-primary ring-1 ring-primary/20 bg-card shadow-md' : 'border-border opacity-100 bg-card'
-              }`}
-              style={{ animationDelay: `${exIdx * 50}ms` }}
-            >
-              <header className="flex items-center justify-between border-b border-border/5">
-                <div 
-                  className="flex-1 p-4 flex items-center gap-3 cursor-pointer"
-                  onClick={() => setExpandedExercise(expandedExercise === ex.id ? null : ex.id)}
-                >
-                  <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center font-black text-xs text-secondary-foreground shrink-0">
-                    {exIdx + 1}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-black text-[clamp(12px,3.5vw,14px)] uppercase tracking-tight truncate pr-2">{ex.name.split(' (')[0]}</h3>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <p className="text-[10px] font-mono text-muted-foreground uppercase opacity-90">
-                        {ex.completedSets.filter(Boolean).length} / {ex.sets} séries
-                      </p>
-                      {ex.lastWeight && ex.lastWeight > 0 ? (
-                        <>
-                          <div className="w-1 h-1 rounded-full bg-border" />
-                          <span className="text-[10px] font-black text-primary uppercase tracking-tight">
-                            PR: {ex.lastWeight}kg
-                          </span>
-                        </>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1 pr-4">
-                  {ex.isSessionOnly && (
-                    <button
-                      type="button"
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteExtraExercise(ex.id, ex.name);
-                      }}
-                      className="relative z-50 p-3 rounded-lg hover:bg-destructive/10 text-destructive/50 hover:text-destructive transition-colors shrink-0 pointer-events-auto"
-                      title="Remover exercício da sessão"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                  <div 
-                    className="p-3 cursor-pointer text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={() => setExpandedExercise(expandedExercise === ex.id ? null : ex.id)}
-                  >
-                    {expandedExercise === ex.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                  </div>
-                </div>
-              </header>
-
-              {expandedExercise === ex.id && (
-                <CardContent className="p-4 pt-0 space-y-3">
-                  <div className={`grid gap-2 px-2 text-[9px] font-black text-muted-foreground uppercase tracking-wider opacity-70 grid-cols-[3.5rem_1fr_1fr_3.5rem]`}>
-                    <span className="pl-1">Série</span>
-                    <span className="text-center">
-                      {ex.category === 'time' ? 'Carga (kg)' : (ex.category === 'bodyweight' ? '+ Carga (kg)' : 'Carga (kg)')}
-                    </span>
-                    <span className="text-center">{ex.category === 'time' ? 'Tempo (s)' : 'Reps'}</span>
-                    <span className="text-right pr-2">Ok</span>
-                  </div>
-                  {ex.completedSets.map((isDone, setIdx) => (
-                    <div 
-                      key={setIdx} 
-                      className={`grid items-center gap-2 p-1.5 rounded-xl transition-colors grid-cols-[3.5rem_1fr_1fr_3.5rem] ${isDone ? 'bg-primary/10' : 'bg-muted/50'}`}
-                    >
-                       <span className="text-xs font-black text-muted-foreground/60 tabular-nums pl-2">#{setIdx + 1}</span>
-                      
-                      <input 
-                        type="number"
-                        inputMode="decimal"
-                        className="bg-background border border-border/50 rounded-xl h-11 text-center font-black text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 w-full transition-all"
-                        value={ex.setsData[setIdx].weight}
-                        onChange={(e) => updateSetData(exIdx, setIdx, 'weight', e.target.value)}
-                        placeholder={(ex.category === 'bodyweight' || ex.category === 'time') ? "+ kg" : "kg"}
-                      />
-                      
-                      <input 
-                        type="number"
-                        inputMode="numeric"
-                        className="bg-background border border-border/50 rounded-xl h-11 text-center font-black text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 w-full transition-all"
-                        value={ex.setsData[setIdx].reps} 
-                        onChange={(e) => updateSetData(exIdx, setIdx, 'reps', e.target.value)}
-                        placeholder={ex.category === 'time' ? "Seg" : "Reps"}
-                      />
-                      
-                      <div className="flex justify-end">
-                        <button 
-                          onClick={() => handleSetToggle(exIdx, setIdx)}
-                          className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all ${
-                            isDone ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-105' : 'bg-background border border-border/60 text-muted-foreground hover:border-primary/40'
-                          }`}
-                        >
-                          {isDone ? <CheckCircle2 className="w-5 h-5 shadow-inner" /> : <Circle className="w-5 h-5 opacity-10" />}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              )}
-            </Card>
+            <WorkoutExerciseCard
+              key={ex.id}
+              exercise={ex}
+              exIdx={exIdx}
+              isExpanded={expandedExercise === ex.id}
+              onToggleExpand={() => setExpandedExercise(expandedExercise === ex.id ? null : ex.id)}
+              onToggleSet={handleSetToggle}
+              onUpdateSetData={updateSetData}
+              onUpdateSetType={updateSetType}
+              onDeleteExtraExercise={handleDeleteExtraExercise}
+              truePR={truePRs[ex.id]}
+            />
           ))}
-          
-          <Button
-            variant="outline"
-            onClick={() => setIsLibraryOpen(true)}
-            className="w-full h-16 rounded-2xl border-dashed border-2 border-primary/20 hover:border-primary/40 hover:bg-primary/5 group transition-all"
-          >
-            <PlusCircle className="w-5 h-5 mr-2 text-primary" />
-            <span className="font-black uppercase tracking-widest text-xs">Adicionar Exercício Extra</span>
-          </Button>
         </div>
 
-        {/* Action Buttons */}
-        <div className="fixed bottom-24 left-0 right-0 p-6 z-[60] animate-in fade-in slide-in-from-bottom-4 duration-700 delay-400 fill-mode-both">
-          <div className="max-w-xl mx-auto grid grid-cols-2 gap-4">
-            <Button 
-              variant="outline"
-              className="h-14 rounded-2xl font-black uppercase tracking-wider gap-3 text-destructive border-destructive/20 hover:bg-destructive/10"
-              onClick={handleCancelWorkout}
+        {/* Botão para Adicionar Exercício Extra */}
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setIsLibraryOpen(true)}
+          className="w-full h-12 rounded-2xl border-dashed border-primary/40 bg-primary/5 hover:bg-primary/10 text-primary font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-[0.99]"
+        >
+          <PlusCircle className="w-4 h-4" />
+          Adicionar Exercício à Sessão
+        </Button>
+
+        {/* Barra Fixa Inferior de Finalização */}
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-md">
+          <div className="p-2 rounded-2xl bg-card/90 border border-border/60 shadow-2xl backdrop-blur-xl flex items-center justify-between gap-3">
+            <div className="px-3 min-w-0">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block leading-none">
+                Concluídas
+              </span>
+              <span className="text-base font-black font-mono text-foreground leading-tight">
+                {totalCompletedSets} séries
+              </span>
+            </div>
+
+            <Button
+              type="button"
+              onClick={handleOpenFinishModal}
+              className="h-12 px-6 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-xs uppercase tracking-wider shadow-lg shadow-primary/25 flex items-center gap-2 active:scale-95 transition-all"
             >
-              <X className="w-5 h-5" /> Cancelar
-            </Button>
-            <Button 
-              className="h-14 rounded-2xl font-black uppercase tracking-wider shadow-2xl shadow-primary/30 gap-3"
-              onClick={finishWorkout}
-            >
-              <Save className="w-5 h-5" /> Finalizar
+              <Save className="w-4 h-4" />
+              Finalizar Treino
             </Button>
           </div>
         </div>
 
-        {/* Library Modal */}
-        <Dialog open={isLibraryOpen} onOpenChange={setIsLibraryOpen}>
-          <DialogContent className="max-w-md w-[95vw] rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
-            <DialogHeader className="p-6 pb-2 bg-card">
-              <DialogTitle className="text-xl font-black uppercase tracking-tight">Biblioteca</DialogTitle>
-              <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-widest">Sessão: {selectedDay}</p>
-            </DialogHeader>
-            
-            <div className="p-6 pt-2 space-y-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground opacity-50" />
-                <Input
-                  className="pl-10 h-12 bg-muted/30 border-none rounded-xl font-bold placeholder:font-black placeholder:uppercase placeholder:text-[10px]"
-                  placeholder="Procurar exercício..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
+        {/* Rest Timer Flutuante */}
+        <FloatingRestTimer
+          isOpen={isTimerOpen}
+          initialSeconds={timerSeconds}
+          onClose={() => setIsTimerOpen(false)}
+        />
 
-              <div className="max-h-[50vh] overflow-y-auto pr-2 space-y-2 custom-scrollbar">
-                {searchQuery.trim().length >= 2 && (
-                  <button
-                    className="w-full flex items-center justify-between p-4 rounded-2xl bg-primary/5 hover:bg-primary/10 border border-dashed border-primary/30 transition-all text-left group mb-4"
-                    onClick={() => handleAddExtraExercise({ name: searchQuery.trim(), muscleGroup: 'Outros' })}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="p-2.5 rounded-xl bg-background shadow-sm text-primary group-hover:scale-110 transition-transform">
-                        <PlusCircle className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="font-black text-[11px] uppercase tracking-tight">Criar "{searchQuery.trim()}"</p>
-                        <p className="text-[9px] font-mono text-primary uppercase">Exercício Personalizado</p>
-                      </div>
-                    </div>
-                    <PlusCircle className="w-4 h-4 text-primary" />
-                  </button>
-                )}
+        {/* Modais Desacoplados */}
+        <ExerciseLibraryModal
+          isOpen={isLibraryOpen}
+          onClose={() => setIsLibraryOpen(false)}
+          library={library}
+          onSelectExercise={handleAddExtraExercise}
+        />
 
-                {library
-                  .filter(ex => ex.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                  .map((ex, idx) => (
-                    <button
-                      key={idx}
-                      className="w-full flex items-center justify-between p-4 rounded-2xl bg-muted/20 hover:bg-primary/10 border border-transparent hover:border-primary/20 transition-all text-left group"
-                      onClick={() => handleAddExtraExercise(ex)}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="p-2.5 rounded-xl bg-background shadow-sm text-primary group-hover:scale-110 transition-transform">
-                          <Dumbbell className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <p className="font-black text-[11px] uppercase tracking-tight">{ex.name}</p>
-                          <p className="text-[9px] font-mono text-muted-foreground uppercase">{ex.muscleGroup}</p>
-                        </div>
-                      </div>
-                      <PlusCircle className="w-4 h-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </button>
-                  ))
-                }
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <ConfigExtraExerciseModal
+          isOpen={isConfigOpen}
+          onClose={() => setIsConfigOpen(false)}
+          configEx={configEx}
+          onChangeSets={(delta) => {
+            if (!configEx) return;
+            setConfigEx({ ...configEx, sets: Math.max(1, Math.min(10, configEx.sets + delta)) });
+          }}
+          onConfirm={confirmAddExtraExercise}
+        />
 
-        {/* Extra Exercise Config Dialog */}
-        <Dialog open={isConfigOpen} onOpenChange={setIsConfigOpen}>
-          <DialogContent className="max-w-md w-[95vw] rounded-3xl p-6 overflow-hidden border-none shadow-2xl">
-            <DialogHeader className="mb-4">
-              <DialogTitle className="text-xl font-black uppercase tracking-tight">Configurar Exercício</DialogTitle>
-              <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-widest">Ajuste os detalhes antes de adicionar</p>
-            </DialogHeader>
+        <WorkoutFinishModal
+          isOpen={isFinishModalOpen}
+          onClose={() => setIsFinishModalOpen(false)}
+          onConfirm={handleConfirmFinishWorkout}
+          totalSetsCompleted={totalCompletedSets}
+          totalVolumeKg={totalCalculatedVolume}
+          brokenPRs={brokenPRsList}
+          isSubmitting={isFinishing}
+        />
 
-            {configEx && (
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-muted-foreground uppercase tracking-wider ml-1">Nome do Exercício</label>
-                  <Input 
-                    value={configEx.name}
-                    onChange={(e) => setConfigEx({...configEx, name: e.target.value})}
-                    className="h-12 bg-muted/30 border-none rounded-xl font-bold"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-wider ml-1">Categoria</label>
-                    <Select 
-                      value={configEx.category} 
-                      onValueChange={(val: any) => setConfigEx({...configEx, category: val})}
-                    >
-                      <SelectTrigger className="h-12 bg-muted/30 border-none rounded-xl font-bold">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="font-bold uppercase text-[10px]">
-                        <SelectItem value="weight">Carga (Peso)</SelectItem>
-                        <SelectItem value="bodyweight">Peso Corporal</SelectItem>
-                        <SelectItem value="time">Tempo (Timer)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-wider ml-1">Séries</label>
-                    <div className="flex items-center gap-2 bg-muted/30 rounded-xl h-12 px-2">
-                      <button 
-                        className="p-1.5 rounded-lg hover:bg-background/50 text-muted-foreground transition-colors disabled:opacity-20"
-                        onClick={() => setConfigEx({...configEx, sets: Math.max(1, configEx.sets - 1)})}
-                        disabled={configEx.sets <= 1}
-                      >
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      <span className="flex-1 text-center font-black tabular-nums">{configEx.sets}</span>
-                      <button 
-                        className="p-1.5 rounded-lg hover:bg-background/50 text-muted-foreground transition-colors"
-                        onClick={() => setConfigEx({...configEx, sets: configEx.sets + 1})}
-                      >
-                        <PlusCircle className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-4 flex gap-3">
-                  <Button variant="outline" className="flex-1 h-12 rounded-xl font-black uppercase text-xs" onClick={() => setIsConfigOpen(false)}>
-                    Cancelar
-                  </Button>
-                  <Button className="flex-1 h-12 rounded-xl font-black uppercase text-xs shadow-lg shadow-primary/20" onClick={confirmAddExtraExercise}>
-                    Adicionar
-                  </Button>
-                </div>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
+        <ConfirmDialog
+          open={cancelDialogOpen}
+          onOpenChange={setCancelDialogOpen}
+          title="Cancelar sessão de treino?"
+          description="Deseja realmente cancelar este treino? O progresso não será salvo no seu histórico."
+          confirmLabel="Cancelar Treino"
+          variant="destructive"
+          onConfirm={confirmCancelWorkout}
+        />
       </div>
     </Layout>
   );

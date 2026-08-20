@@ -3,11 +3,12 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from "sonner";
 import { 
   registerUser, 
-  loginUser 
+  loginUser, 
+  ADMIN_TEST_USER 
 } from '../services/authService';
 import { fullSync } from '../services/syncService';
 import { useAuth } from '../hooks/useAuth';
-import { Button } from "@/components/ui/button"
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -15,11 +16,9 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { ArrowRight as ArrowRightIcon } from "lucide-react"
-
-
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { ArrowRight, ShieldCheck, Dumbbell } from "lucide-react";
 
 export default function AuthPage() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -50,17 +49,18 @@ export default function AuthPage() {
     try {
       if (mode === 'register') {
         await registerUser(email, password);
+        toast.success('Cadastro realizado com sucesso! Efetue login para continuar.');
         setMode('login');
-        setError('Cadastro realizado. Efetue login.');
+        setPassword('');
+        setConfirmPassword('');
       } else {
         const { user: loggedUser, token } = await loginUser(email, password);
         login(loggedUser, token);
         
-        // Sync completo após login
-        toast.promise(fullSync(), {
+        toast.promise(fullSync().catch(() => {}), {
           loading: 'Sincronizando seus dados...',
           success: 'Dados sincronizados!',
-          error: 'Erro na sincronização.'
+          error: 'Modo offline ativo.'
         });
       }
     } catch (err: unknown) {
@@ -68,47 +68,49 @@ export default function AuthPage() {
     }
   };
 
+  const handleAdminTestLogin = () => {
+    login(ADMIN_TEST_USER, 'test-admin-token-mock-123456');
+    toast.success('Logado como Administrador de Teste!');
+    navigate('/');
+  };
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6 selection:bg-primary/30">
-      <Card className="w-full max-w-[360px] border-border/50 bg-card rounded-[2rem] shadow-2xl overflow-hidden outline outline-1 outline-primary/5 animate-in fade-in zoom-in-95 slide-in-from-bottom-8 duration-700 ease-out">
-        <CardHeader className="text-center pt-10 pb-8">
-          <div className="flex justify-center mb-6">
-             <div className="w-20 h-20 bg-white shadow-xl shadow-black/5 rounded-[2rem] flex items-center justify-center overflow-hidden border border-border/5">
-               <img src="/logo.png" alt="Performance Control Logo" className="w-12 h-12 object-contain" />
-             </div>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 sm:p-6">
+      <Card className="w-full max-w-sm border-border/50 bg-card rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-500">
+        <CardHeader className="text-center pt-8 pb-4 space-y-3">
+          <div className="mx-auto w-16 h-16 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center shadow-lg shadow-primary/25">
+            <Dumbbell className="w-8 h-8" />
           </div>
-          <CardTitle 
-            key={`${mode}-title`}
-            className="text-[clamp(20px,2.5vw,24px)] font-black text-foreground tracking-[0.2em] uppercase leading-none animate-in fade-in slide-in-from-bottom-2 duration-500"
-          >
-            {mode === 'login' ? 'Acesso' : 'Registro'}
-          </CardTitle>
-          <CardDescription className="text-muted-foreground font-mono text-[clamp(9px,1vw,11px)] tracking-[0.3em] uppercase mt-4 opacity-60">
-            PERFORMANCE CONTROL
-          </CardDescription>
+          <div>
+            <CardTitle className="text-xl sm:text-2xl font-black text-foreground uppercase tracking-wider">
+              {mode === 'login' ? 'Entrar na Conta' : 'Criar Nova Conta'}
+            </CardTitle>
+            <CardDescription className="text-xs text-muted-foreground font-medium mt-1">
+              Registro de Treinos • PWA Offline First
+            </CardDescription>
+          </div>
         </CardHeader>
         
-        <CardContent className="space-y-5 px-8 pb-8">
-          <form 
-            key={`${mode}-form`}
-            onSubmit={handleSubmit} 
-            className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500"
-          >
+        <CardContent className="space-y-4 px-6 pb-4">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
             <div className="space-y-1">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">E-mail</label>
               <Input
                 type="email"
-                placeholder="E-MAIL"
-                className="focus-visible:ring-primary h-12 rounded-xl px-5 text-center"
+                placeholder="seu.email@exemplo.com"
+                className="h-11 rounded-xl"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
               />
             </div>
+
             <div className="space-y-1">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Senha</label>
               <Input
                 type="password"
-                placeholder="SENHA"
-                className="focus-visible:ring-primary h-12 rounded-xl px-5 text-center"
+                placeholder="••••••••"
+                className="h-11 rounded-xl"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 required
@@ -116,11 +118,12 @@ export default function AuthPage() {
             </div>
 
             {mode === 'register' && (
-              <div className="space-y-1 animate-in fade-in slide-in-from-bottom-2 duration-500">
+              <div className="space-y-1 animate-in fade-in duration-300">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Confirmar Senha</label>
                 <Input
                   type="password"
-                  placeholder="CONFIRMAR SENHA"
-                  className="focus-visible:ring-primary h-12 rounded-xl px-5 text-center"
+                  placeholder="••••••••"
+                  className="h-11 rounded-xl"
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
                   required
@@ -129,28 +132,38 @@ export default function AuthPage() {
             )}
             
             {error && (
-              <div className="text-destructive text-[clamp(9px,1vw,11px)] font-black text-center uppercase tracking-[0.1em] mt-1 bg-destructive/5 py-3 rounded-xl border border-destructive/10">
+              <div className="text-destructive text-xs font-bold text-center py-2 px-3 rounded-xl bg-destructive/10 border border-destructive/20">
                 {error}
               </div>
             )}
             
-            <div>
-              <Button type="submit" className="w-full mt-2 group">
-              {mode === 'login' ? 'Acessar' : 'Criar Conta'}
-              <ArrowRightIcon className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-              </Button>
-            </div>
+            <Button type="submit" className="w-full h-12 rounded-xl mt-2 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2">
+              {mode === 'login' ? 'Entrar' : 'Cadastrar'}
+              <ArrowRight className="w-4 h-4" />
+            </Button>
           </form>
+
+          {/* Atalho rápido para teste */}
+          <div className="pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleAdminTestLogin}
+              className="w-full h-11 border-dashed border-primary/40 bg-primary/5 hover:bg-primary/10 text-primary font-bold uppercase tracking-wider text-xs rounded-xl flex items-center justify-center gap-2"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              Entrar como Admin (Teste)
+            </Button>
+          </div>
         </CardContent>
 
-        <CardFooter className="justify-center border-t border-border/10 bg-muted/5 py-5">
+        <CardFooter className="justify-center border-t border-border/30 bg-muted/20 py-4">
           <Button 
-            key={`${mode}-toggle`}
             variant="link" 
             onClick={() => setMode(mode === 'login' ? 'register' : 'login')} 
-            className="text-muted-foreground/50 text-[clamp(9px,1vw,11px)] font-black uppercase tracking-[0.15em] hover:text-primary transition-colors h-auto p-0 animate-in fade-in duration-500"
+            className="text-muted-foreground text-xs font-bold hover:text-foreground h-auto p-0"
           >
-            {mode === 'login' ? 'Não tem perfil? Criar agora' : 'Já tem perfil? Acessar'}
+            {mode === 'login' ? 'Não tem uma conta? Cadastre-se' : 'Já possui uma conta? Entrar'}
           </Button>
         </CardFooter>
       </Card>

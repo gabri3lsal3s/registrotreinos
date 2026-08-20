@@ -19,6 +19,20 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-charts': ['recharts'],
+          'vendor-motion': ['framer-motion'],
+          'vendor-dnd': ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
+          'vendor-db': ['dexie', '@supabase/supabase-js'],
+          'vendor-icons': ['lucide-react']
+        }
+      }
+    }
+  },
   optimizeDeps: {
     include: ['sonner', '@radix-ui/react-select', 'recharts'],
   },

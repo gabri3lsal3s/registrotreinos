@@ -1,7 +1,7 @@
 // Registro do Service Worker para PWA offline
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/src/services/sw.js');
+    navigator.serviceWorker.register('/sw.js');
   });
 }
 import { StrictMode } from 'react'

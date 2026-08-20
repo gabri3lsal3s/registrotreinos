@@ -1,8 +1,9 @@
 import { db } from './workoutDB';
 import { supabase } from './supabaseClient';
 import { useAuthStore } from './authStore';
+import type { Protocol, Exercise, Workout, WorkoutSet, BodyWeight } from '../types';
 
-const toSnake = (obj: any) => {
+const toSnake = (obj: Record<string, unknown>): Record<string, unknown> => {
   const mapping: Record<string, string> = {
     userId: 'user_id',
     protocolId: 'protocol_id',
@@ -27,7 +28,7 @@ const toSnake = (obj: any) => {
     multiplier: 'multiplier',
     isSessionOnly: 'is_session_only'
   };
-  const newObj: any = {};
+  const newObj: Record<string, unknown> = {};
   for (const key in obj) {
     if (key === 'isSynced' || key === 'baseline') continue;
     
@@ -41,7 +42,7 @@ const toSnake = (obj: any) => {
   return newObj;
 };
 
-const toCamel = (obj: any) => {
+const toCamel = <T = Record<string, unknown>>(obj: Record<string, unknown>): T => {
   const mapping: Record<string, string> = {
     user_id: 'userId',
     protocol_id: 'protocolId',
@@ -66,7 +67,7 @@ const toCamel = (obj: any) => {
     multiplier: 'multiplier',
     is_session_only: 'isSessionOnly'
   };
-  const newObj: any = {};
+  const newObj: Record<string, unknown> = {};
   for (const key in obj) {
     let value = obj[key];
     // Força todos os campos de data para number (timestamp em ms)
@@ -83,7 +84,7 @@ const toCamel = (obj: any) => {
     }
     newObj[mapping[key] || key] = value;
   }
-  return newObj;
+  return newObj as T;
 };
 
 let isSyncing = false;
@@ -95,11 +96,17 @@ export async function syncData() {
   setSyncStatus('syncing');
 
   try {
-    // Pegar apenas itens NÃO sincronizados (dirty)
-    const protocolsLocal = await db.protocols.where('userId').equals(user.id).and(p => !p.isSynced).toArray();
-    const workoutsLocal = await db.workouts.where('userId').equals(user.id).and(w => !w.isSynced).toArray();
-    const exercisesLocal = await db.exercises.toCollection().filter(e => !e.isSynced).toArray();
-    const workoutSetsLocal = await db.workoutSets.toCollection().filter(s => !s.isSynced).toArray();
+    // Pegar protocolos e treinos do usuário atual para isolar estritamente exercícios e séries
+    const userAllProtocols = await db.protocols.where('userId').equals(user.id).toArray();
+    const userProtocolIds = new Set(userAllProtocols.map(p => p.id));
+    const userAllWorkouts = await db.workouts.where('userId').equals(user.id).toArray();
+    const userWorkoutIds = new Set(userAllWorkouts.map(w => w.id));
+
+    // Pegar apenas itens NÃO sincronizados (dirty) pertencentes ao usuário logado
+    const protocolsLocal = userAllProtocols.filter(p => !p.isSynced);
+    const workoutsLocal = userAllWorkouts.filter(w => !w.isSynced);
+    const exercisesLocal = await db.exercises.toCollection().filter(e => !e.isSynced && userProtocolIds.has(e.protocolId)).toArray();
+    const workoutSetsLocal = await db.workoutSets.toCollection().filter(s => !s.isSynced && userWorkoutIds.has(s.workoutId)).toArray();
     const bodyWeightsLocal = await db.bodyWeights.where('userId').equals(user.id).and(b => !b.isSynced).toArray();
 
     if (protocolsLocal.length === 0 && workoutsLocal.length === 0 && exercisesLocal.length === 0 && workoutSetsLocal.length === 0 && bodyWeightsLocal.length === 0) {
@@ -107,11 +114,11 @@ export async function syncData() {
       return { success: true };
     }
 
-    const protocols = protocolsLocal.map(toSnake);
-    const workouts = workoutsLocal.map(toSnake);
-    const exercises = exercisesLocal.map(ex => ({ ...ex, userId: user.id })).map(toSnake);
-    const workoutSets = workoutSetsLocal.map(set => ({ ...set, userId: user.id })).map(toSnake);
-    const bodyWeights = bodyWeightsLocal.map(toSnake);
+    const protocols = protocolsLocal.map(p => toSnake(p as unknown as Record<string, unknown>));
+    const workouts = workoutsLocal.map(w => toSnake(w as unknown as Record<string, unknown>));
+    const exercises = exercisesLocal.map(ex => ({ ...ex, userId: user.id })).map(e => toSnake(e as unknown as Record<string, unknown>));
+    const workoutSets = workoutSetsLocal.map(set => ({ ...set, userId: user.id })).map(s => toSnake(s as unknown as Record<string, unknown>));
+    const bodyWeights = bodyWeightsLocal.map(b => toSnake(b as unknown as Record<string, unknown>));
 
     // Enviar para o Supabase e CHECAR ERROS
     if (protocols.length > 0) {
@@ -160,9 +167,10 @@ export async function syncData() {
 
     setSyncStatus('synced');
     return { success: true };
-  } catch (err: any) {
+  } catch (err: unknown) {
     setSyncStatus('error');
-    console.error('[Sync] Erro no PUSH:', err.message || err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[Sync] Erro no PUSH:', message);
     throw err;
   }
 }
@@ -174,7 +182,6 @@ export async function pullData() {
   setSyncStatus('syncing');
 
   try {
-    
     const [pRes, eRes, wRes, sRes, bwRes] = await Promise.all([
       supabase.from('protocols').select('*').eq('user_id', user.id),
       supabase.from('exercises').select('*').eq('user_id', user.id),
@@ -193,30 +200,33 @@ export async function pullData() {
     const remoteS = sRes.data || [];
     const remoteBW = bwRes.data || [];
 
-
     await db.transaction('rw', [db.protocols, db.exercises, db.workouts, db.workoutSets, db.bodyWeights], async () => {
-      // 1. Limpeza Inteligente
-      // Deletamos apenas o que já FOI sincronizado anteriormente mas não está mais na nuvem
+      // 1. Limpeza Inteligente com Isolamento de Usuário
+      // Deletamos apenas o que já FOI sincronizado anteriormente mas não está mais na nuvem para ESTE usuário
       const remotePIds = remoteP.map(p => p.id);
       const remoteWIds = remoteW.map(w => w.id);
       const remoteEIds = remoteE.map(e => e.id);
       const remoteSIds = remoteS.map(s => s.id);
       const remoteBWIds = remoteBW.map(b => b.id);
 
-      // Remover locais que eram "synced" mas sumiram da nuvem (foi deletado em outro device)
-      // MAS mantemos se estiver arquivado localmente (proteção extra)
+      // Obter IDs locais dos protocolos e treinos do usuário logado
+      const localProtocols = await db.protocols.where('userId').equals(user.id).toArray();
+      const localProtocolIds = new Set(localProtocols.map(p => p.id));
+      const localWorkouts = await db.workouts.where('userId').equals(user.id).toArray();
+      const localWorkoutIds = new Set(localWorkouts.map(w => w.id));
+
+      // Remover locais que eram "synced" mas sumiram da nuvem
       await db.protocols.where('userId').equals(user.id).and(p => p.isSynced === true && !p.isArchived && !remotePIds.includes(p.id)).delete();
       await db.workouts.where('userId').equals(user.id).and(w => w.isSynced === true && !remoteWIds.includes(w.id)).delete();
       await db.bodyWeights.where('userId').equals(user.id).and(b => b.isSynced === true && !remoteBWIds.includes(b.id)).delete();
       
-      // Para exercises e sets, usamos filter() pois eles não têm userId indexado no Dexie
-      await db.exercises.toCollection().filter(e => e.isSynced === true && !e.isArchived && !remoteEIds.includes(e.id)).delete();
-      await db.workoutSets.toCollection().filter(s => s.isSynced === true && !remoteSIds.includes(s.id)).delete();
+      // Para exercises e sets, filtrar estritamente pelos protocolos e treinos do usuário logado
+      await db.exercises.toCollection().filter(e => localProtocolIds.has(e.protocolId) && e.isSynced === true && !e.isArchived && !remoteEIds.includes(e.id)).delete();
+      await db.workoutSets.toCollection().filter(s => localWorkoutIds.has(s.workoutId) && s.isSynced === true && !remoteSIds.includes(s.id)).delete();
 
       // 2. Mapeamento e Persistência
-      // Importante: NÃO sobrescrevemos itens que estão locais e "sujos" (isSynced: false)
       for (const item of remoteP) {
-        const camel = toCamel(item);
+        const camel = toCamel<Protocol>(item);
         const local = await db.protocols.get(camel.id);
         if (!local || local.isSynced) {
           await db.protocols.put({ ...camel, userId: user.id, isSynced: true });
@@ -224,15 +234,15 @@ export async function pullData() {
       }
 
       for (const item of remoteE) {
-        const camel = toCamel(item);
+        const camel = toCamel<Exercise>(item);
         const local = await db.exercises.get(camel.id);
         if (!local || local.isSynced) {
-          await db.exercises.put({ ...camel, userId: user.id, isSynced: true });
+          await db.exercises.put({ ...camel, isSynced: true });
         }
       }
 
       for (const item of remoteW) {
-        const camel = toCamel(item);
+        const camel = toCamel<Workout>(item);
         const local = await db.workouts.get(camel.id);
         if (!local || local.isSynced) {
           await db.workouts.put({ ...camel, userId: user.id, isSynced: true });
@@ -240,33 +250,33 @@ export async function pullData() {
       }
 
       for (const item of remoteS) {
-        const camel = toCamel(item);
+        const camel = toCamel<WorkoutSet>(item);
         const local = await db.workoutSets.get(camel.id);
         if (!local || local.isSynced) {
-          await db.workoutSets.put({ ...camel, userId: user.id, isSynced: true });
+          await db.workoutSets.put({ ...camel, isSynced: true });
         }
       }
       
       for (const item of remoteBW) {
-        const camel = toCamel(item);
+        const camel = toCamel<BodyWeight>(item);
         const local = await db.bodyWeights.get(camel.id);
         if (!local || local.isSynced) {
           await db.bodyWeights.put({ ...camel, userId: user.id, isSynced: true });
         }
       }
-      
     });
 
     setSyncStatus('synced');
     return { success: true };
-  } catch (err: any) {
+  } catch (err: unknown) {
     setSyncStatus('error');
-    console.error('[Sync] Erro no PULL:', err.message || err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[Sync] Erro no PULL:', message);
     throw err;
   }
 }
 
-export async function deleteRemoteItem(table: string, id: string) {
+export async function deleteRemoteItem(table: string, id: string): Promise<void> {
   const { user } = useAuthStore.getState();
   if (!user) return;
 
@@ -278,13 +288,14 @@ export async function deleteRemoteItem(table: string, id: string) {
       .eq('user_id', user.id);
 
     if (error) throw error;
-  } catch (err: any) {
-    console.error(`[Sync] Erro ao deletar no Supabase (${table}):`, err.message || err);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[Sync] Erro ao deletar no Supabase (${table}):`, message);
     throw err;
   }
 }
 
-export async function deleteExercisesByProtocol(protocolId: string) {
+export async function deleteExercisesByProtocol(protocolId: string): Promise<void> {
   const { user } = useAuthStore.getState();
   if (!user) return;
 
@@ -296,27 +307,27 @@ export async function deleteExercisesByProtocol(protocolId: string) {
       .eq('user_id', user.id);
 
     if (error) throw error;
-  } catch (err: any) {
-    console.error(`[Sync] Erro ao deletar exercícios do protocolo (${protocolId}):`, err.message || err);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[Sync] Erro ao deletar exercícios do protocolo (${protocolId}):`, message);
     throw err;
   }
 }
 
-export async function deleteWorkoutFromCloud(workoutId: string) {
+export async function deleteWorkoutFromCloud(workoutId: string): Promise<void> {
   const { user } = useAuthStore.getState();
   if (!user) return;
 
   try {
-    // Delete sets first (cascading equivalent if RLS allows)
     await supabase.from('workout_sets').delete().eq('workout_id', workoutId).eq('user_id', user.id);
-    // Then delete workout
     await supabase.from('workouts').delete().eq('id', workoutId).eq('user_id', user.id);
-  } catch (err: any) {
-    console.error(`[Sync] Erro ao deletar treino no cloud (${workoutId}):`, err.message || err);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[Sync] Erro ao deletar treino no cloud (${workoutId}):`, message);
   }
 }
 
-export async function fullSync() {
+export async function fullSync(): Promise<{ success: boolean } | undefined> {
   if (isSyncing) return;
   isSyncing = true;
   try {
