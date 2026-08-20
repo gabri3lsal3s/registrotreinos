@@ -6,11 +6,12 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { History, Calendar, Dumbbell, Sparkles } from 'lucide-react';
+import { Calendar, Dumbbell, Sparkles } from 'lucide-react';
 import { 
   getExerciseSessionHistory, 
   type ExerciseSessionHistoryItem 
 } from '../../services/workoutDB';
+import { MuscleGroupIcon, MuscleGroupBadge } from '../common';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/pt-br';
@@ -61,19 +62,19 @@ export function ExerciseHistoryModal({
       <DialogContent className="max-w-lg w-[94vw] max-h-[88vh] flex flex-col p-5 sm:p-6 rounded-3xl bg-card border-border/70 shadow-2xl overflow-y-auto">
         <DialogHeader className="text-left">
           <div className="flex items-center gap-3 mb-1">
-            <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <History className="w-5 h-5" />
-            </div>
+            <MuscleGroupIcon
+              muscleGroup={muscleGroup}
+              exerciseName={cleanName}
+              withContainer
+              className="w-5 h-5"
+              containerClassName="w-10 h-10 rounded-2xl shrink-0"
+            />
             <div className="min-w-0">
               <DialogTitle className="text-lg sm:text-xl font-black uppercase tracking-wider text-foreground truncate">
                 {cleanName}
               </DialogTitle>
               <div className="flex items-center gap-2 mt-0.5">
-                {muscleGroup && (
-                  <span className="px-2 py-0.5 rounded-md bg-muted text-muted-foreground text-[10px] font-bold uppercase tracking-wider">
-                    {muscleGroup}
-                  </span>
-                )}
+                <MuscleGroupBadge muscleGroup={muscleGroup} exerciseName={cleanName} size="sm" />
                 {truePR && truePR.weight > 0 && (
                   <span className="flex items-center gap-1 text-primary text-xs font-mono font-bold">
                     <Sparkles className="w-3.5 h-3.5" />

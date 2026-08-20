@@ -8,6 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Plus, Minus, PlusCircle } from 'lucide-react';
 import type { ExerciseCategory } from '../../types';
+import { MuscleGroupIcon, MuscleGroupBadge } from '../common';
 
 export interface ConfigExerciseState {
   name: string;
@@ -34,16 +35,29 @@ export function ConfigExtraExerciseModal({
 }: ConfigExtraExerciseModalProps) {
   if (!configEx) return null;
 
+  const cleanName = configEx.name.split(' (')[0];
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-sm w-[92vw] p-6 rounded-3xl bg-card border-border/60 shadow-2xl">
         <DialogHeader>
-          <DialogTitle className="text-base font-bold text-foreground truncate">
-            Adicionar à Sessão
-          </DialogTitle>
-          <p className="text-xs text-muted-foreground font-medium">
-            Configure as séries para {configEx.name.split(' (')[0]}.
-          </p>
+          <div className="flex items-center gap-3 mb-1 text-left">
+            <MuscleGroupIcon
+              muscleGroup={configEx.muscleGroup}
+              exerciseName={configEx.name}
+              withContainer
+              className="w-5 h-5"
+              containerClassName="w-10 h-10 rounded-2xl shrink-0"
+            />
+            <div className="min-w-0">
+              <DialogTitle className="text-base font-bold text-foreground truncate">
+                {cleanName}
+              </DialogTitle>
+              <div className="flex items-center gap-2 mt-1">
+                <MuscleGroupBadge muscleGroup={configEx.muscleGroup} exerciseName={configEx.name} size="sm" />
+              </div>
+            </div>
+          </div>
         </DialogHeader>
 
         <div className="py-4 space-y-4">

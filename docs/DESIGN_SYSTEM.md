@@ -45,7 +45,27 @@ O design system do **Registro de Treinos** é fundamentado na paleta semântica 
 
 ---
 
-## 4. Ergonomia Mobile & Gym UX
+## 4. Iconografia Semântica por Grupo Muscular (Lucide Icons)
+
+Para escaneabilidade visual imediata no salão de treino sem emojis, o app utiliza um mapeamento de ícones e cores com alto contraste:
+
+| Grupo Muscular | Ícone Lucide | Significado Visual | Token Tailwind |
+| :--- | :--- | :--- | :--- |
+| **Peito** | `Shield` | Estrutura frontal e peitoral | `text-sky-400 bg-sky-500/10 border-sky-500/20` |
+| **Costas** | `Layers` | Densidade e feixes dorsais | `text-amber-400 bg-amber-500/10 border-amber-500/20` |
+| **Quadríceps / Pernas** | `Zap` | Potência e tração dos membros inferiores | `text-emerald-400 bg-emerald-500/10 border-emerald-500/20` |
+| **Isquiotibiais** | `Footprints` | Cadeia posterior e passada | `text-teal-400 bg-teal-500/10 border-teal-500/20` |
+| **Glúteos** | `CircleDot` | Ponto focal e ativação pélvica | `text-rose-400 bg-rose-500/10 border-rose-500/20` |
+| **Panturrilhas** | `TrendingUp` | Elevação e impulso plantar | `text-lime-400 bg-lime-500/10 border-lime-500/20` |
+| **Ombros** | `Triangle` | Deltoides e silhueta em V | `text-purple-400 bg-purple-500/10 border-purple-500/20` |
+| **Bíceps** | `Flame` | Flexão e pico de contração dos braços | `text-red-400 bg-red-500/10 border-red-500/20` |
+| **Tríceps** | `ArrowDown` | Extensão e empurrada posterior do braço | `text-orange-400 bg-orange-500/10 border-orange-500/20` |
+| **Core** | `Crosshair` | Estabilidade central e centro de massa | `text-indigo-400 bg-indigo-500/10 border-indigo-500/20` |
+| **Outros** | `Dumbbell` | Padrão geral de treino com pesos | `text-zinc-400 bg-zinc-500/10 border-zinc-500/20` |
+
+---
+
+## 5. Ergonomia Mobile & Gym UX
 
 1. **Alvos de Toque Mínimos**: Todos os botões interativos possuem no mínimo **44px** (`h-11` ou `h-11 w-11`).
 2. **Auto-seleção ao Focar**: Campos numéricos executam `onFocus={(e) => e.target.select()}` para substituição instantânea de carga e reps com luvas de treino.
