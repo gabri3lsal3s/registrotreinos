@@ -459,9 +459,9 @@ async function fetchDeltaRows<T = Record<string, unknown>>(
 
 /**
  * Puxa alterações remotas incrementais a partir do cursor `last_pulled_at`
- * e reconcilia via Last-Write-Wins (LWW) preservando tombstones.
+ * ou completas caso a base local esteja vazia / solicitada manualmente.
  */
-export async function pullData(): Promise<{ success: boolean }> {
+export async function pullData(forceFull = false): Promise<{ success: boolean }> {
   const { user } = useAuthStore.getState();
   if (!user) return { success: false };
 
@@ -471,11 +471,16 @@ export async function pullData(): Promise<{ success: boolean }> {
     const cursorKey = `sync_last_pulled_at_${user.id}`;
     const storedCursor = typeof localStorage !== 'undefined' ? localStorage.getItem(cursorKey) : null;
     
-    // Buffer de segurança para clock skew (5 segundos)
+    // Se a base local estiver vazia neste dispositivo, força PULL completo
+    const localProtocolsCount = await db.protocols.where('userId').equals(user.id).filter(p => !p.isDeleted).count();
+    const localWorkoutsCount = await db.workouts.where('userId').equals(user.id).filter(w => !w.isDeleted).count();
+    const isLocalEmpty = localProtocolsCount === 0 && localWorkoutsCount === 0;
+
     let safeCursorISO = '1970-01-01T00:00:00.000Z';
-    if (storedCursor) {
+    if (!forceFull && !isLocalEmpty && storedCursor) {
       const ts = parseInt(storedCursor, 10);
       if (!isNaN(ts) && ts > 0) {
+        // Buffer de segurança para clock skew (5 segundos)
         safeCursorISO = new Date(Math.max(0, ts - 5000)).toISOString();
       }
     }
@@ -622,10 +627,20 @@ export async function deleteWorkoutFromCloud(workoutId: string): Promise<void> {
 }
 
 // ============================================================================
+// RESET DE CURSOR DE SINCRONIZAÇÃO
+// ============================================================================
+
+export function resetSyncCursor(userId: string): void {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem(`sync_last_pulled_at_${userId}`);
+  }
+}
+
+// ============================================================================
 // CICLO COMPLETO DE SINCRONIZAÇÃO (PUSH + PULL COM MUTEX)
 // ============================================================================
 
-async function executeFullSync(): Promise<{ success: boolean } | undefined> {
+async function executeFullSync(forceFull = false): Promise<{ success: boolean } | undefined> {
   if (isSyncing) return;
   isSyncing = true;
   try {
@@ -646,7 +661,7 @@ async function executeFullSync(): Promise<{ success: boolean } | undefined> {
     }
 
     await syncData();
-    await pullData();
+    await pullData(forceFull);
     return { success: true };
   } catch (err) {
     console.error('[Sync] Erro no Ciclo Completo:', err);
@@ -656,16 +671,16 @@ async function executeFullSync(): Promise<{ success: boolean } | undefined> {
   }
 }
 
-export async function fullSync(): Promise<{ success: boolean } | undefined> {
+export async function fullSync(forceFull = false): Promise<{ success: boolean } | undefined> {
   if (typeof navigator !== 'undefined' && 'locks' in navigator && navigator.locks?.request) {
     return await navigator.locks.request('workout_sync_mutex', { ifAvailable: true }, async (lock) => {
       if (!lock) {
         console.log('[Sync] Sincronização concorrente ignorada: outra aba já está em sincronização.');
         return { success: true };
       }
-      return await executeFullSync();
+      return await executeFullSync(forceFull);
     });
   }
 
-  return await executeFullSync();
+  return await executeFullSync(forceFull);
 }

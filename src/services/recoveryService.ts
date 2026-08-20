@@ -10,7 +10,8 @@ import type { WorkoutSet } from '../types';
  * reconstruir essas pontes usando o "Matching" por ordem de execução.
  */
 
-export async function runHistoryRecovery(): Promise<void> {
+export async function runHistoryRecovery(options?: { silent?: boolean }): Promise<void> {
+  const silent = options?.silent ?? true;
   // 1. Fix corrupted protocolIds from previous soft-delete implementation
   await fixArchivedExercises();
 
@@ -92,10 +93,12 @@ export async function runHistoryRecovery(): Promise<void> {
     }
 
     if (recoveredCount > 0) {
-      toast.success(`${recoveredCount} registros de histórico recuperados com sucesso!`, {
-        description: 'Seus nomes de exercícios foram restaurados.',
-        duration: 5000
-      });
+      if (!silent) {
+        toast.success(`${recoveredCount} registros de histórico recuperados com sucesso!`, {
+          description: 'Seus nomes de exercícios foram restaurados.',
+          duration: 5000
+        });
+      }
       await syncData().catch(() => {});
     }
 

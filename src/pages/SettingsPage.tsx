@@ -38,7 +38,7 @@ import {
   getPendingSyncCounts, 
   type PendingSyncCounts 
 } from '../services/backupService';
-import { fullSync } from '../services/syncService';
+import { fullSync, resetSyncCursor } from '../services/syncService';
 import { toast } from 'sonner';
 
 export default function SettingsPage() {
@@ -110,9 +110,12 @@ export default function SettingsPage() {
   const handleForceSync = async () => {
     setIsSyncing(true);
     try {
-      await fullSync();
+      if (user) {
+        resetSyncCursor(user.id);
+      }
+      await fullSync(true);
       await loadSyncStatus();
-      toast.success('Sincronização concluída com sucesso!');
+      toast.success('Sincronização completa realizada com sucesso!');
     } catch (err: unknown) {
       console.error('[Sync] Falha manual:', err);
       const errMsg = err instanceof Error ? err.message : 'Falha na comunicação com o servidor';
