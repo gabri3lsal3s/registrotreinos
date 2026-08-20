@@ -31,6 +31,7 @@ Este documento descreve os componentes da aplicação, seus contratos de props e
 | **`WorkoutDayTabs`** | `{ availableDays, currentDay, onSelectDay }` | Abas de alternância de dias da semana em treinos divididos. |
 | **`ExerciseLibraryModal`** | `{ isOpen, onClose, library, onSelectExercise }` | Modal com catálogo de exercícios organizados por grupo muscular e busca em tempo real. |
 | **`ConfigExtraExerciseModal`**| `{ isOpen, onClose, configEx, onChangeSets, onConfirm }` | Modal de ajuste de número de séries para exercício extra adicionado durante o treino ativo. |
+| **`SwapExerciseModal`** | `{ isOpen, onClose, currentExerciseName, muscleGroup?, category?, userLibrary?, onConfirmSwap }` | Modal de **substituição rápida de exercícios** com sugestões inteligentes do mesmo grupo muscular e categoria para equipamentos ocupados. |
 | **`WorkoutFinishModal`** | `{ isOpen, onClose, onConfirm, totalSetsCompleted, totalVolumeKg, brokenPRs, isSubmitting }` | Modal de conclusão de treino com feedback de humor, avaliação de RPE, notas gerais e resumo de PRs batidos. |
 
 ---
@@ -42,6 +43,8 @@ Este documento descreve os componentes da aplicação, seus contratos de props e
 | **`ProtocolCard`** | `{ protocol, exerciseCount, activeDaysCount, onStartWorkout, onEditProtocol, onDuplicateProtocol, onExportProtocol, onDeleteProtocol, onToggleEnabled }` | Card do protocolo com switch de ativação no dashboard, resumo de dias e ações rápidas (Iniciar, Editar, Clonar, Exportar JSON, Excluir). |
 | **`ProtocolBuilder`** | `{ protocolName, onChangeName, isEnabled, onToggleEnabled, activeDays, onToggleDay, selectedDay, onSelectDay, exercisesByDay, onUpdateExercise, onRemoveExercise, onAddExercise, onReorderExercises, onSave, onCancel, isSaving }` | Construtor de protocolos semanal com drag-and-drop (`@dnd-kit/sortable`), gestão de dias ativos e catálogo integrado. |
 | **`ImportProtocolModal`** | `{ isOpen, onClose, onSuccess, userId, existingProtocolNames? }` | Modal com abas de upload de arquivos (`.json`, `.csv`, `.tsv`, `.txt`) e colar texto/tabela de IA, permitindo pré-visualização, edição inline de exercícios e confirmação de importação atômica. |
+| **`StarterPacksModal`** | `{ isOpen, onClose, userId, onSuccess }` | Galeria de templates consagrados de treino (**PPL 6x, Upper/Lower 4x, Full Body 3x**) com preview de divisão diária e adoção com 1-toque. |
+| **`ShareProtocolModal`** | `{ isOpen, onClose, protocol }` | Modal de compartilhamento instantâneo de rotinas via link criptografado em Base64 / QR Code descentralizado. |
 | **`DraggableExerciseCard`** | `{ ex, idx, day, onUpdate, onRemove }` | Card arrastável com alça touch `GripVertical`, selects de categoria/músculo e inputs de séries/reps/carga base. |
 | **`ExercisePickerModal`** | `{ isOpen, onClose, onSelect }` | Catálogo de seleção de exercícios por grupo muscular. |
 
@@ -67,3 +70,12 @@ Este documento descreve os componentes da aplicação, seus contratos de props e
 | **`ActiveWorkoutBanner`** | `{ activeWorkout, onResume }` | Banner com pulso esmeralda para retomar sessão de treino em andamento. |
 | **`ConsistencyGrid`** | `{ completedDayKeys, weeklyGoal }` | Grid visual dos 7 dias da semana mostrando dias cumpridos e meta semanal. |
 | **`BodyWeightQuickCard`** | `{ latestWeight, onWeightLogged }` | Widget para registro rápido de peso corporal com suporte a decimais PT-BR. |
+
+---
+
+## 6. Módulo de Análises (`src/components/analysis/`)
+
+| Componente | Props Principais | Descrição |
+| :--- | :--- | :--- |
+| **`ConsistencyHeatmap`** | `{ data, currentStreak, longestStreak }` | Mapa de calor anual de 52 semanas no padrão GitHub commits com tons de esmeralda e contadores de sequência de treinos. |
+| **`AgonistAntagonistBalanceCard`** | `{ balanceData }` | Gráfico de radar e proporção de séries semanais entre grupos musculares antagônicos com diagnósticos posturais. |

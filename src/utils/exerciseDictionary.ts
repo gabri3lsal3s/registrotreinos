@@ -244,3 +244,24 @@ export function getExerciseInfo(rawName: string, fallbackMuscleGroup?: string): 
     multiplier: finalMult
   };
 }
+
+export interface ExerciseDatabaseItem {
+  name: string;
+  muscleGroup: string;
+  category: ExerciseCategory;
+  multiplier?: number;
+}
+
+export const EXERCISE_DATABASE: ExerciseDatabaseItem[] = Object.values(
+  Object.values(exerciseDict).reduce((acc, def) => {
+    if (!acc[def.canonicalName]) {
+      acc[def.canonicalName] = {
+        name: def.canonicalName,
+        muscleGroup: def.muscleGroup,
+        category: def.category || 'weight',
+        multiplier: def.multiplier
+      };
+    }
+    return acc;
+  }, {} as Record<string, ExerciseDatabaseItem>)
+);

@@ -8,4 +8,5 @@ export * from './ConfigExtraExerciseModal';
 export * from './WorkoutFinishModal';
 export * from './PlateCalculatorModal';
 export * from './ExerciseHistoryModal';
+export * from './SwapExerciseModal';
 

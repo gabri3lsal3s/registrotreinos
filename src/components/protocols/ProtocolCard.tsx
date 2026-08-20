@@ -10,7 +10,8 @@ import {
   Trash2, 
   Dumbbell, 
   CalendarDays,
-  Download
+  Download,
+  Share2
 } from 'lucide-react';
 import type { Protocol } from '../../types';
 
@@ -22,6 +23,7 @@ interface ProtocolCardProps {
   onEditProtocol: (protocolId: string) => void;
   onDuplicateProtocol: (protocolId: string) => void;
   onExportProtocol: (protocolId: string) => void;
+  onShareProtocol?: (protocolId: string) => void;
   onDeleteProtocol: (protocolId: string) => void;
   onToggleEnabled: (protocolId: string, enabled: boolean) => void;
 }
@@ -34,6 +36,7 @@ export function ProtocolCard({
   onEditProtocol,
   onDuplicateProtocol,
   onExportProtocol,
+  onShareProtocol,
   onDeleteProtocol,
   onToggleEnabled
 }: ProtocolCardProps) {
@@ -109,6 +112,19 @@ export function ProtocolCard({
                 <Copy className="w-3.5 h-3.5 mr-1" />
                 Clonar
               </Button>
+
+              {onShareProtocol && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onShareProtocol(protocol.id)}
+                  className="h-9 w-9 text-muted-foreground/70 hover:text-primary hover:bg-primary/10 rounded-xl"
+                  title="Compartilhar Protocolo (Link / QR Code)"
+                >
+                  <Share2 className="w-4 h-4" />
+                </Button>
+              )}
 
               <Button
                 type="button"

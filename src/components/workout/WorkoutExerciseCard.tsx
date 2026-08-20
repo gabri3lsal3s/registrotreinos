@@ -19,12 +19,14 @@ import {
   Sparkles,
   History,
   Pin,
-  Edit2
+  Edit2,
+  ArrowLeftRight
 } from 'lucide-react';
-import type { ExerciseCategory, WorkoutSetType } from '../../types';
+import type { ExerciseCategory, UniqueExercise, WorkoutSetType } from '../../types';
 import { triggerHaptic, playAudioCue } from '../../utils/sensoryFeedback';
 import { WorkoutSetRow, type SetInputData } from './WorkoutSetRow';
 import { ExerciseHistoryModal } from './ExerciseHistoryModal';
+import { SwapExerciseModal } from './SwapExerciseModal';
 
 export type { SetInputData };
 
@@ -32,6 +34,8 @@ export interface WorkoutExerciseData {
   id: string;
   name: string;
   category?: ExerciseCategory;
+  multiplier?: number;
+  muscleGroup?: string;
   order: number;
   lastWeight?: number;
   lastReps?: number;
@@ -47,6 +51,7 @@ interface WorkoutExerciseCardProps {
   exIdx: number;
   isExpanded: boolean;
   userId?: string;
+  library?: UniqueExercise[];
   onToggleExpand: () => void;
   onToggleSet: (exIdx: number, setIdx: number) => void;
   onUpdateSetData: (exIdx: number, setIdx: number, field: 'weight' | 'reps', value: string) => void;
@@ -54,6 +59,7 @@ interface WorkoutExerciseCardProps {
   onDeleteExtraExercise?: (exId: string, name: string) => void;
   onUpdatePinnedNotes?: (exId: string, notes: string) => void;
   onOpenPlateCalculator?: (exIdx: number, setIdx: number, currentWeight: number) => void;
+  onSwapExercise?: (exIdx: number, newEx: { name: string; muscleGroup: string; category: ExerciseCategory; multiplier?: number }) => void;
   truePR?: { weight: number; reps: number };
 }
 
@@ -62,6 +68,7 @@ export function WorkoutExerciseCard({
   exIdx,
   isExpanded,
   userId,
+  library,
   onToggleExpand,
   onToggleSet,
   onUpdateSetData,
@@ -69,11 +76,13 @@ export function WorkoutExerciseCard({
   onDeleteExtraExercise,
   onUpdatePinnedNotes,
   onOpenPlateCalculator,
+  onSwapExercise,
   truePR
 }: WorkoutExerciseCardProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [notesDialogOpen, setNotesDialogOpen] = useState(false);
+  const [swapModalOpen, setSwapModalOpen] = useState(false);
   const [tempNotes, setTempNotes] = useState(exercise.pinnedNotes || '');
 
   const completedCount = exercise.completedSets.filter(Boolean).length;
@@ -191,7 +200,24 @@ export function WorkoutExerciseCard({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0">
+              {onSwapExercise && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    triggerHaptic('light');
+                    setSwapModalOpen(true);
+                  }}
+                  className="h-8 w-8 text-muted-foreground/60 hover:text-amber-500 hover:bg-amber-500/10"
+                  title="Substituir aparelho/exercício"
+                >
+                  <ArrowLeftRight className="w-4 h-4" />
+                </Button>
+              )}
+
               {exercise.isSessionOnly && onDeleteExtraExercise && (
                 <Button
                   type="button"
@@ -324,6 +350,19 @@ export function WorkoutExerciseCard({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de Substituição de Exercício */}
+      {onSwapExercise && (
+        <SwapExerciseModal
+          isOpen={swapModalOpen}
+          onClose={() => setSwapModalOpen(false)}
+          currentExerciseName={exercise.name}
+          muscleGroup={exercise.muscleGroup}
+          category={exercise.category}
+          userLibrary={library}
+          onConfirmSwap={(newEx) => onSwapExercise(exIdx, newEx)}
+        />
+      )}
 
       {/* Confirmação de exclusão de exercício extra */}
       <ConfirmDialog

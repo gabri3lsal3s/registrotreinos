@@ -18,14 +18,17 @@ import { parseLocaleNumber } from '../utils/workoutMath';
 import { fullSync, deleteRemoteItem } from '../services/syncService';
 import type { Protocol, Exercise, ExerciseCategory } from '../types';
 import { Button } from "@/components/ui/button";
-import { Plus, ClipboardList, Upload, Dumbbell } from "lucide-react";
+import { Plus, ClipboardList, Upload, Dumbbell, Sparkles } from "lucide-react";
 import { 
   ProtocolCard, 
   ProtocolBuilder, 
   ImportProtocolModal,
+  ShareProtocolModal,
+  StarterPacksModal,
   type BuilderExerciseItem 
 } from '../components/protocols';
 import { exportProtocolJSON } from '../services/protocolTransferService';
+import type { ProtocolWithExercises } from '../types';
 
 export default function ProtocolsPage() {
   const { user, syncStatus } = useAuth();
@@ -46,8 +49,11 @@ export default function ProtocolsPage() {
   const [saving, setSaving] = useState(false);
   const [editingProtocolId, setEditingProtocolId] = useState<string | null>(null);
 
-  // Import State
+  // Modais de Importação, Compartilhamento e Starter Packs
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isStarterPacksOpen, setIsStarterPacksOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [protocolToShare, setProtocolToShare] = useState<ProtocolWithExercises | null>(null);
 
   const loadProtocols = useCallback(async () => {
     if (!user) return;
@@ -191,6 +197,36 @@ export default function ProtocolsPage() {
     setIsImportModalOpen(false);
     await loadProtocols();
   };
+
+  const handleShareProtocol = async (protocolId: string) => {
+    const p = protocols.find(item => item.id === protocolId);
+    if (!p) return;
+    try {
+      const exs = await getExercisesByProtocol(p.id);
+      setProtocolToShare({
+        ...p,
+        exercises: exs
+      });
+      setIsShareModalOpen(true);
+    } catch (err) {
+      console.error('Erro ao preparar compartilhamento:', err);
+      toast.error('Erro ao carregar dados do protocolo para compartilhamento.');
+    }
+  };
+
+  // Suporte a importação direta via link descentralizado (?import_data=...)
+  useEffect(() => {
+    const importData = searchParams.get('import_data');
+    if (importData && user) {
+      try {
+        // Limpar o param da URL para evitar loops
+        setSearchParams({}, { replace: true });
+        setIsImportModalOpen(true);
+      } catch (e) {
+        console.error('Erro ao processar import_data:', e);
+      }
+    }
+  }, [searchParams, setSearchParams, user]);
 
   const handleDeleteProtocol = async (protocolId: string) => {
     if (!user) return;
@@ -412,22 +448,32 @@ export default function ProtocolsPage() {
           description="Gerencie seus planos de treino e rotinas semanais."
           icon={<Dumbbell className="w-5 h-5 text-primary" />}
           action={
-            <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
+            <div className="grid grid-cols-3 sm:flex sm:items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
+              <Button 
+                type="button"
+                variant="outline"
+                onClick={() => setIsStarterPacksOpen(true)}
+                className="h-11 px-2.5 sm:px-3.5 rounded-xl font-bold text-xs uppercase tracking-wider border-border/60 flex items-center justify-center gap-1.5"
+                title="Explorar Fichas Prontas"
+              >
+                <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                <span className="truncate">Templates</span>
+              </Button>
               <Button 
                 type="button"
                 variant="outline"
                 onClick={() => setIsImportModalOpen(true)}
-                className="h-11 px-3 sm:px-4 rounded-xl font-bold text-xs uppercase tracking-wider border-border/60 flex items-center justify-center gap-2"
+                className="h-11 px-2.5 sm:px-3.5 rounded-xl font-bold text-xs uppercase tracking-wider border-border/60 flex items-center justify-center gap-1.5"
               >
                 <Upload className="w-4 h-4 text-primary shrink-0" />
                 <span className="truncate">Importar</span>
               </Button>
               <Button 
                 onClick={handleOpenNewBuilder}
-                className="h-11 px-3.5 sm:px-5 rounded-xl font-bold text-xs uppercase tracking-wider bg-primary text-primary-foreground shadow-md shadow-primary/20 flex items-center justify-center gap-2"
+                className="h-11 px-3 sm:px-4 rounded-xl font-bold text-xs uppercase tracking-wider bg-primary text-primary-foreground shadow-md shadow-primary/20 flex items-center justify-center gap-1.5"
               >
                 <Plus className="w-4 h-4 shrink-0" />
-                <span className="truncate">Novo Protocolo</span>
+                <span className="truncate">Novo</span>
               </Button>
             </div>
           }
@@ -444,12 +490,23 @@ export default function ProtocolsPage() {
           <EmptyState
             icon={<ClipboardList className="w-8 h-8" />}
             title="Nenhum protocolo cadastrado"
-            description="Crie seu primeiro plano de treino ou importe uma planilha para começar a registrar suas sessões."
+            description="Crie seu primeiro plano de treino, adote um template pronto ou importe uma planilha para começar."
             action={
               <div className="flex flex-col sm:flex-row items-center gap-2">
-                <Button onClick={handleOpenNewBuilder} className="rounded-xl h-11 px-5">
+                <Button 
+                  onClick={() => setIsStarterPacksOpen(true)}
+                  className="rounded-xl h-11 px-5 bg-primary text-primary-foreground font-bold"
+                >
+                  <Sparkles className="w-4 h-4 mr-2 text-amber-300" />
+                  Ver Templates Prontos
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={handleOpenNewBuilder} 
+                  className="rounded-xl h-11 px-5 border-border/60"
+                >
                   <Plus className="w-4 h-4 mr-2" />
-                  Criar Primeiro Protocolo
+                  Criar do Zero
                 </Button>
                 <Button 
                   variant="outline" 
@@ -474,12 +531,33 @@ export default function ProtocolsPage() {
                 onEditProtocol={handleEditProtocol}
                 onDuplicateProtocol={handleDuplicateProtocol}
                 onExportProtocol={handleExportProtocol}
+                onShareProtocol={handleShareProtocol}
                 onDeleteProtocol={handleDeleteProtocol}
                 onToggleEnabled={(id, enabled) => handleToggleEnabled(id, enabled)}
               />
             ))}
           </div>
         )}
+
+        {/* Modal de Templates Consagrados (Starter Packs) */}
+        {user && (
+          <StarterPacksModal
+            isOpen={isStarterPacksOpen}
+            onClose={() => setIsStarterPacksOpen(false)}
+            userId={user.id}
+            onSuccess={() => loadProtocols()}
+          />
+        )}
+
+        {/* Modal de Compartilhamento de Protocolo (Link / QR Code) */}
+        <ShareProtocolModal
+          isOpen={isShareModalOpen}
+          onClose={() => {
+            setIsShareModalOpen(false);
+            setProtocolToShare(null);
+          }}
+          protocol={protocolToShare}
+        />
 
         {/* Modal de Importação Universal */}
         {user && (

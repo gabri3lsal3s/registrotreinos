@@ -615,6 +615,50 @@ export default function WorkoutPage() {
     }
   };
 
+  const handleSwapExercise = async (
+    exIdx: number,
+    newEx: { name: string; muscleGroup: string; category: ExerciseCategory; multiplier?: number }
+  ) => {
+    const currentEx = exercises[exIdx];
+    if (!currentEx) return;
+
+    const daySuffix = selectedDay ? ` (${selectedDay})` : '';
+    const fullName = `${newEx.name}${daySuffix}`;
+
+    try {
+      await updateExercise(currentEx.id, {
+        name: fullName,
+        muscleGroup: newEx.muscleGroup,
+        category: newEx.category,
+        multiplier: newEx.multiplier || 1.0
+      });
+
+      setExercises(prev => {
+        const next = [...prev];
+        next[exIdx] = {
+          ...next[exIdx],
+          name: fullName,
+          muscleGroup: newEx.muscleGroup,
+          category: newEx.category,
+          multiplier: newEx.multiplier || 1.0
+        };
+        return next;
+      });
+
+      if (user) {
+        const newPR = await getExercisePR(currentEx.id, user.id);
+        if (newPR) {
+          setTruePRs(prev => ({ ...prev, [currentEx.id]: { weight: newPR.weight, reps: newPR.reps } }));
+        }
+      }
+
+      toast.success(`Substituído por "${newEx.name}"`);
+    } catch (err) {
+      console.error('Erro ao substituir exercício:', err);
+      toast.error('Erro ao substituir exercício.');
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -684,6 +728,7 @@ export default function WorkoutPage() {
               exIdx={exIdx}
               isExpanded={expandedExercise === ex.id}
               userId={user?.id}
+              library={library}
               onToggleExpand={() => setExpandedExercise(expandedExercise === ex.id ? null : ex.id)}
               onToggleSet={handleSetToggle}
               onUpdateSetData={updateSetData}
@@ -691,6 +736,7 @@ export default function WorkoutPage() {
               onDeleteExtraExercise={handleDeleteExtraExercise}
               onUpdatePinnedNotes={handleUpdatePinnedNotes}
               onOpenPlateCalculator={handleOpenPlateCalculator}
+              onSwapExercise={handleSwapExercise}
               truePR={truePRs[ex.id]}
             />
           ))}
