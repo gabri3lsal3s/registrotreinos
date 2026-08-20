@@ -40,11 +40,16 @@ O **Registro de Treinos** é uma Progressive Web App (PWA) de alto desempenho fo
 1. **Sessão Ativa (`status: 'active'`)**:
    - O usuário pode ter apenas um treino ativo por protocolo ou globalmente.
    - Séries (`WorkoutSet`) são persistidas e atualizadas imediatamente a cada preenchimento/toggle de conclusão.
-2. **Histórico do Último Treino ("Ant: XXkg x YY")**:
+2. **Persistência de Foco e Resiliência Mobile (`Smart Focus`)**:
+   - **Preservação de Estado**: O exercício em execução permanece expandido mesmo após desligamento da tela do celular, suspensão de memória pelo sistema operacional (Android/iOS) ou renovação de token de autenticação.
+   - **Auto-Foco Inteligente**: Ao abrir ou restaurar um treino em andamento, o app foca automaticamente no primeiro exercício com séries pendentes.
+   - **Auto-Avanço Suave**: Ao concluir todas as séries do exercício atual, o card seguinte com séries pendentes é expandido automaticamente.
+   - **Limpeza Automática**: O estado do exercício ativo no `localStorage` é liberado ao finalizar ou cancelar o treino.
+3. **Histórico do Último Treino ("Ant: XXkg x YY")**:
    - A interface exibe a carga e repetições da última execução completada para guiar a progressão de sobrecarga.
-3. **Exercícios de Sessão (`isSessionOnly`)**:
+4. **Exercícios de Sessão (`isSessionOnly`)**:
    - Permite adicionar exercícios avulsos apenas na sessão atual sem alterar a estrutura fixa do protocolo salvo.
-4. **Finalização de Treino**:
+5. **Finalização de Treino**:
    - Ao concluir, o status passa para `'completed'`, o timestamp `finishedAt` é registrado e o estado de prontidão/biofeedback (sono, estresse, humor) é anexado.
 
 ### 2.4. Cálculos de Performance e Métricas de Análise

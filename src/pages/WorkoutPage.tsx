@@ -47,8 +47,30 @@ export default function WorkoutPage() {
   const [exercises, setExercises] = useState<WorkoutExerciseData[]>([]);
   const [truePRs, setTruePRs] = useState<Record<string, { weight: number; reps: number }>>({});
   const [loading, setLoading] = useState(true);
-  const [expandedExercise, setExpandedExercise] = useState<string | null>(null);
+  const [expandedExercise, setExpandedExercise] = useState<string | null>(() => {
+    if (!protocolId) return null;
+    try {
+      return localStorage.getItem(`workout_active_exercise_${protocolId}`);
+    } catch {
+      return null;
+    }
+  });
   const [activeWorkoutId, setActiveWorkoutId] = useState<string | null>(null);
+
+  const updateExpandedExercise = useCallback((exId: string | null) => {
+    setExpandedExercise(exId);
+    if (protocolId) {
+      try {
+        if (exId) {
+          localStorage.setItem(`workout_active_exercise_${protocolId}`, exId);
+        } else {
+          localStorage.removeItem(`workout_active_exercise_${protocolId}`);
+        }
+      } catch {
+        // Ignora erro de localStorage
+      }
+    }
+  }, [protocolId]);
 
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [availableDays, setAvailableDays] = useState<string[]>([]);
@@ -216,7 +238,33 @@ export default function WorkoutPage() {
 
         setExercises(dayExercises);
         if (dayExercises.length > 0) {
-          setExpandedExercise(dayExercises[0].id);
+          setExpandedExercise((prev) => {
+            let savedId: string | null = null;
+            if (protocolId) {
+              try {
+                savedId = localStorage.getItem(`workout_active_exercise_${protocolId}`);
+              } catch {}
+            }
+
+            // 1. Se já está aberto um exercício válido na lista atual, preserva
+            if (prev && dayExercises.some((ex) => ex.id === prev)) {
+              return prev;
+            }
+            // 2. Se há um ID persistido no localStorage válido para esta lista, usa ele
+            if (savedId && dayExercises.some((ex) => ex.id === savedId)) {
+              return savedId;
+            }
+            // 3. Foco Inteligente: Encontra o primeiro exercício que ainda possui séries pendentes
+            const pendingEx = dayExercises.find((ex) => ex.completedSets.some((done) => !done));
+            const chosenId = pendingEx ? pendingEx.id : dayExercises[0].id;
+
+            if (protocolId && chosenId) {
+              try {
+                localStorage.setItem(`workout_active_exercise_${protocolId}`, chosenId);
+              } catch {}
+            }
+            return chosenId;
+          });
         }
       } catch (err) {
         console.error(err);
@@ -226,7 +274,7 @@ export default function WorkoutPage() {
       }
     }
     loadWorkoutData();
-  }, [user, protocolId, selectedDay, navigate]);
+  }, [user?.id, protocolId, selectedDay, navigate]);
 
   useEffect(() => {
     if (isLibraryOpen && user) {
@@ -295,6 +343,17 @@ export default function WorkoutPage() {
 
         // Dispara o Rest Timer na dock automaticamente
         setTimerTrigger(Date.now());
+
+        // Auto-avanço inteligente: se todas as séries do exercício atual foram concluídas, avança para o próximo pendente
+        const allDone = exercise.completedSets.every(Boolean);
+        if (allDone) {
+          const nextPending = newExercises.slice(exIdx + 1).find((e) => e.completedSets.some((done) => !done));
+          if (nextPending) {
+            setTimeout(() => {
+              updateExpandedExercise(nextPending.id);
+            }, 300);
+          }
+        }
       } else {
         const existingSet = await db.workoutSets
           .where({ 
@@ -411,7 +470,7 @@ export default function WorkoutPage() {
       };
 
       setExercises([...exercises, newEx]);
-      setExpandedExercise(newExId);
+      updateExpandedExercise(newExId);
       setIsConfigOpen(false);
       setConfigEx(null);
       setIsLibraryOpen(false);
@@ -449,7 +508,7 @@ export default function WorkoutPage() {
       });
 
       setExercises(prev => prev.filter(ex => ex.id !== exId));
-      if (expandedExercise === exId) setExpandedExercise(null);
+      if (expandedExercise === exId) updateExpandedExercise(null);
       
       toast.success('Exercício removido.');
     } catch (err) {
@@ -459,6 +518,12 @@ export default function WorkoutPage() {
   };
 
   const confirmCancelWorkout = async () => {
+    if (protocolId) {
+      try {
+        localStorage.removeItem(`workout_active_exercise_${protocolId}`);
+      } catch {}
+    }
+
     if (!activeWorkoutId) {
       navigate(-1);
       return;
@@ -583,6 +648,12 @@ export default function WorkoutPage() {
       fullSync().catch((err) => {
         console.warn('[Sync] Sincronização em background adiada:', err);
       });
+
+      if (protocolId) {
+        try {
+          localStorage.removeItem(`workout_active_exercise_${protocolId}`);
+        } catch {}
+      }
 
       toast.success('Treino finalizado e salvo com sucesso!');
       setIsFinishModalOpen(false);
@@ -731,7 +802,7 @@ export default function WorkoutPage() {
               isExpanded={expandedExercise === ex.id}
               userId={user?.id}
               library={library}
-              onToggleExpand={() => setExpandedExercise(expandedExercise === ex.id ? null : ex.id)}
+              onToggleExpand={() => updateExpandedExercise(expandedExercise === ex.id ? null : ex.id)}
               onToggleSet={handleSetToggle}
               onUpdateSetData={updateSetData}
               onUpdateSetType={updateSetType}
