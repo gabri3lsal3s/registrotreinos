@@ -24,10 +24,13 @@ O **Registro de Treinos** segue uma arquitetura **Offline-First Absoluta**, gara
 2. **Fila de Tombstones de Exclusão**: Exclusões offline geram um registro em `pendingDeletions` (`table, recordId, userId`), expurgado no Supabase antes do PULL para evitar que itens excluídos ressuscitem.
 3. **Ciclo PUSH -> PULL com Web Locks & Chunking**:
    - `fullSync()` solicita a trava de sistema `'workout_sync_mutex'` (Web Locks API) com fallback em memória, garantindo isolamento entre múltiplas abas abertas.
-   - `syncData()`: Despacha tombstones, particiona payloads massivos em lotes de até 100 registros (`batchUpsert`) e marca `isSynced: true` atomicamente.
+   - `syncData()`: Despacha tombstones, particiona payloads massivos em lotes de até 100 registros (`batchUpsert`), pré-valida e envia entidades ancestrais (protocolos e treinos pais) e marca `isSynced: true` progressivamente tabela por tabela conforme cada lote é confirmado pelo servidor.
    - `pullData()`: Realiza o PULL de dados remotos para o IndexedDB sem sobrescrever modificações locais não sincronizadas (`!local || local.isSynced`) e filtrando registros marcados para exclusão.
-4. **Auto-Retry com Exponential Backoff & Jitter**: Tolerância a micro-quedas de sinal com até 3 retentativas progressivas automáticas.
-5. **Background Heartbeat Sync**: Temporizador em segundo plano ativo a cada 3 minutos para salvaguarda contínua de treinos longos.
+4. **Auto-Healing de Esquema & Resiliência a Desvios de Schema Remoto**:
+   - Em caso de incompatibilidades de colunas no PostgREST (ex: colunas ausentes em instâncias com migrações parciais), o `batchUpsert` detecta os erros em tempo real, expurga dinamicamente as colunas incompatíveis do lote na memória e retenta o envio sem abortar a sincronização.
+   - Preenchimento canônico obrigatório de `date_key` (`YYYY-MM-DD`) e fallbacks inteligentes de integridade referencial para `protocol_id` e `exercise_id`.
+5. **Auto-Retry com Exponential Backoff & Jitter**: Tolerância a micro-quedas de sinal com até 3 retentativas progressivas automáticas.
+6. **Background Heartbeat Sync**: Temporizador em segundo plano ativo a cada 3 minutos para salvaguarda contínua de treinos longos.
 
 ---
 

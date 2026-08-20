@@ -130,5 +130,10 @@ Este documento registra a evolução do **Registro de Treinos**, cobrindo todas 
    - Divisão de payloads massivos (ex: importação de centenas de séries) em lotes de até 100 itens por requisição, evitando limites de tamanho de payload HTTP (413 Payload Too Large) no PostgREST.
 5. **Background Heartbeat Sync**:
    - Temporizador em segundo plano ativo a cada 3 minutos quando a aba está visível e conectada, garantindo salvaguarda em tempo real de treinos longos sem depender de cliques manuais.
+6. **Auto-Healing Dinâmico de Esquema Remoto (`syncService.ts`)**:
+   - Loop adaptativo no `batchUpsert` capaz de interceptar e expurgar em tempo de execução colunas incompatíveis ou ausentes no banco remoto (ex: `stress_level`, `sleep_quality`, etc.) sem falhar o lote.
+   - Sanitização de campo canônico obrigatório `date_key` (`YYYY-MM-DD`) para `workouts`, `workout_sets` e `body_weights`.
+7. **Sincronização Progressiva com Persistência Imediata**:
+   - Atualização imediata do status `isSynced: true` no Dexie para cada tabela bem-sucedida (`protocols` -> `exercises` -> `workouts` -> `workout_sets` -> `body_weights`), eliminando perda de progresso durante uploads incrementais.
 
 
