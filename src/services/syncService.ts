@@ -178,46 +178,53 @@ async function batchUpsert(table: string, items: Record<string, unknown>[], chun
     let chunk = items.slice(i, i + chunkSize);
     
     await withRetry(async () => {
-      let res = await supabase.from(table).upsert(chunk);
+      let attempts = 15;
+      while (attempts > 0) {
+        attempts--;
+        const res = await supabase.from(table).upsert(chunk);
 
-      // Tratamento auto-reparável de erros de esquema (colunas ausentes no banco remoto)
-      if (res.error && res.error.message) {
-        const missingColumnMatch = res.error.message.match(/Could not find the '([^']+)' column/) ||
-                                   res.error.message.match(/column "([^"]+)" of relation "[^"]+" does not exist/);
+        if (!res.error) {
+          return; // Sucesso absoluto!
+        }
+
+        const msg = res.error.message || '';
+
+        // 1. Tratamento de colunas ausentes no banco remoto (PostgREST schema mismatch)
+        const missingColumnMatch = msg.match(/Could not find the '([^']+)' column/) ||
+                                   msg.match(/column "([^"]+)" of relation "[^"]+" does not exist/);
         if (missingColumnMatch && missingColumnMatch[1]) {
           const badCol = missingColumnMatch[1];
-          console.warn(`[Sync] Coluna '${badCol}' não existe no Supabase para '${table}'. Auto-reparando payload...`);
+          console.warn(`[Sync] Coluna '${badCol}' não existe no Supabase para '${table}'. Auto-reparando e tentando novamente...`);
           chunk = chunk.map(item => {
             const copy = { ...item };
             delete copy[badCol];
             return copy;
           });
-          res = await supabase.from(table).upsert(chunk);
+          continue; // Retenta o upsert imediatamente sem a coluna incompatível
         }
 
-        // Tratamento auto-reparável de integridade referencial de exercício em workout_sets
-        if (res.error && table === 'workout_sets' && (res.error.message.includes('foreign key constraint') || res.error.message.includes('violates foreign key'))) {
-          console.warn(`[Sync] Foreign Key em workout_sets. Salvando séries com exercise_id nulo para preservar integridade...`);
+        // 2. Tratamento de chave estrangeira em workout_sets
+        if (table === 'workout_sets' && (msg.includes('foreign key constraint') || msg.includes('violates foreign key'))) {
+          console.warn(`[Sync] Foreign Key em workout_sets. Salvando séries com exercise_id nulo para preservar dados...`);
           chunk = chunk.map(item => ({
             ...item,
             exercise_id: null
           }));
-          res = await supabase.from(table).upsert(chunk);
+          continue;
         }
 
-        // Tratamento auto-reparável de integridade referencial de protocolo em workouts
-        if (res.error && table === 'workouts' && (res.error.message.includes('foreign key constraint') || res.error.message.includes('violates foreign key'))) {
+        // 3. Tratamento de chave estrangeira em workouts
+        if (table === 'workouts' && (msg.includes('foreign key constraint') || msg.includes('violates foreign key'))) {
           console.warn(`[Sync] Foreign Key em workouts. Salvando treinos com protocol_id nulo para preservar dados...`);
           chunk = chunk.map(item => ({
             ...item,
             protocol_id: null
           }));
-          res = await supabase.from(table).upsert(chunk);
+          continue;
         }
-      }
 
-      if (res.error) {
-        throw new Error(`Erro ao subir ${table} (lote ${Math.floor(i / chunkSize) + 1}): ${res.error.message}`);
+        // Se for outro tipo de erro irrecuperável, lança para o withRetry
+        throw new Error(`Erro ao subir ${table} (lote ${Math.floor(i / chunkSize) + 1}): ${msg}`);
       }
     });
   }
