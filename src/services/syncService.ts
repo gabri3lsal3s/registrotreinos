@@ -23,6 +23,7 @@ const toSnake = (obj: Record<string, unknown>): Record<string, unknown> => {
     daysOfWeek: 'days_of_week',
     updatedAt: 'updated_at',
     dayOfWeek: 'day_of_week',
+    day: 'day',
     isArchived: 'is_archived',
     category: 'category',
     multiplier: 'multiplier',
@@ -39,6 +40,14 @@ const toSnake = (obj: Record<string, unknown>): Record<string, unknown> => {
     }
     newObj[mapping[key] || key] = value;
   }
+
+  // Garantir redundância de dia para exercises
+  if (obj.dayOfWeek || obj.day) {
+    const dayVal = (obj.dayOfWeek || obj.day) as string;
+    newObj.day_of_week = dayVal;
+    newObj.day = dayVal;
+  }
+
   return newObj;
 };
 
@@ -62,6 +71,7 @@ const toCamel = <T = Record<string, unknown>>(obj: Record<string, unknown>): T =
     days_of_week: 'daysOfWeek',
     updated_at: 'updatedAt',
     day_of_week: 'dayOfWeek',
+    day: 'dayOfWeek',
     is_archived: 'isArchived',
     category: 'category',
     multiplier: 'multiplier',
@@ -70,17 +80,10 @@ const toCamel = <T = Record<string, unknown>>(obj: Record<string, unknown>): T =
   const newObj: Record<string, unknown> = {};
   for (const key in obj) {
     let value = obj[key];
-    // Força todos os campos de data para number (timestamp em ms)
-    if ([
-      'created_at', 'finished_at', 'timestamp', 'date', 'updated_at'
-    ].includes(key)) {
-      if (typeof value === 'string') {
-        const parsed = Date.parse(value);
-        if (!isNaN(parsed)) value = parsed;
-        else if (!isNaN(Number(value))) value = Number(value);
-      } else if (typeof value === 'bigint' || typeof value === 'number') {
-        value = Number(value);
-      }
+    // Converter ISO string para timestamps numéricos (Dexie)
+    if (['created_at', 'finished_at', 'timestamp', 'date', 'updated_at'].includes(key) && typeof value === 'string') {
+      const parsed = new Date(value).getTime();
+      if (!isNaN(parsed)) value = parsed;
     }
     newObj[mapping[key] || key] = value;
   }
@@ -89,24 +92,31 @@ const toCamel = <T = Record<string, unknown>>(obj: Record<string, unknown>): T =
 
 let isSyncing = false;
 
-export async function syncData() {
-  const { user, setSyncStatus } = useAuthStore.getState();
-  if (!user) throw new Error('Usuário não autenticado');
+export const setSyncStatus = (status: 'pending' | 'syncing' | 'synced' | 'error') => {
+  useAuthStore.getState().setSyncStatus(status);
+};
+
+export async function syncData(): Promise<{ success: boolean }> {
+  const { user } = useAuthStore.getState();
+  if (!user) return { success: false };
 
   setSyncStatus('syncing');
 
   try {
-    // Pegar protocolos e treinos do usuário atual para isolar estritamente exercícios e séries
-    const userAllProtocols = await db.protocols.where('userId').equals(user.id).toArray();
-    const userProtocolIds = new Set(userAllProtocols.map(p => p.id));
-    const userAllWorkouts = await db.workouts.where('userId').equals(user.id).toArray();
-    const userWorkoutIds = new Set(userAllWorkouts.map(w => w.id));
+    // 1. Coleta e sanitização de dados locais não sincronizados COM ESCOPO DE USUÁRIO
+    const protocolsLocal = await db.protocols.where('userId').equals(user.id).and(p => !p.isSynced).toArray();
+    const workoutsLocal = await db.workouts.where('userId').equals(user.id).and(w => !w.isSynced).toArray();
+    
+    // Obter IDs dos protocolos do usuário para garantir isolamento em exercises
+    const userProtocols = await db.protocols.where('userId').equals(user.id).toArray();
+    const userProtocolIds = new Set(userProtocols.map(p => p.id));
+    const exercisesLocal = await db.exercises.filter(ex => userProtocolIds.has(ex.protocolId) && !ex.isSynced).toArray();
 
-    // Pegar apenas itens NÃO sincronizados (dirty) pertencentes ao usuário logado
-    const protocolsLocal = userAllProtocols.filter(p => !p.isSynced);
-    const workoutsLocal = userAllWorkouts.filter(w => !w.isSynced);
-    const exercisesLocal = await db.exercises.toCollection().filter(e => !e.isSynced && userProtocolIds.has(e.protocolId)).toArray();
-    const workoutSetsLocal = await db.workoutSets.toCollection().filter(s => !s.isSynced && userWorkoutIds.has(s.workoutId)).toArray();
+    // Obter IDs dos treinos do usuário para garantir isolamento em workoutSets
+    const userWorkouts = await db.workouts.where('userId').equals(user.id).toArray();
+    const userWorkoutIds = new Set(userWorkouts.map(w => w.id));
+    const workoutSetsLocal = await db.workoutSets.filter(set => userWorkoutIds.has(set.workoutId) && !set.isSynced).toArray();
+    
     const bodyWeightsLocal = await db.bodyWeights.where('userId').equals(user.id).and(b => !b.isSynced).toArray();
 
     if (protocolsLocal.length === 0 && workoutsLocal.length === 0 && exercisesLocal.length === 0 && workoutSetsLocal.length === 0 && bodyWeightsLocal.length === 0) {
@@ -175,24 +185,27 @@ export async function syncData() {
   }
 }
 
-export async function pullData() {
-  const { user, setSyncStatus } = useAuthStore.getState();
-  if (!user) return;
+export async function pullData(): Promise<{ success: boolean }> {
+  const { user } = useAuthStore.getState();
+  if (!user) return { success: false };
 
   setSyncStatus('syncing');
 
   try {
+    // 1. Buscar tudo do Supabase para ESTE usuário específico
     const [pRes, eRes, wRes, sRes, bwRes] = await Promise.all([
       supabase.from('protocols').select('*').eq('user_id', user.id),
       supabase.from('exercises').select('*').eq('user_id', user.id),
       supabase.from('workouts').select('*').eq('user_id', user.id),
       supabase.from('workout_sets').select('*').eq('user_id', user.id),
-      supabase.from('body_weights').select('*').eq('user_id', user.id)
+      supabase.from('body_weights').select('*').eq('user_id', user.id),
     ]);
 
-    if (pRes.error || eRes.error || wRes.error || sRes.error || bwRes.error) {
-      throw pRes.error || eRes.error || wRes.error || sRes.error || bwRes.error;
-    }
+    if (pRes.error) throw new Error(`PULL Protocols: ${pRes.error.message}`);
+    if (eRes.error) throw new Error(`PULL Exercises: ${eRes.error.message}`);
+    if (wRes.error) throw new Error(`PULL Workouts: ${wRes.error.message}`);
+    if (sRes.error) throw new Error(`PULL WorkoutSets: ${sRes.error.message}`);
+    if (bwRes.error) throw new Error(`PULL BodyWeights: ${bwRes.error.message}`);
 
     const remoteP = pRes.data || [];
     const remoteE = eRes.data || [];
@@ -202,7 +215,6 @@ export async function pullData() {
 
     await db.transaction('rw', [db.protocols, db.exercises, db.workouts, db.workoutSets, db.bodyWeights], async () => {
       // 1. Limpeza Inteligente com Isolamento de Usuário
-      // Deletamos apenas o que já FOI sincronizado anteriormente mas não está mais na nuvem para ESTE usuário
       const remotePIds = remoteP.map(p => p.id);
       const remoteWIds = remoteW.map(w => w.id);
       const remoteEIds = remoteE.map(e => e.id);
@@ -237,7 +249,11 @@ export async function pullData() {
         const camel = toCamel<Exercise>(item);
         const local = await db.exercises.get(camel.id);
         if (!local || local.isSynced) {
-          await db.exercises.put({ ...camel, isSynced: true });
+          await db.exercises.put({
+            ...camel,
+            dayOfWeek: camel.dayOfWeek || (item as Record<string, unknown>).day as string || 'Segunda',
+            isSynced: true
+          });
         }
       }
 
@@ -256,7 +272,7 @@ export async function pullData() {
           await db.workoutSets.put({ ...camel, isSynced: true });
         }
       }
-      
+
       for (const item of remoteBW) {
         const camel = toCamel<BodyWeight>(item);
         const local = await db.bodyWeights.get(camel.id);
