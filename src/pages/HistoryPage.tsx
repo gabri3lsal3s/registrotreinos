@@ -12,8 +12,7 @@ import {
   updateExercise, 
   getBodyWeightsByUser, 
   updateBodyWeight, 
-  deleteBodyWeight,
-  getProtocolsByUser
+  deleteBodyWeight
 } from '../services/workoutDB';
 import { fullSync } from '../services/syncService';
 import { syncEventBus } from '../services/eventBus';
@@ -56,11 +55,11 @@ export default function HistoryPage() {
   const loadData = useCallback(async () => {
     if (!user) return;
     try {
-      const [workouts, weights, userProtocols, exercises] = await Promise.all([
+      const [workouts, weights, allUserProtocols, allUserExercises] = await Promise.all([
         getWorkoutHistory(user.id),
         getBodyWeightsByUser(user.id),
-        getProtocolsByUser(user.id),
-        db.exercises.where('userId').equals(user.id).filter(e => !e.isDeleted).toArray()
+        db.protocols.where('userId').equals(user.id).toArray(),
+        db.exercises.where('userId').equals(user.id).toArray()
       ]);
 
       const formattedWorkouts: WorkoutHistoryItem[] = workouts.map((w: Workout) => ({ ...w, type: 'workout' }));
@@ -69,16 +68,17 @@ export default function HistoryPage() {
       const mixed: HistoryItem[] = [...formattedWorkouts, ...formattedWeights].sort((a, b) => b.date - a.date);
       
       const pMap: Record<string, string> = {};
-      userProtocols.forEach((p: Protocol) => {
+      allUserProtocols.forEach((p: Protocol) => {
         pMap[p.id] = p.name;
       });
 
       const exMap: Record<string, Exercise> = {};
-      exercises.forEach((ex: Exercise) => {
+      allUserExercises.forEach((ex: Exercise) => {
         exMap[ex.id] = ex;
       });
       
-      setProtocols(userProtocols);
+      const activeProtocols = allUserProtocols.filter(p => !p.isDeleted);
+      setProtocols(activeProtocols);
       setProtocolsMap(pMap);
       setExercisesMap(exMap);
       setHistory(mixed);

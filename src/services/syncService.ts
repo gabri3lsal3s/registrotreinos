@@ -8,10 +8,10 @@ import type { Protocol, Exercise, Workout, WorkoutSet, BodyWeight } from '../typ
 // HELPERS DE FORMATAÇÃO E SANITIZAÇÃO DE DADOS
 // ============================================================================
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isValidUUID(id: unknown): boolean {
-  return typeof id === 'string' && UUID_REGEX.test(id);
+  return typeof id === 'string' && UUID_REGEX.test(id.trim());
 }
 
 export function toSafeISOString(val: unknown): string {
@@ -133,7 +133,7 @@ export function sanitizeWorkoutForRemote(
     updated_at: toSafeISOString(w.updatedAt || w.finishedAt || w.date)
   };
 
-  if (w.protocolId && isValidUUID(w.protocolId)) payload.protocol_id = w.protocolId;
+  if (w.protocolId) payload.protocol_id = w.protocolId;
   if (w.finishedAt) payload.finished_at = toNullableSafeISOString(w.finishedAt);
   if (moodVal !== null) payload.mood = moodVal;
   if (typeof w.sleepQuality === 'number' && !isNaN(w.sleepQuality)) payload.sleep_quality = w.sleepQuality;
@@ -154,7 +154,7 @@ export function sanitizeWorkoutSetForRemote(
     id: set.id,
     user_id: userId,
     workout_id: set.workoutId,
-    exercise_id: set.exerciseId && isValidUUID(set.exerciseId) ? set.exerciseId : null,
+    exercise_id: set.exerciseId || null,
     date_key: isoTimestamp.slice(0, 10),
     set_index: typeof set.setIndex === 'number' && !isNaN(set.setIndex) ? set.setIndex : 0,
     weight: typeof set.weight === 'number' && !isNaN(set.weight) ? set.weight : 0,
@@ -531,7 +531,12 @@ export async function pullData(forceFull = false): Promise<{ success: boolean }>
         const localUpdated = Number(local?.updatedAt) || Number(local?.date) || 0;
 
         if (!local || local.isSynced || remoteUpdated >= localUpdated) {
-          await db.workouts.put({ ...camel, userId: user.id, isSynced: true });
+          await db.workouts.put({
+            ...camel,
+            protocolId: camel.protocolId || local?.protocolId || '',
+            userId: user.id,
+            isSynced: true
+          });
         }
       }
 
@@ -543,7 +548,12 @@ export async function pullData(forceFull = false): Promise<{ success: boolean }>
         const localUpdated = Number(local?.updatedAt) || Number(local?.timestamp) || 0;
 
         if (!local || local.isSynced || remoteUpdated >= localUpdated) {
-          await db.workoutSets.put({ ...camel, userId: user.id, isSynced: true });
+          await db.workoutSets.put({
+            ...camel,
+            exerciseId: camel.exerciseId || local?.exerciseId || '',
+            userId: user.id,
+            isSynced: true
+          });
         }
       }
 
