@@ -158,3 +158,22 @@ Este documento registra a evolução do **Registro de Treinos**, cobrindo todas 
 4. **Barramento Reativo de Eventos & Invalidação Instantânea (`eventBus.ts` + `useDataReactivity.ts`)**:
    - Emissão de eventos tipados (`DATA_MUTATED`, `SYNC_COMPLETED`) em qualquer mutação ou sync.
    - `AnalysisPage.tsx`, `HistoryPage.tsx` e `Dashboard.tsx` auto-recalculam métricas, gráficos de volume, 1RM e linha do tempo de forma reativa e fluida, sem necessidade de refresh manual.
+
+---
+
+### 🛡️ Nível 14.1: Blindagem de Integridade Relacional, Validação Canônica UUID e Normalização Cross-Platform
+*Objetivo: Assegurar preservação total de vínculos entre treinos e protocolos, compatibilidade estrita com UUID RFC-4122 e normalização temporal entre IndexedDB e Supabase.*
+
+1. **Correção Canônica de Validação UUID RFC-4122 (`syncService.ts`)**:
+   - Atualizado `UUID_REGEX` para o formato canônico de 5 grupos (`8-4-4-4-12`), eliminando o descarte indevido de `protocol_id` e `exercise_id` no envio ao Supabase.
+   - Preservação estrita dos identificadores locais em caso de reconciliação com registros remotos sem chave.
+2. **Normalização Universal de Datas e Timestamps (`toTimestamp` em `workoutMath.ts`)**:
+   - Conversão transparente de strings ISO 8601, instâncias de `Date` ou epoch ms para garantir comparações numéricas confiáveis em consultas de período no `analysisService.ts` e `Dashboard.tsx`.
+3. **Consistência Semanal Corrente no Dashboard (`ConsistencyGrid.tsx` & `Dashboard.tsx`)**:
+   - Cálculo delimitado da semana ativa (Domingo 00:00 a Sábado 23:59) e mapeamento dinâmico de `DayKey` (`sun`..`sat`) com destaque visual ativo.
+4. **Auto-Healing Dinâmico e Higienização de Payloads**:
+   - Remoção de colunas legadas (`is_archived`, `day`, `timestamp`) nos payloads remotos e auto-recuperação resiliente caso o schema remoto discorde.
+5. **Prevenção de Colisão no Supabase Auth em Multi-Aba**:
+   - Bypass customizado de travamento de token (`auth: { lock: ... }`) evitando `LockAcquireTimeoutError` no carregamento concorrente.
+6. **Detecção de Dispositivo Novo / Base Local Vazia**:
+   - PULL inteligente que força download completo histórico caso o cliente local não possua dados ou tenha cursor defasado.

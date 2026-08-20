@@ -43,10 +43,16 @@ O **Registro de Treinos** segue uma arquitetura **Offline-First Absoluta**, gara
    - As exclusões se propagam deterministicamente sem o risco de ressurreição em outros dispositivos.
 5. **Barramento Reativo de Eventos (`syncEventBus` + `useDataReactivity`)**:
    - Mutações locais e conclusões de sincronização disparam eventos tipados que invalidam o cache e recalcula imediatamente gráficos, volume, 1RM e histórico sem necessidade de recarregar a página.
-6. **Controle de Concorrência Multi-Aba (Web Locks API)**:
+6. **Controle de Concorrência Multi-Aba (Web Locks API & Auth Lock Bypass)**:
    - O ciclo completo de sincronização obtém a trava `'workout_sync_mutex'` com `{ ifAvailable: true }`, evitando execuções redundantes entre abas abertas simultaneamente.
+   - Cliente Supabase configurado com bypass de lock no refresh de token para prevenir `LockAcquireTimeoutError` em mobile e PWAs com múltiplas abas.
 7. **Auto-Retry com Exponential Backoff & Jitter**: Tolerância a micro-quedas de sinal com até 3 retentativas progressivas automáticas.
 8. **Background Heartbeat Sync**: Temporizador em segundo plano ativo a cada 3 minutos para salvaguarda contínua de treinos longos.
+9. **Integridade de Chaves UUID RFC-4122 e Preservação de Vínculos**:
+   - Validação canônica de 5 grupos (`8-4-4-4-12`) assegurando que `protocol_id` e `exercise_id` trafeguem intactos entre cliente e nuvem.
+   - Reconciliação com salvaguarda local em caso de resposta remota omissa.
+10. **Normalização Universal de Datas (`toTimestamp`)**:
+    - Padronização em epoch ms para todas as comparações temporais no motor de análise e grade de consistência, mitigando discrepâncias entre strings ISO do PostgreSQL e números do IndexedDB.
 
 ---
 

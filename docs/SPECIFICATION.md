@@ -63,8 +63,11 @@ O **Registro de Treinos** é uma Progressive Web App (PWA) de alto desempenho fo
      $$\text{e1RM} = \text{Carga Equivalente} \times \left(1 + \frac{\text{Reps}}{30}\right)$$
 3. **Força Relativa**:
    $$\text{Força Relativa} = \frac{\text{e1RM}}{\text{Peso Corporal}}$$
-4. **Consistência Semanal**:
-   - Cálculo baseado no total de treinos concluídos nos últimos 7 dias em relação à meta cadastrada (default: 4 dias/semana).
+4. **Consistência Semanal Corrente**:
+   - Cálculo baseado nos treinos concluídos no intervalo da semana ativa (de Domingo 00:00:00 a Sábado 23:59:59).
+   - Marcação diária individual mapeada por chave canônica de dia (`sun`, `mon`, `tue`, `wed`, `thu`, `fri`, `sat`) com meta configurável derivada dos protocolos ativos.
+5. **Resiliência e Normalização Temporal**:
+   - Todas as datas e timestamps de treinos, séries e pesagens são normalizados para timestamps inteiros UTC, prevenindo incoerências entre formatos de data de diferentes provedores.
 
 ---
 
