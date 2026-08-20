@@ -673,9 +673,38 @@ export async function pullData(): Promise<{ success: boolean }> {
           await db.bodyWeights.put({ ...camel, userId: user.id, isSynced: true });
         }
       }
+
+      // Reconciliação não-destrutiva de itens confirmados (isSynced === true) que foram apagados em outro dispositivo
+      const remoteWIds = new Set(rawRemoteW.map(w => w.id as string));
+      const localSyncedWorkouts = await db.workouts.where('userId').equals(user.id).and(w => w.isSynced === true).toArray();
+      for (const lw of localSyncedWorkouts) {
+        if (!remoteWIds.has(lw.id)) {
+          await db.workouts.delete(lw.id);
+          await db.workoutSets.where('workoutId').equals(lw.id).delete();
+        }
+      }
+
+      const remoteBWIds = new Set(rawRemoteBW.map(b => b.id as string));
+      const localSyncedBW = await db.bodyWeights.where('userId').equals(user.id).and(b => b.isSynced === true).toArray();
+      for (const lb of localSyncedBW) {
+        if (!remoteBWIds.has(lb.id)) {
+          await db.bodyWeights.delete(lb.id);
+        }
+      }
+
+      const remotePIds = new Set(rawRemoteP.map(p => p.id as string));
+      const localSyncedProtocols = await db.protocols.where('userId').equals(user.id).and(p => p.isSynced === true && !p.isArchived).toArray();
+      for (const lp of localSyncedProtocols) {
+        if (!remotePIds.has(lp.id)) {
+          await db.protocols.delete(lp.id);
+          await db.exercises.where('protocolId').equals(lp.id).delete();
+        }
+      }
     });
 
     setSyncStatus('synced');
+    window.dispatchEvent(new Event('refresh-workout-data'));
+    window.dispatchEvent(new Event('refresh-analysis'));
     return { success: true };
   } catch (err: unknown) {
     setSyncStatus('error');

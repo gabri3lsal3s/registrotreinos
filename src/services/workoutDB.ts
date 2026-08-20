@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import { getExerciseInfo } from '../utils/exerciseDictionary';
+import { useAuthStore } from './authStore';
 import type {
   Protocol,
   Exercise,
@@ -100,7 +101,7 @@ export async function updateProtocol(id: string, updates: Partial<Protocol>): Pr
 
 export async function deleteProtocol(id: string): Promise<void> {
   const protocol = await db.protocols.get(id);
-  const userId = protocol?.userId || '';
+  const userId = protocol?.userId || useAuthStore.getState().user?.id || '';
   const workoutsCount = await db.workouts.where('protocolId').equals(id).count();
   
   if (workoutsCount > 0) {
@@ -176,8 +177,9 @@ export async function updateBodyWeight(id: string, updates: Partial<BodyWeight>)
 
 export async function deleteBodyWeight(id: string): Promise<void> {
   const item = await db.bodyWeights.get(id);
-  if (item?.userId) {
-    await queuePendingDeletion('body_weights', id, item.userId);
+  const userId = item?.userId || useAuthStore.getState().user?.id || '';
+  if (userId) {
+    await queuePendingDeletion('body_weights', id, userId);
   }
   await db.bodyWeights.delete(id);
 }
@@ -227,7 +229,7 @@ export async function deleteExercise(id: string): Promise<void> {
   const exercise = await db.exercises.get(id);
   const protocol = exercise?.protocolId ? await db.protocols.get(exercise.protocolId) : undefined;
   const rawEx = exercise as unknown as Record<string, unknown> | undefined;
-  const userId = (rawEx?.userId as string | undefined) || protocol?.userId || '';
+  const userId = (rawEx?.userId as string | undefined) || protocol?.userId || useAuthStore.getState().user?.id || '';
 
   const setsCount = await db.workoutSets.where('exerciseId').equals(id).count();
   
@@ -285,7 +287,7 @@ export async function deleteWorkoutSet(id: string): Promise<void> {
   const set = await db.workoutSets.get(id);
   const workout = set?.workoutId ? await db.workouts.get(set.workoutId) : undefined;
   const rawSet = set as unknown as Record<string, unknown> | undefined;
-  const userId = (rawSet?.userId as string | undefined) || workout?.userId || '';
+  const userId = (rawSet?.userId as string | undefined) || workout?.userId || useAuthStore.getState().user?.id || '';
 
   if (userId) {
     await queuePendingDeletion('workout_sets', id, userId);
@@ -321,14 +323,14 @@ export async function getWorkoutHistory(userId: string): Promise<Workout[]> {
 
 export async function deleteWorkout(workoutId: string): Promise<void> {
   const workout = await db.workouts.get(workoutId);
-  const userId = workout?.userId || '';
+  const userId = workout?.userId || useAuthStore.getState().user?.id || '';
   const sets = await db.workoutSets.where('workoutId').equals(workoutId).toArray();
 
   if (userId) {
-    await queuePendingDeletion('workouts', workoutId, userId);
     for (const s of sets) {
       await queuePendingDeletion('workout_sets', s.id, userId);
     }
+    await queuePendingDeletion('workouts', workoutId, userId);
   }
 
   return db.transaction('rw', [db.workouts, db.workoutSets], async () => {

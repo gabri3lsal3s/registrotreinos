@@ -87,6 +87,15 @@ export default function HistoryPage() {
     if (user) {
       loadData();
     }
+    const handleRefresh = () => {
+      loadData();
+    };
+    window.addEventListener('refresh-workout-data', handleRefresh);
+    window.addEventListener('refresh-analysis', handleRefresh);
+    return () => {
+      window.removeEventListener('refresh-workout-data', handleRefresh);
+      window.removeEventListener('refresh-analysis', handleRefresh);
+    };
   }, [user, loadData]);
 
   const toggleExpand = async (workoutId: string) => {
