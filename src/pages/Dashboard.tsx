@@ -135,22 +135,27 @@ export default function Dashboard() {
         date: toTimestamp(w.date)
       }));
 
-      const completedKeys = allWorkouts.map(w => {
-        const d = new Date(w.date);
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      });
-      setCompletedDayKeys(completedKeys);
+      // Início e fim da semana corrente (Domingo 00:00 até Sábado 23:59)
+      const sundayStart = new Date(now);
+      sundayStart.setDate(now.getDate() - now.getDay());
+      sundayStart.setHours(0, 0, 0, 0);
 
-      // Calcular frequência semanal e mensal
-      const startOfWeek = new Date();
-      const day = startOfWeek.getDay();
-      const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
-      startOfWeek.setDate(diff);
-      startOfWeek.setHours(0, 0, 0, 0);
+      const saturdayEnd = new Date(sundayStart);
+      saturdayEnd.setDate(sundayStart.getDate() + 6);
+      saturdayEnd.setHours(23, 59, 59, 999);
+
+      const thisWeekWorkouts = allWorkouts.filter(w => {
+        return w.date >= sundayStart.getTime() && w.date <= saturdayEnd.getTime();
+      });
+
+      // Mapear os dias da semana concluídos nesta semana ('sun', 'mon', 'tue', etc.)
+      const thisWeekCompletedKeys = [...new Set(thisWeekWorkouts.map(w => {
+        const d = new Date(w.date);
+        return getDayKey(d);
+      }))];
+      setCompletedDayKeys(thisWeekCompletedKeys);
 
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-      const thisWeekWorkouts = allWorkouts.filter(w => w.date >= startOfWeek.getTime());
       const monthlyWorkouts = allWorkouts.filter(w => w.date >= startOfMonth.getTime()).length;
 
       let weeklyGoal = 0;
