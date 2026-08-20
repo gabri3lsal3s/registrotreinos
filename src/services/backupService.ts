@@ -247,6 +247,9 @@ export async function importBackupJSON(
 
   let totalImported = 0;
 
+  // Limpar qualquer tombstone de exclusão para evitar que registros restaurados sejam apagados
+  await db.pendingDeletions.where('userId').equals(userId).delete();
+
   await db.transaction('rw', [db.protocols, db.exercises, db.workouts, db.workoutSets, db.bodyWeights], async () => {
     if (mode === 'replace') {
       // Remover dados antigos do usuário no dispositivo

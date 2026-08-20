@@ -311,11 +311,12 @@ export async function getWorkoutSets(workoutId: string): Promise<WorkoutSet[]> {
 }
 
 export async function getWorkoutHistory(userId: string): Promise<Workout[]> {
-  return db.workouts
-    .where('userId').equals(userId)
-    .filter(w => w.status === 'completed')
-    .reverse()
-    .sortBy('date');
+  const list = await db.workouts
+    .where('userId')
+    .equals(userId)
+    .filter(w => w.status === 'completed' || !w.status)
+    .toArray();
+  return list.sort((a, b) => (Number(b.date) || 0) - (Number(a.date) || 0));
 }
 
 export async function deleteWorkout(workoutId: string): Promise<void> {

@@ -1,6 +1,6 @@
 // Service Worker — Registro de Treinos PWA
 // Estratégia: Cache First para assets hashed, Network First para navegação e API
-const CACHE_VERSION = 'v9';
+const CACHE_VERSION = 'v10';
 const STATIC_CACHE = `workout-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `workout-dynamic-${CACHE_VERSION}`;
 
