@@ -1,4 +1,3 @@
-import React from 'react';
 import { getMuscleGroupMeta } from '../../utils/muscleGroupMetadata';
 
 export interface MuscleGroupIconProps {
