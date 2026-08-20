@@ -15,7 +15,6 @@ import {
   ChevronDown, 
   ChevronUp, 
   Trash2, 
-  Dumbbell, 
   Sparkles,
   History,
   Pin,
