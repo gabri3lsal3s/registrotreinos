@@ -362,3 +362,99 @@ export async function getUniqueExercisesLibrary(userId: string): Promise<UniqueE
 
   return Array.from(unique.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
+
+export interface ExerciseSessionHistoryItem {
+  workoutId: string;
+  date: number;
+  protocolName?: string;
+  sets: WorkoutSet[];
+  bestWeight: number;
+  bestReps: number;
+  estimated1RM: number;
+  totalVolume: number;
+}
+
+/**
+ * Retorna as últimas N sessões em que um exercício foi realizado pelo usuário com métricas consolidadas.
+ */
+export async function getExerciseSessionHistory(
+  userId: string,
+  exerciseName: string,
+  limit = 5
+): Promise<ExerciseSessionHistoryItem[]> {
+  // 1. Obter nome canônico
+  const canonicalName = getExerciseInfo(exerciseName).canonicalName.toLowerCase();
+
+  // 2. Buscar todos os exercícios com mesmo nome canônico do usuário
+  const userProtocols = await db.protocols.where('userId').equals(userId).toArray();
+  const protocolMap = new Map<string, string>();
+  userProtocols.forEach(p => protocolMap.set(p.id, p.name));
+  const protocolIds = Array.from(protocolMap.keys());
+
+  if (protocolIds.length === 0) return [];
+
+  const matchingExercises = await db.exercises
+    .where('protocolId')
+    .anyOf(protocolIds)
+    .toArray();
+
+  const matchingExerciseIds = new Set(
+    matchingExercises
+      .filter(ex => getExerciseInfo(ex.name).canonicalName.toLowerCase() === canonicalName)
+      .map(ex => ex.id)
+  );
+
+  if (matchingExerciseIds.size === 0) return [];
+
+  // 3. Buscar todos os treinos concluídos do usuário ordenados por data decrescente
+  const completedWorkouts = await db.workouts
+    .where('userId')
+    .equals(userId)
+    .filter(w => w.status === 'completed')
+    .reverse()
+    .sortBy('date');
+
+  const historyItems: ExerciseSessionHistoryItem[] = [];
+
+  for (const workout of completedWorkouts) {
+    if (historyItems.length >= limit) break;
+
+    const sets = await db.workoutSets
+      .where('workoutId')
+      .equals(workout.id)
+      .filter(s => matchingExerciseIds.has(s.exerciseId) && s.completed)
+      .toArray();
+
+    if (sets.length > 0) {
+      sets.sort((a, b) => a.setIndex - b.setIndex);
+
+      let bestWeight = 0;
+      let bestReps = 0;
+      let maxE1RM = 0;
+      let totalVolume = 0;
+
+      for (const s of sets) {
+        if (s.weight > bestWeight || (s.weight === bestWeight && s.reps > bestReps)) {
+          bestWeight = s.weight;
+          bestReps = s.reps;
+        }
+        const e1rm = s.weight * (1 + s.reps / 30);
+        if (e1rm > maxE1RM) maxE1RM = e1rm;
+        totalVolume += (s.weight || 0) * (s.reps || 0);
+      }
+
+      historyItems.push({
+        workoutId: workout.id,
+        date: workout.date,
+        protocolName: protocolMap.get(workout.protocolId) || 'Treino',
+        sets,
+        bestWeight,
+        bestReps,
+        estimated1RM: Math.round(maxE1RM * 10) / 10,
+        totalVolume
+      });
+    }
+  }
+
+  return historyItems;
+}

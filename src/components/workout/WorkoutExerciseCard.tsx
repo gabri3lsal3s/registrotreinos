@@ -2,17 +2,29 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from "@/components/ui/dialog";
 import { 
   ChevronDown, 
   ChevronUp, 
   Trash2, 
   Dumbbell, 
-  Sparkles
+  Sparkles,
+  History,
+  Pin,
+  Edit2
 } from 'lucide-react';
 import type { ExerciseCategory, WorkoutSetType } from '../../types';
-import { triggerHaptic } from '../../utils/sensoryFeedback';
+import { triggerHaptic, playAudioCue } from '../../utils/sensoryFeedback';
 import { WorkoutSetRow, type SetInputData } from './WorkoutSetRow';
+import { ExerciseHistoryModal } from './ExerciseHistoryModal';
 
 export type { SetInputData };
 
@@ -27,17 +39,21 @@ export interface WorkoutExerciseData {
   completedSets: boolean[];
   setsData: SetInputData[];
   isSessionOnly?: boolean;
+  pinnedNotes?: string;
 }
 
 interface WorkoutExerciseCardProps {
   exercise: WorkoutExerciseData;
   exIdx: number;
   isExpanded: boolean;
+  userId?: string;
   onToggleExpand: () => void;
   onToggleSet: (exIdx: number, setIdx: number) => void;
   onUpdateSetData: (exIdx: number, setIdx: number, field: 'weight' | 'reps', value: string) => void;
   onUpdateSetType?: (exIdx: number, setIdx: number, type: WorkoutSetType) => void;
   onDeleteExtraExercise?: (exId: string, name: string) => void;
+  onUpdatePinnedNotes?: (exId: string, notes: string) => void;
+  onOpenPlateCalculator?: (exIdx: number, setIdx: number, currentWeight: number) => void;
   truePR?: { weight: number; reps: number };
 }
 
@@ -45,14 +61,20 @@ export function WorkoutExerciseCard({
   exercise,
   exIdx,
   isExpanded,
+  userId,
   onToggleExpand,
   onToggleSet,
   onUpdateSetData,
   onUpdateSetType,
   onDeleteExtraExercise,
+  onUpdatePinnedNotes,
+  onOpenPlateCalculator,
   truePR
 }: WorkoutExerciseCardProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [notesDialogOpen, setNotesDialogOpen] = useState(false);
+  const [tempNotes, setTempNotes] = useState(exercise.pinnedNotes || '');
 
   const completedCount = exercise.completedSets.filter(Boolean).length;
   const isAllCompleted = completedCount === exercise.sets && exercise.sets > 0;
@@ -61,6 +83,26 @@ export function WorkoutExerciseCard({
   const handleHeaderClick = () => {
     triggerHaptic('medium');
     onToggleExpand();
+  };
+
+  const handleOpenHistory = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    triggerHaptic('medium');
+    playAudioCue('click');
+    setHistoryModalOpen(true);
+  };
+
+  const handleOpenNotes = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    triggerHaptic('light');
+    setTempNotes(exercise.pinnedNotes || '');
+    setNotesDialogOpen(true);
+  };
+
+  const handleSaveNotes = () => {
+    triggerHaptic('success');
+    onUpdatePinnedNotes?.(exercise.id, tempNotes.trim());
+    setNotesDialogOpen(false);
   };
 
   return (
@@ -102,8 +144,8 @@ export function WorkoutExerciseCard({
                   )}
                 </div>
 
-                {/* Informações de PR e progresso de séries */}
-                <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground font-mono">
+                {/* Informações de Séries, PR e Histórico Rápido */}
+                <div className="flex items-center gap-2.5 mt-1 text-xs text-muted-foreground font-mono flex-wrap">
                   <span>{completedCount}/{exercise.sets} séries</span>
                   {truePR && truePR.weight > 0 && (
                     <span className="flex items-center gap-1 text-primary font-bold">
@@ -111,7 +153,41 @@ export function WorkoutExerciseCard({
                       PR: {truePR.weight}kg × {truePR.reps}
                     </span>
                   )}
+
+                  {/* Botão de Histórico Inline */}
+                  {userId && (
+                    <button
+                      type="button"
+                      onClick={handleOpenHistory}
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground text-[10px] font-sans font-bold transition-colors"
+                      title="Ver histórico das últimas 5 sessões deste exercício"
+                    >
+                      <History className="w-3 h-3 text-primary" />
+                      Histórico
+                    </button>
+                  )}
                 </div>
+
+                {/* Pinned Notes / Regulagem Fixa de Aparelho */}
+                {exercise.pinnedNotes ? (
+                  <div 
+                    onClick={handleOpenNotes}
+                    className="flex items-center gap-1 mt-1.5 text-[11px] text-primary/90 hover:text-primary font-medium bg-primary/10 px-2 py-0.5 rounded-md w-fit cursor-pointer transition-colors"
+                  >
+                    <Pin className="w-3 h-3 rotate-45 shrink-0" />
+                    <span className="truncate max-w-[200px] sm:max-w-xs">{exercise.pinnedNotes}</span>
+                    <Edit2 className="w-2.5 h-2.5 opacity-60 ml-0.5" />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleOpenNotes}
+                    className="inline-flex items-center gap-1 mt-1.5 text-[10px] text-muted-foreground/70 hover:text-primary transition-colors"
+                  >
+                    <Pin className="w-2.5 h-2.5 rotate-45" />
+                    <span>+ Nota de regulagem</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -172,6 +248,7 @@ export function WorkoutExerciseCard({
                         onToggleSet={(idx) => onToggleSet(exIdx, idx)}
                         onUpdateSetData={(idx, field, val) => onUpdateSetData(exIdx, idx, field, val)}
                         onUpdateSetType={onUpdateSetType ? (idx, type) => onUpdateSetType(exIdx, idx, type) : undefined}
+                        onOpenPlateCalculator={onOpenPlateCalculator ? (idx, weight) => onOpenPlateCalculator(exIdx, idx, weight) : undefined}
                       />
                     ))}
                   </div>
@@ -181,6 +258,63 @@ export function WorkoutExerciseCard({
           </AnimatePresence>
         </Card>
       </motion.div>
+
+      {/* Modal de Histórico Inline das Últimas Sessões */}
+      {userId && (
+        <ExerciseHistoryModal
+          isOpen={historyModalOpen}
+          onClose={() => setHistoryModalOpen(false)}
+          userId={userId}
+          exerciseName={exercise.name}
+          truePR={truePR}
+        />
+      )}
+
+      {/* Dialog para Notas Fixas / Regulagem de Aparelho */}
+      <Dialog open={notesDialogOpen} onOpenChange={setNotesDialogOpen}>
+        <DialogContent className="max-w-sm w-[92vw] p-5 rounded-3xl bg-card border-border/70 shadow-2xl">
+          <DialogHeader>
+            <div className="flex items-center gap-2 mb-1">
+              <Pin className="w-4 h-4 text-primary rotate-45" />
+              <DialogTitle className="text-base font-bold text-foreground">
+                Regulagem Fixa ({displayName})
+              </DialogTitle>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Anotação persistente (ex: banco no furo 4, pegada aberta, polia altura 8).
+            </p>
+          </DialogHeader>
+
+          <div className="py-2">
+            <Input
+              type="text"
+              value={tempNotes}
+              onChange={(e) => setTempNotes(e.target.value)}
+              placeholder="Ex: Furo 3 do banco, pegada aberta"
+              className="h-11 rounded-xl bg-background border-border/60 text-sm font-medium"
+              autoFocus
+            />
+          </div>
+
+          <DialogFooter className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setNotesDialogOpen(false)}
+              className="flex-1 rounded-xl border-border/60"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSaveNotes}
+              className="flex-1 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold"
+            >
+              Salvar Nota
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Confirmação de exclusão de exercício extra */}
       <ConfirmDialog

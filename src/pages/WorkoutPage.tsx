@@ -33,6 +33,7 @@ import {
   ExerciseLibraryModal,
   ConfigExtraExerciseModal,
   WorkoutFinishModal,
+  PlateCalculatorModal,
   type WorkoutExerciseData,
   type ConfigExerciseState
 } from '../components/workout';
@@ -59,6 +60,9 @@ export default function WorkoutPage() {
   // Config Extra Exercise State
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [configEx, setConfigEx] = useState<ConfigExerciseState | null>(null);
+
+  // Plate Calculator State
+  const [plateCalcTarget, setPlateCalcTarget] = useState<{ exIdx: number; setIdx: number; weight: number } | null>(null);
 
   // Rest Timer State
   const [timerTrigger, setTimerTrigger] = useState(0);

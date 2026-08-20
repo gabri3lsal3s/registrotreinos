@@ -1,6 +1,6 @@
 // Service Worker — Registro de Treinos PWA
 // Estratégia: Cache First para assets hashed, Network First para navegação e API
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const STATIC_CACHE = `workout-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `workout-dynamic-${CACHE_VERSION}`;
 
@@ -10,8 +10,16 @@ const PRECACHE_ASSETS = [
   '/index.html',
   '/manifest.json',
   '/favicon.svg',
+  '/icon.svg',
+  '/maskable-icon.svg',
   '/icon-192.png',
   '/icon-512.png',
+  '/icons/pwa-192x192.png',
+  '/icons/pwa-512x512.png',
+  '/icons/pwa-192x192-maskable.png',
+  '/icons/pwa-512x512-maskable.png',
+  '/icons/apple-touch-icon.png',
+  '/icons/apple-touch-icon-180x180.png',
 ];
 
 // ─── Install: pré-cacheia assets fixos ─────────────────────────────────────

@@ -13,6 +13,7 @@ export interface Exercise {
   dayOfWeek?: string;
   lastWeight?: number;
   lastReps?: number;
+  pinnedNotes?: string; // Notas fixas de regulagem de aparelho, pegada, etc.
   isSynced?: boolean;
   isArchived?: boolean;
   isSessionOnly?: boolean;

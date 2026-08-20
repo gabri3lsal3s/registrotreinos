@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Input } from "@/components/ui/input";
-import { CheckCircle2, Circle } from 'lucide-react';
+import { CheckCircle2, Circle, Scale } from 'lucide-react';
 import type { ExerciseCategory, WorkoutSetType } from '../../types';
 import { triggerHaptic, playAudioCue } from '../../utils/sensoryFeedback';
 
@@ -20,6 +20,7 @@ interface WorkoutSetRowProps {
   onToggleSet: (setIdx: number) => void;
   onUpdateSetData: (setIdx: number, field: 'weight' | 'reps', value: string) => void;
   onUpdateSetType?: (setIdx: number, type: WorkoutSetType) => void;
+  onOpenPlateCalculator?: (setIdx: number, currentWeight: number) => void;
 }
 
 const SET_TYPES: { type: WorkoutSetType; label: string; bg: string; text: string; name: string }[] = [
@@ -37,7 +38,8 @@ export const WorkoutSetRow: React.FC<WorkoutSetRowProps> = ({
   category,
   onToggleSet,
   onUpdateSetData,
-  onUpdateSetType
+  onUpdateSetType,
+  onOpenPlateCalculator
 }) => {
   const currentSetType = setData.type || 'normal';
 
@@ -155,6 +157,17 @@ export const WorkoutSetRow: React.FC<WorkoutSetRowProps> = ({
           >
             +2
           </motion.button>
+          {onOpenPlateCalculator && category !== 'time' && (
+            <motion.button
+              whileTap={{ scale: 0.85 }}
+              type="button"
+              onClick={() => onOpenPlateCalculator(setIdx, parseFloat(setData.weight || '0') || 0)}
+              className="h-5 px-1.5 rounded bg-primary/15 hover:bg-primary/25 text-[10px] font-mono text-primary font-bold transition-colors flex items-center justify-center"
+              title="Calculadora de Anilhas"
+            >
+              <Scale className="w-3 h-3" />
+            </motion.button>
+          )}
         </div>
       </div>
 

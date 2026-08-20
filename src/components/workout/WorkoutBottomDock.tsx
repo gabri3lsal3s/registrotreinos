@@ -119,6 +119,15 @@ export function WorkoutBottomDock({
     }
   }, [isRunning]);
 
+  const handleSelectPreset = (sec: number) => {
+    triggerHaptic('medium');
+    playAudioCue('click');
+    setTotalSeconds(sec);
+    setRemainingSeconds(sec);
+    setEndTime(Date.now() + sec * 1000);
+    setIsRunning(true);
+  };
+
   const minutes = Math.floor(remainingSeconds / 60);
   const seconds = remainingSeconds % 60;
   const formattedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
@@ -253,6 +262,27 @@ export function WorkoutBottomDock({
                 </Button>
               )}
             </div>
+          </div>
+
+          {/* Presets Rápidos de Descanso de 1-Toque */}
+          <div className="flex items-center gap-1.5 pt-1.5 px-1 border-t border-border/30 overflow-x-auto no-scrollbar">
+            <span className="text-[9px] uppercase font-bold text-muted-foreground mr-0.5 shrink-0">
+              Presets:
+            </span>
+            {[30, 45, 60, 90, 120, 180].map((sec) => (
+              <button
+                key={sec}
+                type="button"
+                onClick={() => handleSelectPreset(sec)}
+                className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold shrink-0 transition-all active:scale-95 ${
+                  totalSeconds === sec && isRunning
+                    ? 'bg-primary text-primary-foreground font-black shadow-xs'
+                    : 'bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {sec}s
+              </button>
+            ))}
           </div>
         </div>
 

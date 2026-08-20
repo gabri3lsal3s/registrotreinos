@@ -21,7 +21,8 @@ import {
   CheckCircle2,
   HardDrive,
   Vibrate,
-  Volume2
+  Volume2,
+  Dumbbell
 } from "lucide-react";
 import { 
   getSensorySettings, 
@@ -462,8 +463,42 @@ export default function SettingsPage() {
           </Card>
         </section>
 
+        {/* 5. Sobre o Aplicativo & Identidade Visual */}
+        <section className="space-y-3">
+          <h3 className="text-xs font-black uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 px-1">
+            <Dumbbell className="w-3.5 h-3.5 text-primary" />
+            Sobre o Aplicativo
+          </h3>
+
+          <Card className="border-border/50 bg-card rounded-2xl shadow-sm overflow-hidden">
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center shadow-md shadow-primary/20 shrink-0">
+                <Dumbbell className="w-7 h-7" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h4 className="font-black text-sm uppercase tracking-wider text-foreground truncate">
+                    Registro de Treinos
+                  </h4>
+                  <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-mono font-bold uppercase">
+                    PWA Standalone
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground font-medium mt-0.5">
+                  Rastreamento de hipertrofia, sobrecarga progressiva e biofeedback 100% offline-first.
+                </p>
+                <div className="flex items-center gap-3 mt-2 text-[10px] font-mono text-muted-foreground font-bold uppercase">
+                  <span>Versão 1.8.0</span>
+                  <span>•</span>
+                  <span>Paleta Zinc & Emerald</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
         {/* Rodapé / Versão */}
-        <div className="text-center pt-4 opacity-40 space-y-1">
+        <div className="text-center pt-2 opacity-40 space-y-0.5">
           <p className="text-[10px] font-black uppercase tracking-[0.2em]">Registro de Treinos PWA</p>
           <p className="text-[9px] font-mono">Offline First • Build v1.8.0</p>
         </div>
