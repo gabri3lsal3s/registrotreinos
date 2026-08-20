@@ -1,5 +1,5 @@
 import { db } from './workoutDB';
-import { fullSync } from './syncService';
+import { syncData } from './syncService';
 import type { Protocol, Exercise, Workout, WorkoutSet, BodyWeight } from '../types';
 import { calculateVolume, parseLocaleNumber } from '../utils/workoutMath';
 
@@ -304,14 +304,18 @@ export async function importBackupJSON(
 
     // Inserir Treinos
     for (const w of data.workouts || []) {
-      if (!w || typeof w !== 'object' || !w.protocolId) continue;
+      if (!w || typeof w !== 'object') continue;
+      const rawW = w as unknown as Record<string, unknown>;
+      const protocolId = String(w.protocolId || rawW.protocol_id || '');
+      const rawDate = w.date || rawW.created_at;
+      const dateNum = typeof rawDate === 'string' ? new Date(rawDate).getTime() : Number(rawDate);
       await db.workouts.put({
         ...w,
-        id: w.id || crypto.randomUUID(),
+        id: w.id || (rawW.id as string) || crypto.randomUUID(),
         userId,
-        protocolId: String(w.protocolId),
-        date: Number(w.date) || Date.now(),
-        status: w.status || 'completed',
+        protocolId,
+        date: dateNum || Date.now(),
+        status: w.status || (rawW.status as Workout['status']) || 'completed',
         isSynced: false
       });
       totalImported++;
@@ -319,16 +323,22 @@ export async function importBackupJSON(
 
     // Inserir Séries
     for (const s of data.workoutSets || []) {
-      if (!s || typeof s !== 'object' || !s.workoutId || !s.exerciseId) continue;
+      if (!s || typeof s !== 'object') continue;
+      const rawS = s as unknown as Record<string, unknown>;
+      const workoutId = String(s.workoutId || rawS.workout_id || '');
+      const exerciseId = String(s.exerciseId || rawS.exercise_id || '');
+      if (!workoutId) continue;
+      const rawTs = s.timestamp || rawS.created_at;
+      const tsNum = typeof rawTs === 'string' ? new Date(rawTs).getTime() : Number(rawTs);
       await db.workoutSets.put({
         ...s,
-        id: s.id || crypto.randomUUID(),
-        workoutId: String(s.workoutId),
-        exerciseId: String(s.exerciseId),
-        setIndex: Number(s.setIndex) || 0,
-        weight: parseLocaleNumber(s.weight, 0),
-        reps: parseLocaleNumber(s.reps, 0),
-        timestamp: Number(s.timestamp) || Date.now(),
+        id: s.id || (rawS.id as string) || crypto.randomUUID(),
+        workoutId,
+        exerciseId,
+        setIndex: Number(s.setIndex ?? rawS.set_index) || 0,
+        weight: parseLocaleNumber(s.weight ?? rawS.weight, 0),
+        reps: parseLocaleNumber(s.reps ?? rawS.reps, 0),
+        timestamp: tsNum || Date.now(),
         isSynced: false
       });
       totalImported++;
@@ -349,8 +359,8 @@ export async function importBackupJSON(
     }
   });
 
-  // Disparar sincronização em background
-  fullSync().catch(console.error);
+  // Disparar envio seguro para nuvem (PUSH puro sem risco de sobrescrita)
+  syncData().catch(console.error);
 
   return { importedCount: totalImported };
 }

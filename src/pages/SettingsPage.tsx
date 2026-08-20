@@ -173,6 +173,28 @@ export default function SettingsPage() {
     }
   };
 
+  const handleEmergencyCachePurge = async () => {
+    try {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const reg of registrations) {
+          await reg.unregister();
+        }
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      toast.success('Cache limpo com sucesso! Recarregando...');
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao limpar cache.');
+    }
+  };
+
   return (
     <Layout>
       <div className="w-full max-w-4xl mx-auto space-y-6">
@@ -353,6 +375,22 @@ export default function SettingsPage() {
                   <span className="font-mono text-[10px] font-bold text-amber-500 uppercase">Tombstones ativos</span>
                 </div>
               )}
+
+              <div className="pt-2 border-t border-border/30 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-foreground block">Atualização Forçada do App</span>
+                  <span className="text-[11px] text-muted-foreground">Limpa cache do Service Worker e recarrega versão mais recente</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleEmergencyCachePurge}
+                  className="rounded-xl text-xs font-bold shrink-0 border-border/50 hover:bg-muted/40"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                  Limpar Cache PWA
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </section>
