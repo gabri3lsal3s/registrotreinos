@@ -177,10 +177,10 @@ export default function Dashboard() {
         weight,
         date: Date.now()
       });
-      await fullSync();
       setLatestWeight(weight);
       toast.success('Peso registrado com sucesso!');
       window.dispatchEvent(new Event('refresh-analysis'));
+      fullSync().catch(console.error);
     } catch (err) {
       console.error(err);
       toast.error('Erro ao salvar peso.');

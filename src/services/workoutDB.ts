@@ -38,7 +38,15 @@ class WorkoutDB extends Dexie {
     });
 
     this.version(6).stores({
-      workoutSets: 'id, workoutId, exerciseId, setIndex, [workoutId+exerciseId+setIndex]',
+      workoutSets: 'id, workoutId, exerciseId, setIndex, [workoutId+exerciseId], [workoutId+exerciseId+setIndex]',
+    });
+
+    this.version(7).stores({
+      protocols: 'id, userId, name, isEnabled, isSynced, [userId+isEnabled], [userId+isSynced]',
+      exercises: 'id, userId, protocolId, name, order, isSynced, [protocolId+isSynced]',
+      workouts: 'id, userId, protocolId, date, status, isSynced, [userId+protocolId+status], [userId+status], [userId+isSynced]',
+      workoutSets: 'id, userId, workoutId, exerciseId, setIndex, isSynced, [workoutId+exerciseId], [workoutId+exerciseId+setIndex], [workoutId+isSynced]',
+      bodyWeights: 'id, userId, date, isSynced, [userId+date], [userId+isSynced]',
     });
   }
 }

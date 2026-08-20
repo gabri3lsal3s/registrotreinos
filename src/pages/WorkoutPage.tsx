@@ -243,7 +243,9 @@ export default function WorkoutPage() {
             if (protocolId) {
               try {
                 savedId = localStorage.getItem(`workout_active_exercise_${protocolId}`);
-              } catch {}
+              } catch {
+                // Ignore storage error
+              }
             }
 
             // 1. Se já está aberto um exercício válido na lista atual, preserva
@@ -261,7 +263,9 @@ export default function WorkoutPage() {
             if (protocolId && chosenId) {
               try {
                 localStorage.setItem(`workout_active_exercise_${protocolId}`, chosenId);
-              } catch {}
+              } catch {
+                // Ignore storage error
+              }
             }
             return chosenId;
           });
@@ -521,7 +525,9 @@ export default function WorkoutPage() {
     if (protocolId) {
       try {
         localStorage.removeItem(`workout_active_exercise_${protocolId}`);
-      } catch {}
+      } catch {
+        // Ignore storage error
+      }
     }
 
     if (!activeWorkoutId) {
@@ -652,7 +658,9 @@ export default function WorkoutPage() {
       if (protocolId) {
         try {
           localStorage.removeItem(`workout_active_exercise_${protocolId}`);
-        } catch {}
+        } catch {
+          // Ignore storage error
+        }
       }
 
       toast.success('Treino finalizado e salvo com sucesso!');

@@ -27,26 +27,26 @@ export interface PendingSyncCounts {
  * Retorna contadores de itens locais não sincronizados para o usuário.
  */
 export async function getPendingSyncCounts(userId: string): Promise<PendingSyncCounts> {
-  const protocols = await db.protocols.where({ userId, isSynced: false }).count();
+  const protocols = await db.protocols.where('userId').equals(userId).and(p => !p.isSynced).count();
   
   // Buscar IDs de protocolos e treinos do usuário para escopar exercícios e séries
   const userProtocols = await db.protocols.where('userId').equals(userId).toArray();
-  const protocolIds = userProtocols.map(p => p.id);
+  const protocolIds = new Set(userProtocols.map(p => p.id));
   
-  const exercises = protocolIds.length > 0
-    ? await db.exercises.where('protocolId').anyOf(protocolIds).and(e => !e.isSynced).count()
+  const exercises = protocolIds.size > 0
+    ? await db.exercises.filter(e => protocolIds.has(e.protocolId) && !e.isSynced).count()
     : 0;
 
-  const workouts = await db.workouts.where({ userId, isSynced: false }).count();
+  const workouts = await db.workouts.where('userId').equals(userId).and(w => !w.isSynced).count();
   
   const userWorkouts = await db.workouts.where('userId').equals(userId).toArray();
-  const workoutIds = userWorkouts.map(w => w.id);
+  const workoutIds = new Set(userWorkouts.map(w => w.id));
 
-  const workoutSets = workoutIds.length > 0
-    ? await db.workoutSets.where('workoutId').anyOf(workoutIds).and(s => !s.isSynced).count()
+  const workoutSets = workoutIds.size > 0
+    ? await db.workoutSets.filter(s => workoutIds.has(s.workoutId) && !s.isSynced).count()
     : 0;
 
-  const bodyWeights = await db.bodyWeights.where({ userId, isSynced: false }).count();
+  const bodyWeights = await db.bodyWeights.where('userId').equals(userId).and(b => !b.isSynced).count();
 
   return {
     protocols,

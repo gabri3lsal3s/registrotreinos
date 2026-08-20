@@ -122,12 +122,12 @@ export default function HistoryPage() {
 
   const handleDeleteWorkout = async (workoutId: string) => {
     try {
-      await deleteRemoteItem('workouts', workoutId);
+      deleteRemoteItem('workouts', workoutId).catch(console.warn);
       await deleteWorkout(workoutId);
-      await fullSync();
       setHistory(prev => prev.filter(w => w.id !== workoutId));
       toast.success('Treino removido com sucesso.');
       window.dispatchEvent(new Event('refresh-analysis'));
+      fullSync().catch(console.error);
     } catch (err) {
       console.error(err);
       toast.error('Erro ao excluir treino.');
@@ -137,10 +137,10 @@ export default function HistoryPage() {
   const handleUpdateWeight = async (id: string, newWeight: number) => {
     try {
       await updateBodyWeight(id, { weight: newWeight });
-      await fullSync();
       setHistory(prev => prev.map(w => w.id === id ? { ...w, weight: newWeight } : w));
       toast.success('Peso atualizado com sucesso!');
       window.dispatchEvent(new Event('refresh-analysis'));
+      fullSync().catch(console.error);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error('Erro ao atualizar peso: ' + msg);
@@ -149,12 +149,12 @@ export default function HistoryPage() {
 
   const handleDeleteWeight = async (id: string) => {
     try {
-      await deleteRemoteItem('body_weights', id);
+      deleteRemoteItem('body_weights', id).catch(console.warn);
       await deleteBodyWeight(id);
-      await fullSync();
       setHistory(prev => prev.filter(w => w.id !== id));
       toast.success('Registro de peso removido.');
       window.dispatchEvent(new Event('refresh-analysis'));
+      fullSync().catch(console.error);
     } catch (err) {
       console.error(err);
       toast.error('Erro ao excluir registro de peso.');
@@ -190,8 +190,8 @@ export default function HistoryPage() {
           });
         }
       }
-      await fullSync();
       toast.success('Série atualizada com sucesso!');
+      fullSync().catch(console.error);
     } catch (err) {
       console.error(err);
       toast.error('Erro ao atualizar série.');
@@ -200,7 +200,7 @@ export default function HistoryPage() {
 
   const handleDeleteSet = async (setId: string) => {
     try {
-      await deleteRemoteItem('workout_sets', setId);
+      deleteRemoteItem('workout_sets', setId).catch(console.warn);
       await deleteWorkoutSet(setId);
       
       setSessionDetails(prev => {
@@ -214,8 +214,8 @@ export default function HistoryPage() {
         return newDetails;
       });
 
-      await fullSync();
       toast.success('Série excluída.');
+      fullSync().catch(console.error);
     } catch (err) {
       console.error(err);
       toast.error('Erro ao excluir série.');
@@ -226,10 +226,10 @@ export default function HistoryPage() {
     if (!editingDateWorkout) return;
     try {
       await db.workouts.update(editingDateWorkout.id, { date: newTimestamp, isSynced: false });
-      await fullSync();
       setHistory(h => h.map(w => w.id === editingDateWorkout.id ? { ...w, date: newTimestamp } : w).sort((a, b) => b.date - a.date));
       toast.success('Data do treino atualizada com sucesso!');
       window.dispatchEvent(new Event('refresh-analysis'));
+      fullSync().catch(console.error);
     } catch (err) {
       console.error(err);
       toast.error('Erro ao atualizar data do treino.');

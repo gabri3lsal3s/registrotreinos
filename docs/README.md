@@ -13,7 +13,7 @@ Bem-vindo à base de conhecimento e documentação arquitetural do aplicativo **
 | **[DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md)** | Tokens visuais da paleta Zinc & Emerald, escala tipográfica responsiva oficial, regras de contraste e microinterações. |
 | **[COMPONENTS.md](./COMPONENTS.md)** | Catálogo DRY de componentes (`common/`, `dashboard/`, `protocols/`, `workout/`, `history/`, `analysis/`, `ui/`). |
 | **[PWA_GUIDELINES.md](./PWA_GUIDELINES.md)** | Configurações de Service Worker, cache offline, instalação em dispositivo móvel e Web APIs (Wake Lock, Web Audio, Haptics). |
-| **[ROADMAP.md](./ROADMAP.md)** | Histórico evolutivo completo de todos os 10 níveis e marcos consolidados. |
+| **[ROADMAP.md](./ROADMAP.md)** | Histórico evolutivo completo de todos os 12 níveis e marcos consolidados. |
 | **[GOVERNANCE.md](./GOVERNANCE.md)** | Regras de governança de código, TypeScript estrito, política de zero lixo e protocolo de build. |
 
 ---

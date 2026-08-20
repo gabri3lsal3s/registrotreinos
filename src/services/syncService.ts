@@ -3,55 +3,140 @@ import { supabase } from './supabaseClient';
 import { useAuthStore } from './authStore';
 import type { Protocol, Exercise, Workout, WorkoutSet, BodyWeight } from '../types';
 
-const toSnake = (obj: Record<string, unknown>): Record<string, unknown> => {
-  const mapping: Record<string, string> = {
-    userId: 'user_id',
-    protocolId: 'protocol_id',
-    exerciseId: 'exercise_id',
-    workoutId: 'workout_id',
-    setIndex: 'set_index',
-    createdAt: 'created_at',
-    finishedAt: 'finished_at',
-    muscleGroup: 'muscle_group',
-    lastWeight: 'last_weight',
-    lastReps: 'last_reps',
-    sleepQuality: 'sleep_quality',
-    stressLevel: 'stress_level',
-    timestamp: 'timestamp',
-    date: 'date',
-    isEnabled: 'is_enabled',
-    daysOfWeek: 'days_of_week',
-    updatedAt: 'updated_at',
-    dayOfWeek: 'day_of_week',
-    day: 'day',
-    isArchived: 'is_archived',
-    category: 'category',
-    multiplier: 'multiplier',
-    isSessionOnly: 'is_session_only',
-    timeInSeconds: 'time_in_seconds',
-    dateKey: 'date_key'
+// ============================================================================
+// HELPERS DE FORMATAÇÃO E SANITIZAÇÃO DE DADOS
+// ============================================================================
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isValidUUID(id: unknown): boolean {
+  return typeof id === 'string' && UUID_REGEX.test(id);
+}
+
+function toSafeISOString(val: unknown): string {
+  if (typeof val === 'number') {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  } else if (typeof val === 'string') {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+  return new Date().toISOString();
+}
+
+function toNullableSafeISOString(val: unknown): string | null {
+  if (!val) return null;
+  if (typeof val === 'number') {
+    if (val <= 0) return null;
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  } else if (typeof val === 'string') {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+  return null;
+}
+
+// ============================================================================
+// SANITIZADORES ESTRITOS POR TABELA (WHITELISTING PARA O SUPABASE POSTGRESQL)
+// Evita envio de colunas não mapeadas como pinnedNotes, supersetGroupId, etc.
+// ============================================================================
+
+export function sanitizeProtocolForRemote(p: Protocol, userId: string): Record<string, unknown> {
+  return {
+    id: p.id,
+    user_id: userId,
+    name: (p.name || 'Protocolo Sem Nome').trim(),
+    description: p.description || null,
+    is_enabled: p.isEnabled !== undefined ? Boolean(p.isEnabled) : true,
+    days_of_week: Array.isArray(p.daysOfWeek) ? p.daysOfWeek : [],
+    is_archived: Boolean(p.isArchived),
+    created_at: toSafeISOString(p.createdAt),
+    updated_at: toSafeISOString(p.updatedAt)
   };
-  const newObj: Record<string, unknown> = {};
-  for (const key in obj) {
-    if (key === 'isSynced' || key === 'baseline') continue;
-    
-    let value = obj[key];
-    // Converter timestamps de número (Dexie) para ISO String (Supabase timestamptz)
-    if (['createdAt', 'finishedAt', 'timestamp', 'date', 'updatedAt'].includes(key) && typeof value === 'number') {
-      value = new Date(value).toISOString();
-    }
-    newObj[mapping[key] || key] = value;
-  }
+}
 
-  // Garantir redundância de dia para exercises
-  if (obj.dayOfWeek || obj.day) {
-    const dayVal = (obj.dayOfWeek || obj.day) as string;
-    newObj.day_of_week = dayVal;
-    newObj.day = dayVal;
-  }
+export function sanitizeExerciseForRemote(ex: Exercise, userId: string): Record<string, unknown> {
+  const rawEx = ex as unknown as Record<string, unknown>;
+  const day = (ex.dayOfWeek || rawEx.day || 'Segunda') as string;
+  return {
+    id: ex.id,
+    user_id: userId,
+    protocol_id: ex.protocolId,
+    name: (ex.name || 'Exercício').trim(),
+    order: typeof ex.order === 'number' && !isNaN(ex.order) ? ex.order : 0,
+    muscle_group: ex.muscleGroup || 'Outros',
+    category: ex.category || 'weight',
+    multiplier: typeof ex.multiplier === 'number' && !isNaN(ex.multiplier) ? ex.multiplier : 1.0,
+    day: day,
+    day_of_week: day,
+    sets: typeof ex.sets === 'number' && !isNaN(ex.sets) ? ex.sets : 3,
+    reps: typeof ex.reps === 'number' && !isNaN(ex.reps) ? ex.reps : 10,
+    last_weight: typeof ex.lastWeight === 'number' && !isNaN(ex.lastWeight) ? ex.lastWeight : 0,
+    last_reps: typeof ex.lastReps === 'number' && !isNaN(ex.lastReps) ? ex.lastReps : 0,
+    is_session_only: Boolean(ex.isSessionOnly),
+    is_archived: Boolean(ex.isArchived),
+    created_at: toSafeISOString(rawEx.createdAt),
+    updated_at: toSafeISOString(rawEx.updatedAt)
+  };
+}
 
-  return newObj;
-};
+export function sanitizeWorkoutForRemote(w: Workout, userId: string): Record<string, unknown> {
+  return {
+    id: w.id,
+    user_id: userId,
+    protocol_id: w.protocolId && isValidUUID(w.protocolId) ? w.protocolId : null,
+    date: toSafeISOString(w.date),
+    status: w.status || 'completed',
+    finished_at: toNullableSafeISOString(w.finishedAt),
+    mood: w.mood !== undefined && w.mood !== null ? String(w.mood) : null,
+    sleep_quality: typeof w.sleepQuality === 'number' && !isNaN(w.sleepQuality) ? w.sleepQuality : null,
+    stress_level: typeof w.stressLevel === 'number' && !isNaN(w.stressLevel) ? w.stressLevel : null,
+    recovery: w.recovery || null,
+    notes: w.notes || null,
+    created_at: toSafeISOString(w.date),
+    updated_at: toSafeISOString(w.finishedAt || w.date)
+  };
+}
+
+export function sanitizeWorkoutSetForRemote(
+  set: WorkoutSet,
+  userId: string,
+  validExerciseIds: Set<string>
+): Record<string, unknown> {
+  return {
+    id: set.id,
+    user_id: userId,
+    workout_id: set.workoutId,
+    exercise_id: set.exerciseId && validExerciseIds.has(set.exerciseId) ? set.exerciseId : null,
+    set_index: typeof set.setIndex === 'number' && !isNaN(set.setIndex) ? set.setIndex : 0,
+    weight: typeof set.weight === 'number' && !isNaN(set.weight) ? set.weight : 0,
+    reps: typeof set.reps === 'number' && !isNaN(set.reps) ? set.reps : 0,
+    type: set.type || 'normal',
+    notes: set.notes || null,
+    time_in_seconds: typeof set.timeInSeconds === 'number' && !isNaN(set.timeInSeconds) ? set.timeInSeconds : null,
+    rpe: typeof set.rpe === 'number' && !isNaN(set.rpe) ? set.rpe : null,
+    completed: Boolean(set.completed),
+    timestamp: toSafeISOString(set.timestamp),
+    created_at: toSafeISOString(set.timestamp),
+    updated_at: toSafeISOString(set.timestamp)
+  };
+}
+
+export function sanitizeBodyWeightForRemote(bw: BodyWeight, userId: string): Record<string, unknown> {
+  return {
+    id: bw.id,
+    user_id: userId,
+    weight: typeof bw.weight === 'number' && !isNaN(bw.weight) ? bw.weight : 70,
+    date: toSafeISOString(bw.date),
+    created_at: toSafeISOString(bw.date),
+    updated_at: toSafeISOString(bw.date)
+  };
+}
+
+// ============================================================================
+// CONVERSOR CAMELCASE (DO SUPABASE PARA O DEXIE LOCAL)
+// ============================================================================
 
 const toCamel = <T = Record<string, unknown>>(obj: Record<string, unknown>): T => {
   const mapping: Record<string, string> = {
@@ -100,6 +185,9 @@ export const setSyncStatus = (status: 'pending' | 'syncing' | 'synced' | 'error'
   useAuthStore.getState().setSyncStatus(status);
 };
 
+/**
+ * Envia todas as alterações pendentes locais (isSynced === false) para o Supabase.
+ */
 export async function syncData(): Promise<{ success: boolean }> {
   const { user } = useAuthStore.getState();
   if (!user) return { success: false };
@@ -107,16 +195,16 @@ export async function syncData(): Promise<{ success: boolean }> {
   setSyncStatus('syncing');
 
   try {
-    // 1. Coleta e sanitização de dados locais não sincronizados COM ESCOPO DE USUÁRIO
+    // 1. Coleta dados locais não sincronizados com escopo de usuário
     const protocolsLocal = await db.protocols.where('userId').equals(user.id).and(p => !p.isSynced).toArray();
     const workoutsLocal = await db.workouts.where('userId').equals(user.id).and(w => !w.isSynced).toArray();
     
-    // Obter IDs dos protocolos do usuário para garantir isolamento em exercises
+    // Obter todos os protocolos do usuário para garantir isolamento e FKs
     const userProtocols = await db.protocols.where('userId').equals(user.id).toArray();
     const userProtocolIds = new Set(userProtocols.map(p => p.id));
     const exercisesLocal = await db.exercises.filter(ex => userProtocolIds.has(ex.protocolId) && !ex.isSynced).toArray();
 
-    // Obter IDs dos treinos do usuário para garantir isolamento em workoutSets
+    // Obter todos os treinos do usuário para garantir isolamento de séries
     const userWorkouts = await db.workouts.where('userId').equals(user.id).toArray();
     const userWorkoutIds = new Set(userWorkouts.map(w => w.id));
     const workoutSetsLocal = await db.workoutSets.filter(set => userWorkoutIds.has(set.workoutId) && !set.isSynced).toArray();
@@ -128,23 +216,18 @@ export async function syncData(): Promise<{ success: boolean }> {
       return { success: true };
     }
 
-    const protocols = protocolsLocal.map(p => toSnake(p as unknown as Record<string, unknown>));
-    const workouts = workoutsLocal.map(w => toSnake(w as unknown as Record<string, unknown>));
-    const exercises = exercisesLocal.map(ex => ({
-      ...ex,
-      userId: user.id,
-      multiplier: ex.multiplier !== undefined && ex.multiplier !== null ? Number(ex.multiplier) : 1.0,
-      category: ex.category || 'weight',
-      order: ex.order ?? 0,
-      sets: ex.sets ?? 3,
-      reps: ex.reps ?? 10,
-      lastWeight: ex.lastWeight ?? 0,
-      lastReps: ex.lastReps ?? 0
-    })).map(e => toSnake(e as unknown as Record<string, unknown>));
-    const workoutSets = workoutSetsLocal.map(set => ({ ...set, userId: user.id })).map(s => toSnake(s as unknown as Record<string, unknown>));
-    const bodyWeights = bodyWeightsLocal.map(b => toSnake(b as unknown as Record<string, unknown>));
+    // Obter todos os IDs de exercícios para validar FK em workoutSets
+    const allUserExercises = await db.exercises.filter(ex => userProtocolIds.has(ex.protocolId)).toArray();
+    const validExerciseIds = new Set(allUserExercises.map(e => e.id));
 
-    // Enviar para o Supabase e CHECAR ERROS
+    // 2. Sanitização estrita (apenas colunas permitidas no schema Supabase)
+    const protocols = protocolsLocal.map(p => sanitizeProtocolForRemote(p, user.id));
+    const exercises = exercisesLocal.map(e => sanitizeExerciseForRemote(e, user.id));
+    const workouts = workoutsLocal.map(w => sanitizeWorkoutForRemote(w, user.id));
+    const workoutSets = workoutSetsLocal.map(s => sanitizeWorkoutSetForRemote(s, user.id, validExerciseIds));
+    const bodyWeights = bodyWeightsLocal.map(b => sanitizeBodyWeightForRemote(b, user.id));
+
+    // 3. PUSH sequencial respeitando integridade de chaves estrangeiras
     if (protocols.length > 0) {
       const { error } = await supabase.from('protocols').upsert(protocols);
       if (error) throw new Error(`Erro ao subir protocolos: ${error.message}`);
@@ -170,7 +253,7 @@ export async function syncData(): Promise<{ success: boolean }> {
       if (error) throw new Error(`Erro ao subir peso corporal: ${error.message}`);
     }
 
-    // Marcar como sincronizado localmente APENAS se o PUSH funcionou
+    // 4. Marcar localmente como sincronizado com transação atômica
     await db.transaction('rw', [db.protocols, db.exercises, db.workouts, db.workoutSets, db.bodyWeights], async () => {
       if (protocolsLocal.length > 0) {
         await db.protocols.where('id').anyOf(protocolsLocal.map(p => p.id)).modify({ isSynced: true });
@@ -199,6 +282,9 @@ export async function syncData(): Promise<{ success: boolean }> {
   }
 }
 
+/**
+ * Busca dados remotos do usuário e atualiza a base local no Dexie preservando metadados locais.
+ */
 export async function pullData(): Promise<{ success: boolean }> {
   const { user } = useAuthStore.getState();
   if (!user) return { success: false };
@@ -206,7 +292,6 @@ export async function pullData(): Promise<{ success: boolean }> {
   setSyncStatus('syncing');
 
   try {
-    // 1. Buscar tudo do Supabase para ESTE usuário específico
     const [pRes, eRes, wRes, sRes, bwRes] = await Promise.all([
       supabase.from('protocols').select('*').eq('user_id', user.id),
       supabase.from('exercises').select('*').eq('user_id', user.id),
@@ -250,7 +335,7 @@ export async function pullData(): Promise<{ success: boolean }> {
       await db.exercises.toCollection().filter(e => localProtocolIds.has(e.protocolId) && e.isSynced === true && !e.isArchived && !remoteEIds.includes(e.id)).delete();
       await db.workoutSets.toCollection().filter(s => localWorkoutIds.has(s.workoutId) && s.isSynced === true && !remoteSIds.includes(s.id)).delete();
 
-      // 2. Mapeamento e Persistência
+      // 2. Mapeamento e Persistência preservando metadados locais
       for (const item of remoteP) {
         const camel = toCamel<Protocol>(item);
         const local = await db.protocols.get(camel.id);
@@ -266,6 +351,9 @@ export async function pullData(): Promise<{ success: boolean }> {
           await db.exercises.put({
             ...camel,
             dayOfWeek: camel.dayOfWeek || (item as Record<string, unknown>).day as string || 'Segunda',
+            // Preservar notas fixas e grupo de bi-set locais se não existirem no payload remoto
+            pinnedNotes: camel.pinnedNotes || local?.pinnedNotes,
+            supersetGroupId: camel.supersetGroupId || local?.supersetGroupId,
             isSynced: true
           });
         }
@@ -306,6 +394,9 @@ export async function pullData(): Promise<{ success: boolean }> {
   }
 }
 
+/**
+ * Exclui registro no Supabase de forma resiliente e não-bloqueante.
+ */
 export async function deleteRemoteItem(table: string, id: string): Promise<void> {
   const { user } = useAuthStore.getState();
   if (!user) return;
@@ -317,11 +408,12 @@ export async function deleteRemoteItem(table: string, id: string): Promise<void>
       .eq('id', id)
       .eq('user_id', user.id);
 
-    if (error) throw error;
+    if (error) {
+      console.warn(`[Sync] Aviso ao deletar remoto (${table}:${id}):`, error.message);
+    }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[Sync] Erro ao deletar no Supabase (${table}):`, message);
-    throw err;
+    console.warn(`[Sync] Falha não bloqueante ao deletar no Supabase (${table}):`, message);
   }
 }
 
@@ -336,11 +428,12 @@ export async function deleteExercisesByProtocol(protocolId: string): Promise<voi
       .eq('protocol_id', protocolId)
       .eq('user_id', user.id);
 
-    if (error) throw error;
+    if (error) {
+      console.warn(`[Sync] Aviso ao deletar exercícios do protocolo (${protocolId}):`, error.message);
+    }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[Sync] Erro ao deletar exercícios do protocolo (${protocolId}):`, message);
-    throw err;
+    console.warn(`[Sync] Falha não bloqueante ao deletar exercícios (${protocolId}):`, message);
   }
 }
 
@@ -353,7 +446,7 @@ export async function deleteWorkoutFromCloud(workoutId: string): Promise<void> {
     await supabase.from('workouts').delete().eq('id', workoutId).eq('user_id', user.id);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[Sync] Erro ao deletar treino no cloud (${workoutId}):`, message);
+    console.warn(`[Sync] Falha não bloqueante ao deletar treino (${workoutId}):`, message);
   }
 }
 
@@ -371,3 +464,4 @@ export async function fullSync(): Promise<{ success: boolean } | undefined> {
     isSyncing = false;
   }
 }
+

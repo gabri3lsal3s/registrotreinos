@@ -31,15 +31,15 @@ O **Registro de Treinos** segue uma arquitetura **Offline-First Absoluta**, gara
 
 ## 2. Estrutura do Esquema IndexedDB (Dexie `WorkoutDB`)
 
-O banco local `WorkoutDB` versão 3 possui as seguintes tabelas tipadas:
+O banco local `WorkoutDB` versão 7 possui as seguintes tabelas e índices:
 
 ```ts
-db.version(3).stores({
-  protocols: 'id, userId, name, isEnabled, isSynced',
-  exercises: 'id, userId, protocolId, name, order, muscleGroup, isSynced',
-  workouts: 'id, userId, protocolId, date, dateKey, isSynced',
-  workoutSets: 'id, userId, workoutId, exerciseId, setIndex, dateKey, isSynced',
-  bodyWeights: 'id, userId, date, dateKey, isSynced'
+db.version(7).stores({
+  protocols: 'id, userId, name, isEnabled, isSynced, [userId+isEnabled], [userId+isSynced]',
+  exercises: 'id, userId, protocolId, name, order, isSynced, [protocolId+isSynced]',
+  workouts: 'id, userId, protocolId, date, status, isSynced, [userId+protocolId+status], [userId+status], [userId+isSynced]',
+  workoutSets: 'id, userId, workoutId, exerciseId, setIndex, isSynced, [workoutId+exerciseId], [workoutId+exerciseId+setIndex], [workoutId+isSynced]',
+  bodyWeights: 'id, userId, date, isSynced, [userId+date], [userId+isSynced]',
 });
 ```
 

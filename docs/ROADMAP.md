@@ -19,6 +19,7 @@ Este documento registra a evolução do **Registro de Treinos**, cobrindo todas 
 | **Nível 9** | 📈 Inteligência, Gamificação Sutil & Analytics | Detecção instantânea e celebração de PRs (*Personal Records*), mapa de calor anual de frequência (*Consistency Heatmap*), balanço agonista/antagonista e card de conclusão compartilhável. | **CONCLUÍDO** ✅ |
 | **Nível 10** | 🔄 Gestão Ágil de Rotinas & Intercâmbio | Substituição inteligente de exercícios ocupados (*Swap Exercise*), compartilhamento de protocolos via Link/QR Code descentralizado, templates consagrados (*Starter Packs*) e importação em 1 clique. | **CONCLUÍDO** ✅ |
 | **Nível 11** | 🌟 Tema Escuro OLED & Visual Harmony | Fundo Pitch-Black `#000000` (desligamento real de pixels OLED), superfícies carvão `#09090b`, bordas nítidas `#1e1e24`, alto contraste WCAG AAA e PWA status bar unificado. | **CONCLUÍDO** ✅ |
+| **Nível 12** | 🛡️ Blindagem de Sincronização, Resiliência Offline & Integridade de Protocolos | Whitelisting estrito por entidade no `syncService.ts`, preservação de metadados locais no PULL (`pinnedNotes`/`supersetGroupId`), correção de índices compostos no Dexie (`version(7)`), chamadas de UI 100% não-bloqueantes no `ProtocolsPage`, `HistoryPage` e `Dashboard`. | **CONCLUÍDO** ✅ |
 
 ---
 
@@ -91,3 +92,22 @@ Este documento registra a evolução do **Registro de Treinos**, cobrindo todas 
    - Modelos prontos de divisões de treinamento populares (PPL 6x, Upper/Lower 4x, Fullbody 3x, ABC Clássico) importáveis com 1 clique.
 4. **Séries Casadas (*Supersets / Bi-sets*)**:
    - Agrupamento visual de exercícios no montador e na tela de execução com cronômetro conjunto e transição imediata.
+
+---
+
+### 🛡️ Nível 12: Blindagem de Sincronização, Resiliência Offline & Integridade de Protocolos
+*Objetivo: Eliminar falhas de sincronização na nuvem, garantir soberania offline absoluta e fluidez no gerenciamento e edição de protocolos de treino.*
+
+1. **Sanitização e Whitelisting Estrito de Payloads (`syncService.ts`)**:
+   - Eliminou erro HTTP 400 do PostgREST filtrando campos exclusivos de UI (`pinnedNotes`, `supersetGroupId`, `completedSets`, `setsData`) antes do envio ao Supabase.
+   - Conversão blindada de tipos numéricos (prevenção de `NaN`) e datas ISO 8601 UTC.
+   - Integridade relacional de chave estrangeira (`exercise_id` seguro) ao subir `workout_sets`.
+2. **Preservação de Metadados Locais no PULL**:
+   - Manutenção de notas de regulagem dos aparelhos (`pinnedNotes`) e grupos de bi-set (`supersetGroupId`) ao receber dados da nuvem.
+3. **Atualização de Esquema Dexie v7 (`workoutDB.ts`)**:
+   - Índices compostos explícitos adicionados para `[userId+isSynced]`, `[workoutId+exerciseId]`, `[workoutId+exerciseId+setIndex]`, `[protocolId+isSynced]`, `[userId+status]` e `[userId+date]`.
+4. **Desacoplamento e Não-Bloqueio de UI (`ProtocolsPage`, `HistoryPage`, `Dashboard`)**:
+   - Operações locais gravam instantaneamente no Dexie e disparam `fullSync().catch(...)` em segundo plano de forma 100% não-bloqueante.
+   - Exclusões remotas (`deleteRemoteItem`) tolerantes a falhas offline.
+   - Higienização automática de sufixos de dias da semana no montador para evitar duplicações (`Supino (Seg) (Seg)`).
+

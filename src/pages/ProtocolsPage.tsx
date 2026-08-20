@@ -175,9 +175,9 @@ export default function ProtocolsPage() {
     try {
       const newId = await duplicateProtocol(protocolId, user.id);
       toast.success('Protocolo clonado com sucesso!');
-      await fullSync();
       await loadProtocols();
       handleEditProtocol(newId);
+      fullSync().catch(console.error);
     } catch (err) {
       console.error(err);
       toast.error('Erro ao duplicar protocolo.');
@@ -232,11 +232,11 @@ export default function ProtocolsPage() {
   const handleDeleteProtocol = async (protocolId: string) => {
     if (!user) return;
     try {
-      await deleteRemoteItem('protocols', protocolId);
+      deleteRemoteItem('protocols', protocolId).catch(console.warn);
       await deleteProtocol(protocolId);
-      await fullSync();
       toast.success('Protocolo removido.');
-      loadProtocols();
+      await loadProtocols();
+      fullSync().catch(console.error);
     } catch (err) {
       console.error(err);
       toast.error('Erro ao excluir protocolo.');
@@ -367,9 +367,10 @@ export default function ProtocolsPage() {
 
         for (let i = 0; i < dayExercises.length; i++) {
           const ex = dayExercises[i];
+          const cleanName = ex.name.replace(/\s*\([^)]*\)$/, '').trim();
           const exData: Omit<Exercise, 'id'> = {
             protocolId: targetProtocolId!,
-            name: `${ex.name} (${dayLabel})`,
+            name: `${cleanName} (${dayLabel})`,
             muscleGroup: ex.muscleGroup || undefined,
             category: ex.category || 'weight',
             multiplier: ex.multiplier !== undefined && ex.multiplier !== null ? Number(ex.multiplier) : 1.0,
@@ -398,17 +399,21 @@ export default function ProtocolsPage() {
       for (const removedEx of removedExercises) {
         const historyCount = await db.workoutSets.where('exerciseId').equals(removedEx.id).count();
         if (historyCount === 0) {
-          await deleteRemoteItem('exercises', removedEx.id);
+          deleteRemoteItem('exercises', removedEx.id).catch(console.warn);
           await db.exercises.delete(removedEx.id);
         } else {
           await updateExercise(removedEx.id, { isArchived: true });
         }
       }
 
-      await fullSync();
       toast.success(editingProtocolId ? 'Protocolo atualizado com sucesso!' : 'Protocolo criado com sucesso!');
       setShowBuilder(false);
-      loadProtocols();
+      await loadProtocols();
+
+      // Sincronização em segundo plano não bloqueante
+      fullSync().catch((syncErr) => {
+        console.warn('[Sync] Sincronização em background adiada:', syncErr);
+      });
     } catch (err) {
       console.error(err);
       toast.error('Erro ao salvar protocolo.');
