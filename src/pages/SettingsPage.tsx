@@ -194,10 +194,10 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <h4 className="font-bold text-sm text-foreground leading-tight">
-                    Modo Escuro
+                    Modo Escuro OLED
                   </h4>
                   <p className="text-xs text-muted-foreground font-medium">
-                    Tema de alto contraste otimizado para a academia
+                    Preto absoluto (Pitch-Black #000000) otimizado para telas OLED e economia de bateria
                   </p>
                 </div>
               </div>

@@ -6,15 +6,17 @@ O design system do **Registro de Treinos** é fundamentado na paleta semântica 
 
 ## 1. Tokens de Cores Semânticas
 
-| Token | Modo Claro (Light) | Modo Escuro (Dark) | Aplicação |
+| Token | Modo Claro (Light) | Modo Escuro OLED (Dark) | Aplicação |
 | :--- | :--- | :--- | :--- |
-| **`--background`** | `#f9fafb` (Zinc 50) | `#09090b` (Zinc 950) | Fundo principal da aplicação |
-| **`--card`** | `#ffffff` (Pure White) | `#121214` (Elevated Card) | Cards de exercícios, dashboards e modais |
-| **`--foreground`** | `#09090b` (Zinc 950) | `#fafafa` (Zinc 50) | Títulos e textos de alto contraste |
-| **`--muted-foreground`**| `#3f3f46` (Zinc 700) | `#a1a1aa` (Zinc 400) | Legendas, metadados e notas secundárias |
-| **`--primary`** | `#10b981` (Emerald 500) | `#34d399` (Emerald 400) | Destaque ativo, botões primários e PRs |
-| **`--border`** | `#d1d5db` (Zinc 300) | `#27272a` (Zinc 800) | Bordas e divisórias estruturais |
-| **`--destructive`** | `#ef4444` (Red 500) | `#f87171` (Red 400) | Ações destrutivas e cancelamento |
+| **`--background`** | `#f9fafb` (Zinc 50) | `#000000` (Pure Pitch Black) | Fundo principal da aplicação e telas OLED |
+| **`--card`** | `#ffffff` (Pure White) | `#09090b` (Deep Charcoal Card) | Cards de exercícios, dashboards e modais |
+| **`--foreground`** | `#09090b` (Zinc 950) | `#ffffff` (Pure White High Contrast) | Títulos e textos de alto contraste |
+| **`--muted-foreground`**| `#3f3f46` (Zinc 700) | `#a1a1aa` (Zinc 400) | Legendas, metadados e notas secundárias (WCAG AAA) |
+| **`--primary`** | `#10b981` (Emerald 500) | `#10b981` (Emerald 500) | Destaque ativo, botões primários e PRs |
+| **`--primary-foreground`**| `#ffffff` | `#000000` (Pure Black on Emerald) | Texto de alto contraste sobre botões primários |
+| **`--border`** | `#d1d5db` (Zinc 300) | `#1e1e24` (Crisp Dark Border) | Bordas e divisórias estruturais finas e nítidas |
+| **`--input`** | `#f3f4f6` (Zinc 100) | `#000000` (Pure Black Input) | Campos de digitação de carga e repetições |
+| **`--destructive`** | `#ef4444` (Red 500) | `#ef4444` (Red 500) | Ações destrutivas e cancelamento |
 
 ---
 

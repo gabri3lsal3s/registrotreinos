@@ -18,6 +18,7 @@ Este documento registra a evolução do **Registro de Treinos**, cobrindo todas 
 | **Nível 8** | ⚡ Gym Floor UX & Agilidade em Sessão | Calculadora de anilhas (*Plate Calculator*), mini-histórico inline nos exercícios, notas fixas (*Pin Notes*), presets de descanso no dock e visualização esquemática de barras. | **CONCLUÍDO** ✅ |
 | **Nível 9** | 📈 Inteligência, Gamificação Sutil & Analytics | Detecção instantânea e celebração de PRs (*Personal Records*), mapa de calor anual de frequência (*Consistency Heatmap*), balanço agonista/antagonista e card de conclusão compartilhável. | **CONCLUÍDO** ✅ |
 | **Nível 10** | 🔄 Gestão Ágil de Rotinas & Intercâmbio | Substituição inteligente de exercícios ocupados (*Swap Exercise*), compartilhamento de protocolos via Link/QR Code descentralizado, templates consagrados (*Starter Packs*) e importação em 1 clique. | **CONCLUÍDO** ✅ |
+| **Nível 11** | 🌟 Tema Escuro OLED & Visual Harmony | Fundo Pitch-Black `#000000` (desligamento real de pixels OLED), superfícies carvão `#09090b`, bordas nítidas `#1e1e24`, alto contraste WCAG AAA e PWA status bar unificado. | **CONCLUÍDO** ✅ |
 
 ---
 

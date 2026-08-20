@@ -37,34 +37,37 @@
 }
 
 .dark {
-  /* Dark Mode - Deep Zinc & Emerald */
-  --background: #09090b; /* Zinc 950 - Pure deep background */
-  --foreground: #fafafa; /* Zinc 50 */
+  /* Dark Mode - Professional True OLED Pitch-Black & Emerald */
+  --background: #000000; /* Pure OLED Black - Maximum battery saving & infinite contrast */
+  --foreground: #ffffff; /* High contrast pure white text */
   
-  --card: #121214; /* Elevated surface, slightly lighter than background */
-  --card-foreground: #fafafa;
+  --card: #09090b; /* Deep charcoal surface - Elevated & distinct from #000000 */
+  --card-foreground: #ffffff;
   
-  --popover: #09090b;
-  --popover-foreground: #fafafa;
+  --popover: #0c0c0e; /* Elevated popover surface */
+  --popover-foreground: #ffffff;
   
-  --primary: #34d399; /* Emerald 400 */
-  --primary-foreground: #042f2e; /* Teal 950 */
+  --primary: #10b981; /* Emerald 500 */
+  --primary-foreground: #000000; /* Deep black text on primary buttons for supreme contrast */
   
-  --secondary: #18181b; /* Zinc 900 */
+  --secondary: #121215; /* Sub-surface layer */
   --secondary-foreground: #fafafa;
   
-  --muted: #181a20; /* Darker muted for sub-sections */
-  --muted-foreground: #a1a1aa; /* Zinc 400 - clean secondary text */
+  --muted: #121216; /* Clean dark muted containers */
+  --muted-foreground: #a1a1aa; /* Zinc 400 - WCAG AAA clean readable secondary text */
   
-  --accent: #27272a; /* Zinc 800 */
-  --accent-foreground: #fafafa;
+  --accent: #1a1a20; /* Subtle hover & active indicator states */
+  --accent-foreground: #ffffff;
   
-  --border: #27272a; /* Zinc 800 - clearly defined hierarchy */
-  --input: #1c1c1e; /* Distinct input background */
-  --ring: #34d399;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
   
-  --radius: 1rem; /* More balanced radius */
-  --emerald: #34d399;
+  --border: #1e1e24; /* Crisp, thin OLED borders */
+  --input: #000000; /* Pure black input surfaces with crisp border */
+  --ring: #10b981; /* Emerald ring focus */
+  
+  --radius: 1rem;
+  --emerald: #10b981;
 }
 
 @theme {
