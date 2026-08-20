@@ -593,6 +593,28 @@ export default function WorkoutPage() {
     }
   };
 
+  const handleOpenPlateCalculator = (exIdx: number, setIdx: number, weight: number) => {
+    setPlateCalcTarget({ exIdx, setIdx, weight });
+  };
+
+  const handleApplyPlateCalculator = (calculatedWeight: number) => {
+    if (!plateCalcTarget) return;
+    const { exIdx, setIdx } = plateCalcTarget;
+    updateSetData(exIdx, setIdx, 'weight', String(calculatedWeight));
+    setPlateCalcTarget(null);
+  };
+
+  const handleUpdatePinnedNotes = async (exId: string, notes: string) => {
+    try {
+      await updateExercise(exId, { pinnedNotes: notes });
+      setExercises(prev => prev.map(ex => ex.id === exId ? { ...ex, pinnedNotes: notes } : ex));
+      toast.success('Nota salva com sucesso!');
+    } catch (err) {
+      console.error('Erro ao salvar nota:', err);
+      toast.error('Erro ao salvar nota.');
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -661,11 +683,14 @@ export default function WorkoutPage() {
               exercise={ex}
               exIdx={exIdx}
               isExpanded={expandedExercise === ex.id}
+              userId={user?.id}
               onToggleExpand={() => setExpandedExercise(expandedExercise === ex.id ? null : ex.id)}
               onToggleSet={handleSetToggle}
               onUpdateSetData={updateSetData}
               onUpdateSetType={updateSetType}
               onDeleteExtraExercise={handleDeleteExtraExercise}
+              onUpdatePinnedNotes={handleUpdatePinnedNotes}
+              onOpenPlateCalculator={handleOpenPlateCalculator}
               truePR={truePRs[ex.id]}
             />
           ))}
@@ -706,6 +731,13 @@ export default function WorkoutPage() {
             setConfigEx({ ...configEx, sets: Math.max(1, Math.min(10, configEx.sets + delta)) });
           }}
           onConfirm={confirmAddExtraExercise}
+        />
+
+        <PlateCalculatorModal
+          isOpen={!!plateCalcTarget}
+          onClose={() => setPlateCalcTarget(null)}
+          initialWeight={plateCalcTarget?.weight || 0}
+          onApplyWeight={handleApplyPlateCalculator}
         />
 
         <WorkoutFinishModal

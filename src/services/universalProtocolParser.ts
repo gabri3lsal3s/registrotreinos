@@ -12,6 +12,7 @@ export interface ParsedExerciseItem {
   reps: number;
   dayKey: string;
   dayLabel: string;
+  pinnedNotes?: string;
   rawLine?: string;
   hasWarning?: boolean;
 }
@@ -47,6 +48,7 @@ export interface ExportedProtocolData {
       dayOfWeek?: string;
       lastWeight?: number;
       lastReps?: number;
+      pinnedNotes?: string;
     }>;
   };
 }
@@ -233,7 +235,7 @@ function parseJSONProtocol(jsonString: string): ParsedProtocolData {
     });
 
     const exercises = Array.isArray(p.exercises) ? p.exercises : [];
-    exercises.forEach((ex: { name?: string; muscleGroup?: string; category?: ExerciseCategory; multiplier?: number; sets?: number; reps?: number; dayOfWeek?: string; lastWeight?: number }) => {
+    exercises.forEach((ex: { name?: string; muscleGroup?: string; category?: ExerciseCategory; multiplier?: number; sets?: number; reps?: number; dayOfWeek?: string; lastWeight?: number; pinnedNotes?: string }) => {
       if (!ex.name) return;
       const dayKey = ex.dayOfWeek && days.includes(ex.dayOfWeek) ? ex.dayOfWeek : days[0] || 'mon';
       activeDaysSet.add(dayKey);
@@ -249,7 +251,8 @@ function parseJSONProtocol(jsonString: string): ParsedProtocolData {
         sets: parseNumericRange(ex.sets, 3),
         reps: parseNumericRange(ex.reps, 10),
         dayKey,
-        dayLabel: WEEK_DAYS.find(w => w.key === dayKey)?.label || 'Segunda-feira'
+        dayLabel: WEEK_DAYS.find(w => w.key === dayKey)?.label || 'Segunda-feira',
+        pinnedNotes: ex.pinnedNotes
       });
     });
 

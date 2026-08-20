@@ -42,7 +42,8 @@ export async function exportProtocolJSON(protocolId: string): Promise<void> {
       reps: ex.reps || 10,
       dayOfWeek: ex.dayOfWeek,
       lastWeight: ex.lastWeight,
-      lastReps: ex.lastReps
+      lastReps: ex.lastReps,
+      pinnedNotes: ex.pinnedNotes
     };
   });
 
@@ -127,6 +128,7 @@ export async function saveImportedProtocol(
           reps: item.reps || 10,
           lastWeight: 0,
           lastReps: 0,
+          pinnedNotes: item.pinnedNotes || undefined,
           isSynced: false
         });
       }

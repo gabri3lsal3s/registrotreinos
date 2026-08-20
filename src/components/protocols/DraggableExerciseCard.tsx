@@ -11,7 +11,7 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
-import { GripVertical, Minus, Plus, Trash2 } from 'lucide-react';
+import { GripVertical, Minus, Plus, Trash2, Pin } from 'lucide-react';
 import type { ExerciseCategory } from '../../types';
 import { parseLocaleNumber } from '../../utils/workoutMath';
 
@@ -24,6 +24,7 @@ export interface BuilderExerciseItem {
   sets: number;
   reps: number;
   baseline: string | number;
+  pinnedNotes?: string;
 }
 
 interface DraggableExerciseCardProps { 
@@ -123,6 +124,17 @@ export function DraggableExerciseCard({
                   <SelectItem value="Outros">Outros</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Notas Fixas / Regulagem de Aparelho */}
+            <div className="flex items-center gap-1.5 mt-2 text-xs">
+              <Pin className="w-3 h-3 text-muted-foreground/60 rotate-45 shrink-0" />
+              <Input
+                placeholder="Regulagem / notas (ex: Banco no furo 4)"
+                className="h-6 text-xs text-muted-foreground placeholder:text-muted-foreground/40 bg-transparent border-none p-0 focus-visible:ring-0"
+                value={ex.pinnedNotes || ''}
+                onChange={(e) => onUpdate(day, idx, 'pinnedNotes', e.target.value)}
+              />
             </div>
           </div>
         </div>
