@@ -8,10 +8,11 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeftRight, Search, Sparkles, Dumbbell } from 'lucide-react';
+import { ArrowLeftRight, Search, Sparkles } from 'lucide-react';
 import { EXERCISE_DATABASE, getExerciseInfo } from '../../utils/exerciseDictionary';
 import type { ExerciseCategory, UniqueExercise } from '../../types';
 import { triggerHaptic, playAudioCue } from '../../utils/sensoryFeedback';
+import { MuscleGroupIcon, MuscleGroupBadge } from '../common';
 
 interface SwapExerciseModalProps {
   isOpen: boolean;
@@ -178,15 +179,13 @@ export function SwapExerciseModal({
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                    <Dumbbell className={`w-4 h-4 shrink-0 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
-                    <span className="font-bold text-xs sm:text-sm truncate">
+                    <MuscleGroupIcon muscleGroup={item.muscleGroup} exerciseName={item.name} className="w-4 h-4 shrink-0" />
+                    <span className="font-bold text-xs sm:text-sm truncate text-foreground">
                       {item.name}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-muted text-muted-foreground">
-                      {item.muscleGroup}
-                    </span>
+                    <MuscleGroupBadge muscleGroup={item.muscleGroup} size="sm" />
                     {isSelected && (
                       <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
                     )}
