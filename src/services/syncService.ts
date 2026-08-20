@@ -123,10 +123,13 @@ export function sanitizeWorkoutForRemote(
     ? w.protocolId
     : (defaultProtocolId && isValidUUID(defaultProtocolId) ? defaultProtocolId : null);
 
+  const isoDate = toSafeISOString(w.date);
+
   const payload: Record<string, unknown> = {
     id: w.id,
     user_id: userId,
-    date: toSafeISOString(w.date),
+    date: isoDate,
+    date_key: isoDate.slice(0, 10),
     status: w.status || 'completed'
   };
 
@@ -139,7 +142,7 @@ export function sanitizeWorkoutForRemote(
   if (w.notes) payload.notes = w.notes;
   const rawDuration = (w as unknown as Record<string, unknown>).duration;
   if (typeof rawDuration === 'number' && !isNaN(rawDuration)) payload.duration = rawDuration;
-  payload.created_at = toSafeISOString(w.date);
+  payload.created_at = isoDate;
   payload.updated_at = toSafeISOString(w.finishedAt || w.date);
 
   return payload;
@@ -155,17 +158,20 @@ export function sanitizeWorkoutSetForRemote(
     ? set.exerciseId
     : (defaultExerciseId && validExerciseIds.has(defaultExerciseId) ? defaultExerciseId : null);
 
+  const isoTimestamp = toSafeISOString(set.timestamp);
+
   const payload: Record<string, unknown> = {
     id: set.id,
     user_id: userId,
     workout_id: set.workoutId,
+    date_key: isoTimestamp.slice(0, 10),
     set_index: typeof set.setIndex === 'number' && !isNaN(set.setIndex) ? set.setIndex : 0,
     weight: typeof set.weight === 'number' && !isNaN(set.weight) ? set.weight : 0,
     reps: typeof set.reps === 'number' && !isNaN(set.reps) ? set.reps : 0,
     completed: set.completed !== undefined ? Boolean(set.completed) : true,
-    timestamp: toSafeISOString(set.timestamp),
-    created_at: toSafeISOString(set.timestamp),
-    updated_at: toSafeISOString(set.timestamp)
+    timestamp: isoTimestamp,
+    created_at: isoTimestamp,
+    updated_at: isoTimestamp
   };
 
   if (exerciseId) payload.exercise_id = exerciseId;
@@ -178,13 +184,15 @@ export function sanitizeWorkoutSetForRemote(
 }
 
 export function sanitizeBodyWeightForRemote(bw: BodyWeight, userId: string): Record<string, unknown> {
+  const isoDate = toSafeISOString(bw.date);
   return {
     id: bw.id,
     user_id: userId,
     weight: typeof bw.weight === 'number' && !isNaN(bw.weight) ? bw.weight : 70,
-    date: toSafeISOString(bw.date),
-    created_at: toSafeISOString(bw.date),
-    updated_at: toSafeISOString(bw.date)
+    date: isoDate,
+    date_key: isoDate.slice(0, 10),
+    created_at: isoDate,
+    updated_at: isoDate
   };
 }
 
@@ -229,7 +237,19 @@ async function batchUpsert(
           continue; // Retenta o upsert imediatamente sem a coluna incompatível
         }
 
-        // 2. Tratamento de chave estrangeira / not-null em workout_sets
+        // 2. Tratamento de date_key not-null constraint
+        if (msg.includes('date_key') && (msg.includes('not-null') || msg.includes('null value'))) {
+          console.warn(`[Sync] Preenchendo date_key para contornar restrição not-null...`);
+          chunk = chunk.map(item => ({
+            ...item,
+            date_key: typeof item.date === 'string' 
+              ? (item.date as string).slice(0, 10) 
+              : (typeof item.timestamp === 'string' ? (item.timestamp as string).slice(0, 10) : new Date().toISOString().slice(0, 10))
+          }));
+          continue;
+        }
+
+        // 3. Tratamento de chave estrangeira / not-null em workout_sets
         if (table === 'workout_sets' && (msg.includes('foreign key constraint') || msg.includes('violates foreign key') || msg.includes('exercise_id'))) {
           console.warn(`[Sync] Ajustando exercise_id em workout_sets para contornar restrição de FK/not-null...`);
           const fallbackEx = fallbackIds?.defaultExerciseId || null;
@@ -240,7 +260,7 @@ async function batchUpsert(
           continue;
         }
 
-        // 3. Tratamento de chave estrangeira / not-null em workouts
+        // 4. Tratamento de chave estrangeira / not-null em workouts
         if (table === 'workouts' && (msg.includes('foreign key constraint') || msg.includes('violates foreign key') || msg.includes('protocol_id'))) {
           console.warn(`[Sync] Ajustando protocol_id em workouts para contornar restrição de FK/not-null...`);
           const fallbackProt = fallbackIds?.defaultProtocolId || null;
