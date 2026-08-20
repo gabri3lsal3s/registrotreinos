@@ -46,7 +46,7 @@ export async function runHistoryRecovery(options?: { silent?: boolean }): Promis
     // Para cada treino afetado, tentar o remendo
     for (const workoutId of Object.keys(orphansByWorkout)) {
       const workout = await db.workouts.get(workoutId);
-      if (!workout) continue;
+      if (!workout || !workout.protocolId) continue;
 
       const currentExercises = await db.exercises
         .where('protocolId')
