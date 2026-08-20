@@ -59,9 +59,27 @@ export function calculate1RM(
 /**
  * Calcula a força relativa baseada no 1RM estimado dividido pelo peso corporal.
  */
-export function calculateRelativeStrength(e1rm: number, userWeight: number): number {
-  if (!userWeight || userWeight <= 0 || !e1rm || e1rm <= 0) return 0;
-  return Number((e1rm / userWeight).toFixed(2));
+export function calculateRelativeStrength(
+  e1rm: number,
+  userWeight: number = 0
+): number {
+  const baseWeight = userWeight > 0 ? userWeight : 70;
+  return Number((e1rm / baseWeight).toFixed(2));
+}
+
+/**
+ * Converte de forma resiliente qualquer formato de data/timestamp para epoch em milissegundos.
+ */
+export function toTimestamp(val: unknown): number {
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  if (typeof val === 'string') {
+    const num = Number(val);
+    if (!isNaN(num) && num > 100000) return num;
+    const parsed = new Date(val).getTime();
+    if (!isNaN(parsed)) return parsed;
+  }
+  if (val instanceof Date) return val.getTime();
+  return 0;
 }
 
 /**

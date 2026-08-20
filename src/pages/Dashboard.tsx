@@ -13,6 +13,7 @@ import {
 import { fullSync } from '../services/syncService';
 import { syncEventBus } from '../services/eventBus';
 import { WEEK_DAYS, getDayKey, getDayLabel } from '../utils/constants';
+import { toTimestamp } from '../utils/workoutMath';
 import { Calendar, TrendingUp, LayoutDashboard } from "lucide-react";
 
 import { 
@@ -35,8 +36,8 @@ export default function Dashboard() {
   const [stats, setStats] = useState({ 
     weeklyWorkouts: 0, 
     monthlyWorkouts: 0,
-    weeklyGoal: 5,
-    monthlyGoal: 20
+    weeklyGoal: 4,
+    monthlyGoal: 16
   });
   const [latestWeight, setLatestWeight] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,9 +53,9 @@ export default function Dashboard() {
         .where('userId')
         .equals(user.id)
         .filter(p => !p.isDeleted)
-        .toArray()).filter(p => !p.isArchived);
+        .toArray());
 
-      const enabledProtocols = allProtocols.filter(p => p.isEnabled);
+      const enabledProtocols = allProtocols.filter(p => p.isEnabled !== false);
 
       let activeProtocol = null;
       for (const p of enabledProtocols) {
@@ -123,11 +124,16 @@ export default function Dashboard() {
       }
 
       // Buscar histórico para mapa de consistência e métricas
-      const allWorkouts = await db.workouts
+      const rawWorkouts = await db.workouts
         .where('userId')
         .equals(user.id)
-        .filter(w => !w.isDeleted && (w.status === 'completed' || !w.status))
+        .filter(w => !w.isDeleted && w.status !== 'cancelled' && w.status !== 'active')
         .toArray();
+
+      const allWorkouts = rawWorkouts.map(w => ({
+        ...w,
+        date: toTimestamp(w.date)
+      }));
 
       const completedKeys = allWorkouts.map(w => {
         const d = new Date(w.date);
@@ -144,8 +150,8 @@ export default function Dashboard() {
 
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-      const thisWeekWorkouts = allWorkouts.filter(w => new Date(w.date) >= startOfWeek);
-      const monthlyWorkouts = allWorkouts.filter(w => new Date(w.date) >= startOfMonth).length;
+      const thisWeekWorkouts = allWorkouts.filter(w => w.date >= startOfWeek.getTime());
+      const monthlyWorkouts = allWorkouts.filter(w => w.date >= startOfMonth.getTime()).length;
 
       let weeklyGoal = 0;
       let monthlyGoal = 0;

@@ -2,7 +2,7 @@ import { db, getBodyWeightsByUser } from './workoutDB';
 import dayjs from 'dayjs';
 import 'dayjs/locale/pt-br';
 import { getExerciseInfo } from '../utils/exerciseDictionary';
-import { calculateEquivalentWeight, calculateVolume, calculate1RM, calculateRelativeStrength } from '../utils/workoutMath';
+import { calculateEquivalentWeight, calculateVolume, calculate1RM, calculateRelativeStrength, toTimestamp } from '../utils/workoutMath';
 import type { AnalysisPeriod, AnalysisSummary, ExerciseCategory } from '../types';
 
 dayjs.locale('pt-br');
@@ -64,21 +64,34 @@ export async function getAnalysisSummary(
   };
 
   const userProtocols = (await db.protocols.where('userId').equals(userId).toArray()).filter(p => !p.isDeleted);
-  const workouts = await db.workouts.where('userId').equals(userId)
-    .filter(w => !w.isDeleted && w.status === 'completed' && w.date >= (period === 'all' ? 0 : baselineStartDate))
+  
+  const rawWorkouts = await db.workouts.where('userId').equals(userId)
+    .filter(w => !w.isDeleted && w.status !== 'cancelled' && w.status !== 'active')
     .toArray();
 
+  const workouts = rawWorkouts
+    .map(w => ({
+      ...w,
+      date: toTimestamp(w.date)
+    }))
+    .filter(w => (period === 'all' ? true : w.date >= baselineStartDate));
+
   const workoutIds = workouts.map(w => w.id);
-  const allSets = (await db.workoutSets.where('workoutId').anyOf(workoutIds).toArray()).filter(s => !s.isDeleted);
+  const rawSets = (await db.workoutSets.where('workoutId').anyOf(workoutIds).toArray()).filter(s => !s.isDeleted);
+  const allSets = rawSets.map(s => ({
+    ...s,
+    timestamp: toTimestamp(s.timestamp || s.createdAt)
+  }));
+
   const exerciseIds = [...new Set(allSets.map(s => s.exerciseId))];
-  const allExercises = (await db.exercises.where('id').anyOf(exerciseIds).toArray()).filter(e => !e.isDeleted);
+  const allExercises = await db.exercises.where('id').anyOf(exerciseIds).toArray();
   const exerciseMap = new Map(allExercises.map(e => [e.id, e]));
   const bwHistory = await getBodyWeightsByUser(userId);
 
   const getWeightAtDate = (timestamp: number) => {
     let closestWeight = 0;
     for (const bw of bwHistory) {
-      if (bw.date <= timestamp) closestWeight = bw.weight;
+      if (toTimestamp(bw.date) <= timestamp) closestWeight = bw.weight;
       else break;
     }
     return closestWeight || 75;
@@ -88,10 +101,12 @@ export async function getAnalysisSummary(
     .map(set => {
       const workout = workouts.find(w => w.id === set.workoutId);
       if (!workout) return null;
-      const info = getExerciseInfo(exerciseMap.get(set.exerciseId)?.name || '');
-      const userWeight = getWeightAtDate(workout.date);
-      const cat = exerciseMap.get(set.exerciseId)?.category || info.category || 'weight';
-      const k = exerciseMap.get(set.exerciseId)?.multiplier || info.multiplier || 1;
+      const workoutTime = workout.date || set.timestamp;
+      const exObj = exerciseMap.get(set.exerciseId);
+      const info = getExerciseInfo(exObj?.name || '');
+      const userWeight = getWeightAtDate(workoutTime);
+      const cat = exObj?.category || info.category || 'weight';
+      const k = exObj?.multiplier || info.multiplier || 1;
       
       const eqWeight = calculateEquivalentWeight(set.weight, cat, userWeight, k);
       const volume = calculateVolume(set.weight, set.reps, cat, userWeight, k);
@@ -100,13 +115,13 @@ export async function getAnalysisSummary(
 
       return {
         ...set,
-        dateKey: dayjs(workout.date).format('YYYY-MM-DD'),
-        timestamp: workout.date,
-        protocolId: workout.protocolId,
+        dateKey: dayjs(workoutTime).format('YYYY-MM-DD'),
+        timestamp: workoutTime,
+        protocolId: workout.protocolId || '',
         eqWeight,
         volume,
         cat,
-        exName: info.canonicalName,
+        exName: exObj?.name || info.canonicalName || 'Exercício',
         muscleGroup: info.muscleGroup || 'Outros',
         relStrength
       };
