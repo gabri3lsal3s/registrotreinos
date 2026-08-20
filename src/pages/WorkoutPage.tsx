@@ -281,7 +281,7 @@ export default function WorkoutPage() {
       }
     }
     loadWorkoutData();
-  }, [user?.id, protocolId, selectedDay, navigate]);
+  }, [user, protocolId, selectedDay, navigate]);
 
   useEffect(() => {
     if (isLibraryOpen && user) {
