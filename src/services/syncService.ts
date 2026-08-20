@@ -514,29 +514,7 @@ export async function pullData(): Promise<{ success: boolean }> {
     const remoteBW = rawRemoteBW.filter(item => !pendingDeletionKeys.has(`body_weights_${item.id}`));
 
     await db.transaction('rw', [db.protocols, db.exercises, db.workouts, db.workoutSets, db.bodyWeights], async () => {
-      // 1. Limpeza Inteligente com Isolamento de Usuário
-      const remotePIds = remoteP.map(p => p.id as string);
-      const remoteWIds = remoteW.map(w => w.id as string);
-      const remoteEIds = remoteE.map(e => e.id as string);
-      const remoteSIds = remoteS.map(s => s.id as string);
-      const remoteBWIds = remoteBW.map(b => b.id as string);
-
-      // Obter IDs locais dos protocolos e treinos do usuário logado
-      const localProtocols = await db.protocols.where('userId').equals(user.id).toArray();
-      const localProtocolIds = new Set(localProtocols.map(p => p.id));
-      const localWorkouts = await db.workouts.where('userId').equals(user.id).toArray();
-      const localWorkoutIds = new Set(localWorkouts.map(w => w.id));
-
-      // Remover locais que eram "synced" mas sumiram da nuvem
-      await db.protocols.where('userId').equals(user.id).and(p => p.isSynced === true && !p.isArchived && !remotePIds.includes(p.id)).delete();
-      await db.workouts.where('userId').equals(user.id).and(w => w.isSynced === true && !remoteWIds.includes(w.id)).delete();
-      await db.bodyWeights.where('userId').equals(user.id).and(b => b.isSynced === true && !remoteBWIds.includes(b.id)).delete();
-      
-      // Para exercises e sets, filtrar estritamente pelos protocolos e treinos do usuário logado
-      await db.exercises.toCollection().filter(e => localProtocolIds.has(e.protocolId) && e.isSynced === true && !e.isArchived && !remoteEIds.includes(e.id)).delete();
-      await db.workoutSets.toCollection().filter(s => localWorkoutIds.has(s.workoutId) && s.isSynced === true && !remoteSIds.includes(s.id)).delete();
-
-      // 2. Mapeamento e Persistência preservando metadados locais
+      // Mapeamento e Persistência Não-Destrutiva preservando metadados locais
       for (const item of remoteP) {
         const camel = toCamel<Protocol>(item);
         const local = await db.protocols.get(camel.id);
