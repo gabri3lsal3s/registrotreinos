@@ -44,6 +44,7 @@ export interface WorkoutExerciseData {
   setsData: SetInputData[];
   isSessionOnly?: boolean;
   pinnedNotes?: string;
+  supersetGroupId?: string;
 }
 
 interface WorkoutExerciseCardProps {
@@ -146,6 +147,11 @@ export function WorkoutExerciseCard({
                   <h3 className="font-bold text-sm sm:text-base text-foreground truncate leading-tight">
                     {displayName}
                   </h3>
+                  {exercise.supersetGroupId && (
+                    <span className="px-1.5 py-0.5 rounded-md bg-purple-500/15 text-purple-400 border border-purple-500/30 text-[10px] font-black uppercase tracking-wider">
+                      ⚡ Bi-Set {exercise.supersetGroupId}
+                    </span>
+                  )}
                   {exercise.isSessionOnly && (
                     <span className="px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 text-[10px] font-bold uppercase tracking-wider">
                       Extra

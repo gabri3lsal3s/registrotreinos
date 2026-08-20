@@ -150,6 +150,7 @@ export default function ProtocolsPage() {
           reps: ex.reps || 10,
           baseline: ex.lastWeight || '',
           pinnedNotes: ex.pinnedNotes || '',
+          supersetGroupId: ex.supersetGroupId || '',
         }));
       
       if (dayExs.length > 0) {
@@ -379,6 +380,7 @@ export default function ProtocolsPage() {
             lastWeight: parseLocaleNumber(ex.baseline, 0),
             lastReps: parseLocaleNumber(ex.reps, 0),
             pinnedNotes: ex.pinnedNotes ? ex.pinnedNotes.trim() : undefined,
+            supersetGroupId: ex.supersetGroupId ? ex.supersetGroupId.trim() : undefined,
           };
 
           if (ex.id && oldExercises.some(old => old.id === ex.id)) {

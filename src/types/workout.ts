@@ -14,6 +14,7 @@ export interface Exercise {
   lastWeight?: number;
   lastReps?: number;
   pinnedNotes?: string; // Notas fixas de regulagem de aparelho, pegada, etc.
+  supersetGroupId?: string; // Agrupamento em Bi-set / Super-série (ex: 'A', 'B')
   isSynced?: boolean;
   isArchived?: boolean;
   isSessionOnly?: boolean;

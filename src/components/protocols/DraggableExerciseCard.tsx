@@ -25,6 +25,7 @@ export interface BuilderExerciseItem {
   reps: number;
   baseline: string | number;
   pinnedNotes?: string;
+  supersetGroupId?: string;
 }
 
 interface DraggableExerciseCardProps { 
@@ -122,6 +123,21 @@ export function DraggableExerciseCard({
                   <SelectItem value="Tríceps">Tríceps</SelectItem>
                   <SelectItem value="Core">Core</SelectItem>
                   <SelectItem value="Outros">Outros</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={ex.supersetGroupId || 'none'}
+                onValueChange={(val: string) => onUpdate(day, idx, 'supersetGroupId', val === 'none' ? '' : val)}
+              >
+                <SelectTrigger className={`h-7 text-[10px] w-auto border-none font-bold rounded-lg px-2.5 shadow-none ${ex.supersetGroupId ? 'bg-purple-500/20 text-purple-400 font-black' : 'bg-muted/60 text-muted-foreground'}`}>
+                  <SelectValue placeholder="Série Casada" />
+                </SelectTrigger>
+                <SelectContent className="text-xs font-bold">
+                  <SelectItem value="none">Série Normal</SelectItem>
+                  <SelectItem value="A">⚡ Bi-Set A</SelectItem>
+                  <SelectItem value="B">⚡ Bi-Set B</SelectItem>
+                  <SelectItem value="C">⚡ Bi-Set C</SelectItem>
                 </SelectContent>
               </Select>
             </div>

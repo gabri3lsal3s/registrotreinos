@@ -208,7 +208,9 @@ export default function WorkoutPage() {
               setsData,
               isSessionOnly: ex.isSessionOnly,
               lastWeight: finalPR.weight,
-              lastReps: finalPR.reps
+              lastReps: finalPR.reps,
+              pinnedNotes: ex.pinnedNotes,
+              supersetGroupId: ex.supersetGroupId,
             };
           }));
 
