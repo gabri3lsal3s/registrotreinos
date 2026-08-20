@@ -1,26 +1,106 @@
 {
-  "name": "Registro de Treinos",
   "short_name": "Treinos",
-  "description": "PWA para rastreamento de hipertrofia, análise de performance e biofeedback.",
-  "lang": "pt-BR",
+  "name": "Registro de Treinos — Performance Control",
+  "description": "PWA offline-first para rastreamento de hipertrofia, análise de volume, sobrecarga progressiva, 1RM e biofeedback.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "window-controls-overlay"],
   "orientation": "portrait",
   "background_color": "#09090b",
   "theme_color": "#09090b",
+  "categories": ["fitness", "health", "sports", "productivity"],
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "shortcuts": [
+    {
+      "name": "Iniciar Treino",
+      "short_name": "Treinar",
+      "description": "Acessar protocolos e iniciar um novo treino",
+      "url": "/protocols",
+      "icons": [
+        {
+          "src": "/icons/pwa-192x192.png",
+          "type": "image/png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Histórico de Treinos",
+      "short_name": "Histórico",
+      "description": "Ver treinos finalizados e registros passados",
+      "url": "/history",
+      "icons": [
+        {
+          "src": "/icons/pwa-192x192.png",
+          "type": "image/png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Análises e Métricas",
+      "short_name": "Métricas",
+      "description": "Acompanhar volume muscular, 1RM e consistência",
+      "url": "/analysis",
+      "icons": [
+        {
+          "src": "/icons/pwa-192x192.png",
+          "type": "image/png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
   "icons": [
     {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
+      "src": "/icons/pwa-192x192.png",
       "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/pwa-512x512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/pwa-192x192-maskable.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/pwa-512x512-maskable.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "/maskable-icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
       "purpose": "any"
     },
     {
       "src": "/icon-512.png",
-      "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "sizes": "512x512",
+      "purpose": "any"
     }
   ]
 }

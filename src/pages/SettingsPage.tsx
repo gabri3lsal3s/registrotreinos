@@ -19,8 +19,16 @@ import {
   ShieldCheck, 
   Sparkles,
   CheckCircle2,
-  HardDrive
+  HardDrive,
+  Vibrate,
+  Volume2
 } from "lucide-react";
+import { 
+  getSensorySettings, 
+  saveSensorySettings, 
+  triggerHaptic, 
+  playAudioCue 
+} from '../utils/sensoryFeedback';
 import { 
   exportBackupJSON, 
   exportWorkoutHistoryCSV, 
@@ -35,6 +43,24 @@ export default function SettingsPage() {
   const { user, logout, syncStatus } = useAuth();
   const { isDarkMode, setIsDarkMode } = useTheme();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  const [sensorySettings, setSensorySettingsState] = useState(() => getSensorySettings());
+
+  const handleToggleHaptics = (val: boolean) => {
+    const updated = saveSensorySettings({ hapticsEnabled: val });
+    setSensorySettingsState(updated);
+    if (val) {
+      triggerHaptic('success');
+    }
+  };
+
+  const handleToggleSound = (val: boolean) => {
+    const updated = saveSensorySettings({ soundEnabled: val });
+    setSensorySettingsState(updated);
+    if (val) {
+      playAudioCue('set_complete');
+    }
+  };
 
   const [pendingCounts, setPendingCounts] = useState<PendingSyncCounts>({
     protocols: 0,
@@ -176,6 +202,60 @@ export default function SettingsPage() {
               <Switch 
                 checked={isDarkMode} 
                 onCheckedChange={(val) => setIsDarkMode(val)} 
+              />
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* 2. Microinterações & Feedback Sensorial */}
+        <section className="space-y-3">
+          <h3 className="text-xs font-black uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 px-1">
+            <Vibrate className="w-3.5 h-3.5 text-primary" />
+            Feedback Sensorial & Áudio
+          </h3>
+
+          <Card className="border-border/50 bg-card rounded-2xl shadow-sm overflow-hidden divide-y divide-border/30">
+            {/* Vibração Háptica */}
+            <CardContent className="p-4 sm:p-5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <Vibrate className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-foreground leading-tight">
+                    Vibração Háptica
+                  </h4>
+                  <p className="text-xs text-muted-foreground font-medium">
+                    Feedback tátil ao marcar séries, ajustar cargas e cronômetro
+                  </p>
+                </div>
+              </div>
+
+              <Switch 
+                checked={sensorySettings.hapticsEnabled} 
+                onCheckedChange={handleToggleHaptics} 
+              />
+            </CardContent>
+
+            {/* Efeitos Sonoros */}
+            <CardContent className="p-4 sm:p-5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <Volume2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-foreground leading-tight">
+                    Efeitos Sonoros de Interface
+                  </h4>
+                  <p className="text-xs text-muted-foreground font-medium">
+                    Bipes suaves e tons sintéticos para séries, PRs e descanso
+                  </p>
+                </div>
+              </div>
+
+              <Switch 
+                checked={sensorySettings.soundEnabled} 
+                onCheckedChange={handleToggleSound} 
               />
             </CardContent>
           </Card>

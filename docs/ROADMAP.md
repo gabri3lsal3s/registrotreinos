@@ -90,5 +90,3 @@ Este documento registra a evolução do **Registro de Treinos**, cobrindo todas 
    - Modelos prontos de divisões de treinamento populares (PPL 6x, Upper/Lower 4x, Fullbody 3x, ABC Clássico) importáveis com 1 clique.
 4. **Séries Casadas (*Supersets / Bi-sets*)**:
    - Agrupamento visual de exercícios no montador e na tela de execução com cronômetro conjunto e transição imediata.
-
-

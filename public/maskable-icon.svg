@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Solid Zinc 950 -->
+    <linearGradient id="maskableBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#18181b"/>
+      <stop offset="50%" stop-color="#09090b"/>
+      <stop offset="100%" stop-color="#040405"/>
+    </linearGradient>
+
+    <!-- Radial Emerald Ambience -->
+    <radialGradient id="maskableGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#10b981" stop-opacity="0.25"/>
+      <stop offset="55%" stop-color="#059669" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#09090b" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Primary Emerald Plate Gradient -->
+    <linearGradient id="emeraldPlateMask" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6ee7b7"/>
+      <stop offset="25%" stop-color="#34d399"/>
+      <stop offset="70%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+
+    <!-- Metallic Shaft Gradient -->
+    <linearGradient id="barMetalMask" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#a1a1aa"/>
+      <stop offset="35%" stop-color="#f4f4f5"/>
+      <stop offset="65%" stop-color="#d4d4d8"/>
+      <stop offset="100%" stop-color="#52525b"/>
+    </linearGradient>
+
+    <!-- Collar Gradient -->
+    <linearGradient id="collarMetalMask" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#71717a"/>
+      <stop offset="50%" stop-color="#e4e4e7"/>
+      <stop offset="100%" stop-color="#3f3f46"/>
+    </linearGradient>
+
+    <!-- Drop Shadow -->
+    <filter id="maskShadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#000000" flood-opacity="0.8"/>
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#10b981" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- 1. Full Bleed Background (Edge-to-Edge for Android Masking) -->
+  <rect width="512" height="512" fill="url(#maskableBg)"/>
+  <rect width="512" height="512" fill="url(#maskableGlow)"/>
+
+  <!-- 2. Safe Zone Scale & Center (0.80 scale centered at 256, 256) -->
+  <g transform="translate(256, 256) scale(0.80) translate(-256, -256)" filter="url(#maskShadow)">
+    <!-- Central Barbell Grip Shaft -->
+    <rect x="130" y="238" width="252" height="36" rx="18" fill="url(#barMetalMask)"/>
+
+    <!-- Knurling Texture Details -->
+    <g opacity="0.30" stroke="#18181b" stroke-width="3" stroke-linecap="round">
+      <line x1="216" y1="243" x2="216" y2="269"/>
+      <line x1="230" y1="243" x2="230" y2="269"/>
+      <line x1="244" y1="243" x2="244" y2="269"/>
+      <line x1="256" y1="243" x2="256" y2="269"/>
+      <line x1="268" y1="243" x2="268" y2="269"/>
+      <line x1="282" y1="243" x2="282" y2="269"/>
+      <line x1="296" y1="243" x2="296" y2="269"/>
+    </g>
+
+    <!-- LEFT WEIGHT PLATES -->
+    <rect x="52" y="176" width="34" height="160" rx="17" fill="url(#emeraldPlateMask)" stroke="#047857" stroke-width="2.5"/>
+    <rect x="60" y="188" width="8" height="136" rx="4" fill="#ffffff" opacity="0.35"/>
+
+    <rect x="96" y="128" width="44" height="256" rx="22" fill="url(#emeraldPlateMask)" stroke="#047857" stroke-width="2.5"/>
+    <rect x="106" y="142" width="10" height="228" rx="5" fill="#ffffff" opacity="0.4"/>
+
+    <rect x="146" y="222" width="20" height="68" rx="10" fill="url(#collarMetalMask)" stroke="#27272a" stroke-width="2"/>
+
+    <!-- RIGHT WEIGHT PLATES -->
+    <rect x="346" y="222" width="20" height="68" rx="10" fill="url(#collarMetalMask)" stroke="#27272a" stroke-width="2"/>
+
+    <rect x="372" y="128" width="44" height="256" rx="22" fill="url(#emeraldPlateMask)" stroke="#047857" stroke-width="2.5"/>
+    <rect x="382" y="142" width="10" height="228" rx="5" fill="#ffffff" opacity="0.4"/>
+
+    <rect x="426" y="176" width="34" height="160" rx="17" fill="url(#emeraldPlateMask)" stroke="#047857" stroke-width="2.5"/>
+    <rect x="434" y="188" width="8" height="136" rx="4" fill="#ffffff" opacity="0.35"/>
+  </g>
+</svg>

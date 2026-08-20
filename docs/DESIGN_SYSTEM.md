@@ -32,7 +32,19 @@ O design system do **Registro de Treinos** é fundamentado na paleta semântica 
 
 ---
 
-## 3. Ergonomia Mobile & Gym UX
+## 3. Identidade de Marca e Iconografia (Logo PWA Minimalista)
+
+1. **Símbolo Central**: Haltere metálico minimalista com anilhas simétricas em gradiente esmeralda (`#6ee7b7` ➔ `#34d399` ➔ `#10b981` ➔ `#047857`), barra central com acabamento texturizado de pegada e travas de segurança.
+2. **Container Base**: Squircle com raio suave no tom Zinc 950 (`#09090b`) com iluminação ambiente radial e borda esmeralda sutil.
+3. **Formatos Oficiais**:
+   - `public/icon.svg` (Vetor Master minimalista de halteres)
+   - `public/maskable-icon.svg` (Vetor com safe zone de 80% e fundo contínuo)
+   - `public/favicon.svg` (Favicon vetorial minimalista para abas)
+   - `public/icons/` e `public/splash/` (Assets PNG gerados para todas as resoluções Android e iOS)
+
+---
+
+## 4. Ergonomia Mobile & Gym UX
 
 1. **Alvos de Toque Mínimos**: Todos os botões interativos possuem no mínimo **44px** (`h-11` ou `h-11 w-11`).
 2. **Auto-seleção ao Focar**: Campos numéricos executam `onFocus={(e) => e.target.select()}` para substituição instantânea de carga e reps com luvas de treino.
