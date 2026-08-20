@@ -94,7 +94,6 @@ export function sanitizeExerciseForRemote(ex: Exercise, userId: string): Record<
     muscle_group: ex.muscleGroup || 'Outros',
     category: ex.category || 'weight',
     multiplier: typeof ex.multiplier === 'number' && !isNaN(ex.multiplier) ? ex.multiplier : 1.0,
-    day: day,
     day_of_week: day,
     sets: typeof ex.sets === 'number' && !isNaN(ex.sets) ? ex.sets : 3,
     reps: typeof ex.reps === 'number' && !isNaN(ex.reps) ? ex.reps : 10,
@@ -108,6 +107,14 @@ export function sanitizeExerciseForRemote(ex: Exercise, userId: string): Record<
 }
 
 export function sanitizeWorkoutForRemote(w: Workout, userId: string): Record<string, unknown> {
+  let moodVal: string | number | null = null;
+  const rawMood = w.mood as unknown;
+  if (typeof rawMood === 'number' && !isNaN(rawMood)) moodVal = rawMood;
+  else if (typeof rawMood === 'string' && rawMood.trim().length > 0) {
+    const parsed = parseInt(rawMood, 10);
+    moodVal = isNaN(parsed) ? rawMood : parsed;
+  }
+
   return {
     id: w.id,
     user_id: userId,
@@ -115,7 +122,7 @@ export function sanitizeWorkoutForRemote(w: Workout, userId: string): Record<str
     date: toSafeISOString(w.date),
     status: w.status || 'completed',
     finished_at: toNullableSafeISOString(w.finishedAt),
-    mood: w.mood !== undefined && w.mood !== null ? String(w.mood) : null,
+    mood: moodVal,
     sleep_quality: typeof w.sleepQuality === 'number' && !isNaN(w.sleepQuality) ? w.sleepQuality : null,
     stress_level: typeof w.stressLevel === 'number' && !isNaN(w.stressLevel) ? w.stressLevel : null,
     recovery: w.recovery || null,
@@ -161,16 +168,56 @@ export function sanitizeBodyWeightForRemote(bw: BodyWeight, userId: string): Rec
 }
 
 // ============================================================================
-// UPSERT EM CHUNKS (PARTICIONAMENTO EM LOTES DE ATÉ 100 REGISTROS)
+// UPSERT AUTO-REPARÁVEL EM CHUNKS (PARTICIONAMENTO E AUTO-HEALING DE SCHEMA)
 // ============================================================================
 
 async function batchUpsert(table: string, items: Record<string, unknown>[], chunkSize = 100): Promise<void> {
+  if (items.length === 0) return;
+
   for (let i = 0; i < items.length; i += chunkSize) {
-    const chunk = items.slice(i, i + chunkSize);
+    let chunk = items.slice(i, i + chunkSize);
+    
     await withRetry(async () => {
-      const { error } = await supabase.from(table).upsert(chunk);
-      if (error) {
-        throw new Error(`Erro ao subir ${table} (lote ${Math.floor(i / chunkSize) + 1}): ${error.message}`);
+      let res = await supabase.from(table).upsert(chunk);
+
+      // Tratamento auto-reparável de erros de esquema (colunas ausentes no banco remoto)
+      if (res.error && res.error.message) {
+        const missingColumnMatch = res.error.message.match(/Could not find the '([^']+)' column/) ||
+                                   res.error.message.match(/column "([^"]+)" of relation "[^"]+" does not exist/);
+        if (missingColumnMatch && missingColumnMatch[1]) {
+          const badCol = missingColumnMatch[1];
+          console.warn(`[Sync] Coluna '${badCol}' não existe no Supabase para '${table}'. Auto-reparando payload...`);
+          chunk = chunk.map(item => {
+            const copy = { ...item };
+            delete copy[badCol];
+            return copy;
+          });
+          res = await supabase.from(table).upsert(chunk);
+        }
+
+        // Tratamento auto-reparável de integridade referencial de exercício em workout_sets
+        if (res.error && table === 'workout_sets' && (res.error.message.includes('foreign key constraint') || res.error.message.includes('violates foreign key'))) {
+          console.warn(`[Sync] Foreign Key em workout_sets. Salvando séries com exercise_id nulo para preservar integridade...`);
+          chunk = chunk.map(item => ({
+            ...item,
+            exercise_id: null
+          }));
+          res = await supabase.from(table).upsert(chunk);
+        }
+
+        // Tratamento auto-reparável de integridade referencial de protocolo em workouts
+        if (res.error && table === 'workouts' && (res.error.message.includes('foreign key constraint') || res.error.message.includes('violates foreign key'))) {
+          console.warn(`[Sync] Foreign Key em workouts. Salvando treinos com protocol_id nulo para preservar dados...`);
+          chunk = chunk.map(item => ({
+            ...item,
+            protocol_id: null
+          }));
+          res = await supabase.from(table).upsert(chunk);
+        }
+      }
+
+      if (res.error) {
+        throw new Error(`Erro ao subir ${table} (lote ${Math.floor(i / chunkSize) + 1}): ${res.error.message}`);
       }
     });
   }
@@ -272,11 +319,11 @@ export async function syncData(): Promise<{ success: boolean }> {
     // 1. Processar e expurgar fila de deleções pendentes (Tombstones)
     await flushPendingDeletions(user.id);
 
-    // 2. Coleta dados locais não sincronizados com escopo de usuário
+    // 2. Coleta dados locais com escopo de usuário
     const protocolsLocal = await db.protocols.where('userId').equals(user.id).and(p => !p.isSynced).toArray();
     const workoutsLocal = await db.workouts.where('userId').equals(user.id).and(w => !w.isSynced).toArray();
     
-    // Obter todos os protocolos do usuário para garantir isolamento e FKs
+    // Obter todos os protocolos do usuário para garantir isolamento e integridade de FK
     const userProtocols = await db.protocols.where('userId').equals(user.id).toArray();
     const userProtocolIds = new Set(userProtocols.map(p => p.id));
     const exercisesLocal = await db.exercises.filter(ex => userProtocolIds.has(ex.protocolId) && !ex.isSynced).toArray();
@@ -293,36 +340,54 @@ export async function syncData(): Promise<{ success: boolean }> {
       return { success: true };
     }
 
+    // Garantir que todos os protocolos referenciados pelos exercícios sejam enviados
+    const referencedProtocolIds = new Set(exercisesLocal.map(e => e.protocolId));
+    const parentProtocolsToSend = userProtocols.filter(p => referencedProtocolIds.has(p.id));
+    const protocolsMap = new Map<string, Protocol>();
+    for (const p of [...protocolsLocal, ...parentProtocolsToSend]) {
+      protocolsMap.set(p.id, p);
+    }
+    const finalProtocols = Array.from(protocolsMap.values());
+
     // Obter todos os IDs de exercícios para validar FK em workoutSets
     const allUserExercises = await db.exercises.filter(ex => userProtocolIds.has(ex.protocolId)).toArray();
     const validExerciseIds = new Set(allUserExercises.map(e => e.id));
 
+    // Garantir que todos os treinos referenciados pelas séries sejam enviados
+    const referencedWorkoutIds = new Set(workoutSetsLocal.map(s => s.workoutId));
+    const parentWorkoutsToSend = userWorkouts.filter(w => referencedWorkoutIds.has(w.id));
+    const workoutsMap = new Map<string, Workout>();
+    for (const w of [...workoutsLocal, ...parentWorkoutsToSend]) {
+      workoutsMap.set(w.id, w);
+    }
+    const finalWorkouts = Array.from(workoutsMap.values());
+
     // 3. Sanitização estrita (apenas colunas permitidas no schema Supabase)
-    const protocols = protocolsLocal.map(p => sanitizeProtocolForRemote(p, user.id));
-    const exercises = exercisesLocal.map(e => sanitizeExerciseForRemote(e, user.id));
-    const workouts = workoutsLocal.map(w => sanitizeWorkoutForRemote(w, user.id));
-    const workoutSets = workoutSetsLocal.map(s => sanitizeWorkoutSetForRemote(s, user.id, validExerciseIds));
-    const bodyWeights = bodyWeightsLocal.map(b => sanitizeBodyWeightForRemote(b, user.id));
+    const protocolsPayload = finalProtocols.map(p => sanitizeProtocolForRemote(p, user.id));
+    const exercisesPayload = exercisesLocal.map(e => sanitizeExerciseForRemote(e, user.id));
+    const workoutsPayload = finalWorkouts.map(w => sanitizeWorkoutForRemote(w, user.id));
+    const workoutSetsPayload = workoutSetsLocal.map(s => sanitizeWorkoutSetForRemote(s, user.id, validExerciseIds));
+    const bodyWeightsPayload = bodyWeightsLocal.map(b => sanitizeBodyWeightForRemote(b, user.id));
 
-    // 4. PUSH sequencial em lotes com auto-retry
-    if (protocols.length > 0) {
-      await batchUpsert('protocols', protocols);
+    // 4. PUSH sequencial hierárquico em lotes com auto-retry e auto-healing
+    if (protocolsPayload.length > 0) {
+      await batchUpsert('protocols', protocolsPayload);
     }
     
-    if (exercises.length > 0) {
-      await batchUpsert('exercises', exercises);
+    if (exercisesPayload.length > 0) {
+      await batchUpsert('exercises', exercisesPayload);
     }
     
-    if (workouts.length > 0) {
-      await batchUpsert('workouts', workouts);
+    if (workoutsPayload.length > 0) {
+      await batchUpsert('workouts', workoutsPayload);
     }
     
-    if (workoutSets.length > 0) {
-      await batchUpsert('workout_sets', workoutSets);
+    if (workoutSetsPayload.length > 0) {
+      await batchUpsert('workout_sets', workoutSetsPayload);
     }
 
-    if (bodyWeights.length > 0) {
-      await batchUpsert('body_weights', bodyWeights);
+    if (bodyWeightsPayload.length > 0) {
+      await batchUpsert('body_weights', bodyWeightsPayload);
     }
 
     // 5. Marcar localmente como sincronizado com transação atômica

@@ -112,10 +112,12 @@ export default function SettingsPage() {
     try {
       await fullSync();
       await loadSyncStatus();
-      toast.success('Sincronização concluída!');
-    } catch (err) {
-      console.error(err);
-      toast.error('Erro durante a sincronização.');
+      toast.success('Sincronização concluída com sucesso!');
+    } catch (err: unknown) {
+      console.error('[Sync] Falha manual:', err);
+      const errMsg = err instanceof Error ? err.message : 'Falha na comunicação com o servidor';
+      toast.error(`Erro na sincronização: ${errMsg}`, { duration: 6000 });
+      await loadSyncStatus();
     } finally {
       setIsSyncing(false);
     }

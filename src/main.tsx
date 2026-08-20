@@ -1,7 +1,12 @@
-// Registro do Service Worker para PWA offline
+// Registro do Service Worker para PWA offline com auto-update
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js');
+    navigator.serviceWorker.register('/sw.js').then((reg) => {
+      // Verificar se há atualização do Service Worker a cada carregamento
+      reg.update().catch(() => {});
+    }).catch((err) => {
+      console.warn('[SW] Falha ao registrar Service Worker:', err);
+    });
   });
 }
 import { StrictMode } from 'react'
