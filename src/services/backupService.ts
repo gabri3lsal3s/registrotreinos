@@ -20,6 +20,7 @@ export interface PendingSyncCounts {
   workouts: number;
   workoutSets: number;
   bodyWeights: number;
+  pendingDeletions: number;
   total: number;
 }
 
@@ -47,6 +48,7 @@ export async function getPendingSyncCounts(userId: string): Promise<PendingSyncC
     : 0;
 
   const bodyWeights = await db.bodyWeights.where('userId').equals(userId).and(b => !b.isSynced).count();
+  const pendingDeletions = await db.pendingDeletions.where('userId').equals(userId).count();
 
   return {
     protocols,
@@ -54,7 +56,8 @@ export async function getPendingSyncCounts(userId: string): Promise<PendingSyncC
     workouts,
     workoutSets,
     bodyWeights,
-    total: protocols + exercises + workouts + workoutSets + bodyWeights
+    pendingDeletions,
+    total: protocols + exercises + workouts + workoutSets + bodyWeights + pendingDeletions
   };
 }
 

@@ -38,6 +38,32 @@ function toNullableSafeISOString(val: unknown): string | null {
 }
 
 // ============================================================================
+// RETENTATIVA COM EXPONENTIAL BACKOFF & JITTER
+// ============================================================================
+
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries = 3,
+  baseDelay = 800
+): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await fn();
+    } catch (err) {
+      attempt++;
+      if (attempt > maxRetries) {
+        throw err;
+      }
+      const jitter = Math.random() * 200;
+      const delay = Math.min(baseDelay * Math.pow(2, attempt - 1) + jitter, 5000);
+      console.warn(`[Sync] Falha transitória (tentativa ${attempt}/${maxRetries}), aguardando ${Math.round(delay)}ms...`);
+      await new Promise(res => setTimeout(res, delay));
+    }
+  }
+}
+
+// ============================================================================
 // SANITIZADORES ESTRITOS POR TABELA (WHITELISTING PARA O SUPABASE POSTGRESQL)
 // Evita envio de colunas não mapeadas como pinnedNotes, supersetGroupId, etc.
 // ============================================================================
@@ -135,6 +161,53 @@ export function sanitizeBodyWeightForRemote(bw: BodyWeight, userId: string): Rec
 }
 
 // ============================================================================
+// UPSERT EM CHUNKS (PARTICIONAMENTO EM LOTES DE ATÉ 100 REGISTROS)
+// ============================================================================
+
+async function batchUpsert(table: string, items: Record<string, unknown>[], chunkSize = 100): Promise<void> {
+  for (let i = 0; i < items.length; i += chunkSize) {
+    const chunk = items.slice(i, i + chunkSize);
+    await withRetry(async () => {
+      const { error } = await supabase.from(table).upsert(chunk);
+      if (error) {
+        throw new Error(`Erro ao subir ${table} (lote ${Math.floor(i / chunkSize) + 1}): ${error.message}`);
+      }
+    });
+  }
+}
+
+// ============================================================================
+// PROCESSADOR DE FILA DE DELEÇÕES PENDENTES (TOMBSTONES)
+// ============================================================================
+
+async function flushPendingDeletions(userId: string): Promise<void> {
+  const pending = await db.pendingDeletions.where('userId').equals(userId).toArray();
+  if (pending.length === 0) return;
+
+  const successfulIds: string[] = [];
+
+  for (const item of pending) {
+    try {
+      const { error } = await supabase
+        .from(item.table)
+        .delete()
+        .eq('id', item.recordId)
+        .eq('user_id', userId);
+
+      if (!error || error.code === 'PGRST116' || error.message.includes('not found')) {
+        successfulIds.push(item.id);
+      }
+    } catch (err) {
+      console.warn(`[Sync] Falha ao processar deleção remota (${item.table}:${item.recordId}):`, err);
+    }
+  }
+
+  if (successfulIds.length > 0) {
+    await db.pendingDeletions.where('id').anyOf(successfulIds).delete();
+  }
+}
+
+// ============================================================================
 // CONVERSOR CAMELCASE (DO SUPABASE PARA O DEXIE LOCAL)
 // ============================================================================
 
@@ -186,7 +259,8 @@ export const setSyncStatus = (status: 'pending' | 'syncing' | 'synced' | 'error'
 };
 
 /**
- * Envia todas as alterações pendentes locais (isSynced === false) para o Supabase.
+ * Envia todas as alterações pendentes locais (isSynced === false) para o Supabase
+ * e despacha tombstones pendentes.
  */
 export async function syncData(): Promise<{ success: boolean }> {
   const { user } = useAuthStore.getState();
@@ -195,7 +269,10 @@ export async function syncData(): Promise<{ success: boolean }> {
   setSyncStatus('syncing');
 
   try {
-    // 1. Coleta dados locais não sincronizados com escopo de usuário
+    // 1. Processar e expurgar fila de deleções pendentes (Tombstones)
+    await flushPendingDeletions(user.id);
+
+    // 2. Coleta dados locais não sincronizados com escopo de usuário
     const protocolsLocal = await db.protocols.where('userId').equals(user.id).and(p => !p.isSynced).toArray();
     const workoutsLocal = await db.workouts.where('userId').equals(user.id).and(w => !w.isSynced).toArray();
     
@@ -220,40 +297,35 @@ export async function syncData(): Promise<{ success: boolean }> {
     const allUserExercises = await db.exercises.filter(ex => userProtocolIds.has(ex.protocolId)).toArray();
     const validExerciseIds = new Set(allUserExercises.map(e => e.id));
 
-    // 2. Sanitização estrita (apenas colunas permitidas no schema Supabase)
+    // 3. Sanitização estrita (apenas colunas permitidas no schema Supabase)
     const protocols = protocolsLocal.map(p => sanitizeProtocolForRemote(p, user.id));
     const exercises = exercisesLocal.map(e => sanitizeExerciseForRemote(e, user.id));
     const workouts = workoutsLocal.map(w => sanitizeWorkoutForRemote(w, user.id));
     const workoutSets = workoutSetsLocal.map(s => sanitizeWorkoutSetForRemote(s, user.id, validExerciseIds));
     const bodyWeights = bodyWeightsLocal.map(b => sanitizeBodyWeightForRemote(b, user.id));
 
-    // 3. PUSH sequencial respeitando integridade de chaves estrangeiras
+    // 4. PUSH sequencial em lotes com auto-retry
     if (protocols.length > 0) {
-      const { error } = await supabase.from('protocols').upsert(protocols);
-      if (error) throw new Error(`Erro ao subir protocolos: ${error.message}`);
+      await batchUpsert('protocols', protocols);
     }
     
     if (exercises.length > 0) {
-      const { error } = await supabase.from('exercises').upsert(exercises);
-      if (error) throw new Error(`Erro ao subir exercícios: ${error.message}`);
+      await batchUpsert('exercises', exercises);
     }
     
     if (workouts.length > 0) {
-      const { error } = await supabase.from('workouts').upsert(workouts);
-      if (error) throw new Error(`Erro ao subir treinos: ${error.message}`);
+      await batchUpsert('workouts', workouts);
     }
     
     if (workoutSets.length > 0) {
-      const { error } = await supabase.from('workout_sets').upsert(workoutSets);
-      if (error) throw new Error(`Erro ao subir séries: ${error.message}`);
+      await batchUpsert('workout_sets', workoutSets);
     }
 
     if (bodyWeights.length > 0) {
-      const { error } = await supabase.from('body_weights').upsert(bodyWeights);
-      if (error) throw new Error(`Erro ao subir peso corporal: ${error.message}`);
+      await batchUpsert('body_weights', bodyWeights);
     }
 
-    // 4. Marcar localmente como sincronizado com transação atômica
+    // 5. Marcar localmente como sincronizado com transação atômica
     await db.transaction('rw', [db.protocols, db.exercises, db.workouts, db.workoutSets, db.bodyWeights], async () => {
       if (protocolsLocal.length > 0) {
         await db.protocols.where('id').anyOf(protocolsLocal.map(p => p.id)).modify({ isSynced: true });
@@ -283,7 +355,8 @@ export async function syncData(): Promise<{ success: boolean }> {
 }
 
 /**
- * Busca dados remotos do usuário e atualiza a base local no Dexie preservando metadados locais.
+ * Busca dados remotos do usuário e atualiza a base local no Dexie preservando metadados locais
+ * e ignorando itens marcados para deleção pendente.
  */
 export async function pullData(): Promise<{ success: boolean }> {
   const { user } = useAuthStore.getState();
@@ -292,12 +365,13 @@ export async function pullData(): Promise<{ success: boolean }> {
   setSyncStatus('syncing');
 
   try {
-    const [pRes, eRes, wRes, sRes, bwRes] = await Promise.all([
-      supabase.from('protocols').select('*').eq('user_id', user.id),
-      supabase.from('exercises').select('*').eq('user_id', user.id),
-      supabase.from('workouts').select('*').eq('user_id', user.id),
-      supabase.from('workout_sets').select('*').eq('user_id', user.id),
-      supabase.from('body_weights').select('*').eq('user_id', user.id),
+    const [pRes, eRes, wRes, sRes, bwRes, pendingDeletions] = await Promise.all([
+      withRetry(async () => await supabase.from('protocols').select('*').eq('user_id', user.id)),
+      withRetry(async () => await supabase.from('exercises').select('*').eq('user_id', user.id)),
+      withRetry(async () => await supabase.from('workouts').select('*').eq('user_id', user.id)),
+      withRetry(async () => await supabase.from('workout_sets').select('*').eq('user_id', user.id)),
+      withRetry(async () => await supabase.from('body_weights').select('*').eq('user_id', user.id)),
+      db.pendingDeletions.where('userId').equals(user.id).toArray()
     ]);
 
     if (pRes.error) throw new Error(`PULL Protocols: ${pRes.error.message}`);
@@ -306,19 +380,28 @@ export async function pullData(): Promise<{ success: boolean }> {
     if (sRes.error) throw new Error(`PULL WorkoutSets: ${sRes.error.message}`);
     if (bwRes.error) throw new Error(`PULL BodyWeights: ${bwRes.error.message}`);
 
-    const remoteP = pRes.data || [];
-    const remoteE = eRes.data || [];
-    const remoteW = wRes.data || [];
-    const remoteS = sRes.data || [];
-    const remoteBW = bwRes.data || [];
+    // Cria conjunto de chaves de itens que foram deletados offline e não devem ser recriados
+    const pendingDeletionKeys = new Set(pendingDeletions.map(d => `${d.table}_${d.recordId}`));
+
+    const rawRemoteP = (pRes.data || []) as Record<string, unknown>[];
+    const rawRemoteE = (eRes.data || []) as Record<string, unknown>[];
+    const rawRemoteW = (wRes.data || []) as Record<string, unknown>[];
+    const rawRemoteS = (sRes.data || []) as Record<string, unknown>[];
+    const rawRemoteBW = (bwRes.data || []) as Record<string, unknown>[];
+
+    const remoteP = rawRemoteP.filter(item => !pendingDeletionKeys.has(`protocols_${item.id}`));
+    const remoteE = rawRemoteE.filter(item => !pendingDeletionKeys.has(`exercises_${item.id}`));
+    const remoteW = rawRemoteW.filter(item => !pendingDeletionKeys.has(`workouts_${item.id}`));
+    const remoteS = rawRemoteS.filter(item => !pendingDeletionKeys.has(`workout_sets_${item.id}`));
+    const remoteBW = rawRemoteBW.filter(item => !pendingDeletionKeys.has(`body_weights_${item.id}`));
 
     await db.transaction('rw', [db.protocols, db.exercises, db.workouts, db.workoutSets, db.bodyWeights], async () => {
       // 1. Limpeza Inteligente com Isolamento de Usuário
-      const remotePIds = remoteP.map(p => p.id);
-      const remoteWIds = remoteW.map(w => w.id);
-      const remoteEIds = remoteE.map(e => e.id);
-      const remoteSIds = remoteS.map(s => s.id);
-      const remoteBWIds = remoteBW.map(b => b.id);
+      const remotePIds = remoteP.map(p => p.id as string);
+      const remoteWIds = remoteW.map(w => w.id as string);
+      const remoteEIds = remoteE.map(e => e.id as string);
+      const remoteSIds = remoteS.map(s => s.id as string);
+      const remoteBWIds = remoteBW.map(b => b.id as string);
 
       // Obter IDs locais dos protocolos e treinos do usuário logado
       const localProtocols = await db.protocols.where('userId').equals(user.id).toArray();
@@ -450,7 +533,7 @@ export async function deleteWorkoutFromCloud(workoutId: string): Promise<void> {
   }
 }
 
-export async function fullSync(): Promise<{ success: boolean } | undefined> {
+async function executeFullSync(): Promise<{ success: boolean } | undefined> {
   if (isSyncing) return;
   isSyncing = true;
   try {
@@ -463,5 +546,22 @@ export async function fullSync(): Promise<{ success: boolean } | undefined> {
   } finally {
     isSyncing = false;
   }
+}
+
+/**
+ * Executa o ciclo completo de sincronização protegido por Web Lock entre abas
+ */
+export async function fullSync(): Promise<{ success: boolean } | undefined> {
+  if (typeof navigator !== 'undefined' && 'locks' in navigator && navigator.locks?.request) {
+    return await navigator.locks.request('workout_sync_mutex', { ifAvailable: true }, async (lock) => {
+      if (!lock) {
+        console.log('[Sync] Sincronização concorrente evitada: outra aba já está sincronizando.');
+        return { success: true };
+      }
+      return await executeFullSync();
+    });
+  }
+
+  return await executeFullSync();
 }
 

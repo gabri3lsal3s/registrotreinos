@@ -6,10 +6,11 @@ import type {
   Workout,
   WorkoutSet,
   BodyWeight,
-  UniqueExercise
+  UniqueExercise,
+  PendingDeletion
 } from '../types';
 
-export type { Protocol, Exercise, Workout, WorkoutSet, BodyWeight, UniqueExercise };
+export type { Protocol, Exercise, Workout, WorkoutSet, BodyWeight, UniqueExercise, PendingDeletion };
 
 class WorkoutDB extends Dexie {
   protocols!: Table<Protocol, string>;
@@ -17,6 +18,7 @@ class WorkoutDB extends Dexie {
   workouts!: Table<Workout, string>;
   workoutSets!: Table<WorkoutSet, string>;
   bodyWeights!: Table<BodyWeight, string>;
+  pendingDeletions!: Table<PendingDeletion, string>;
 
   constructor() {
     super('WorkoutDB');
@@ -48,10 +50,37 @@ class WorkoutDB extends Dexie {
       workoutSets: 'id, userId, workoutId, exerciseId, setIndex, isSynced, [workoutId+exerciseId], [workoutId+exerciseId+setIndex], [workoutId+isSynced]',
       bodyWeights: 'id, userId, date, isSynced, [userId+date], [userId+isSynced]',
     });
+
+    this.version(8).stores({
+      pendingDeletions: 'id, userId, table, recordId, timestamp, [userId+table]',
+    });
   }
 }
 
 export const db = new WorkoutDB();
+
+/**
+ * Enfileira uma deleção pendente (Tombstone) para envio garantido ao Supabase
+ */
+export async function queuePendingDeletion(
+  table: PendingDeletion['table'],
+  recordId: string,
+  userId: string
+): Promise<void> {
+  if (!userId || !recordId) return;
+  try {
+    const id = `${table}_${recordId}`;
+    await db.pendingDeletions.put({
+      id,
+      userId,
+      table,
+      recordId,
+      timestamp: Date.now()
+    });
+  } catch (err) {
+    console.warn('[DB] Falha ao enfileirar deleção pendente:', err);
+  }
+}
 
 // Protocol Services
 export async function createProtocol(protocol: Omit<Protocol, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
@@ -70,6 +99,8 @@ export async function updateProtocol(id: string, updates: Partial<Protocol>): Pr
 }
 
 export async function deleteProtocol(id: string): Promise<void> {
+  const protocol = await db.protocols.get(id);
+  const userId = protocol?.userId || '';
   const workoutsCount = await db.workouts.where('protocolId').equals(id).count();
   
   if (workoutsCount > 0) {
@@ -78,7 +109,14 @@ export async function deleteProtocol(id: string): Promise<void> {
     // Soft-delete exercícios também
     await db.exercises.where('protocolId').equals(id).modify({ isArchived: true, isSynced: false });
   } else {
-    // Deleção física se for seguro (não tem histórico)
+    // Deleção física: enfileirar tombstone para sincronização
+    const exercises = await db.exercises.where('protocolId').equals(id).toArray();
+    if (userId) {
+      await queuePendingDeletion('protocols', id, userId);
+      for (const ex of exercises) {
+        await queuePendingDeletion('exercises', ex.id, userId);
+      }
+    }
     await db.exercises.where('protocolId').equals(id).delete();
     await db.protocols.delete(id);
   }
@@ -137,6 +175,10 @@ export async function updateBodyWeight(id: string, updates: Partial<BodyWeight>)
 }
 
 export async function deleteBodyWeight(id: string): Promise<void> {
+  const item = await db.bodyWeights.get(id);
+  if (item?.userId) {
+    await queuePendingDeletion('body_weights', id, item.userId);
+  }
   await db.bodyWeights.delete(id);
 }
 
@@ -182,12 +224,20 @@ export async function getExercisesByProtocol(
 }
 
 export async function deleteExercise(id: string): Promise<void> {
+  const exercise = await db.exercises.get(id);
+  const protocol = exercise?.protocolId ? await db.protocols.get(exercise.protocolId) : undefined;
+  const rawEx = exercise as unknown as Record<string, unknown> | undefined;
+  const userId = (rawEx?.userId as string | undefined) || protocol?.userId || '';
+
   const setsCount = await db.workoutSets.where('exerciseId').equals(id).count();
   
   if (setsCount > 0) {
     // Soft-delete: arquivar para preservar histórico
     await db.exercises.update(id, { isArchived: true, isSynced: false });
   } else {
+    if (userId) {
+      await queuePendingDeletion('exercises', id, userId);
+    }
     await db.exercises.delete(id);
   }
 }
@@ -232,6 +282,14 @@ export async function updateWorkoutSet(id: string, updates: Partial<WorkoutSet>)
 }
 
 export async function deleteWorkoutSet(id: string): Promise<void> {
+  const set = await db.workoutSets.get(id);
+  const workout = set?.workoutId ? await db.workouts.get(set.workoutId) : undefined;
+  const rawSet = set as unknown as Record<string, unknown> | undefined;
+  const userId = (rawSet?.userId as string | undefined) || workout?.userId || '';
+
+  if (userId) {
+    await queuePendingDeletion('workout_sets', id, userId);
+  }
   await db.workoutSets.delete(id);
 }
 
@@ -261,6 +319,17 @@ export async function getWorkoutHistory(userId: string): Promise<Workout[]> {
 }
 
 export async function deleteWorkout(workoutId: string): Promise<void> {
+  const workout = await db.workouts.get(workoutId);
+  const userId = workout?.userId || '';
+  const sets = await db.workoutSets.where('workoutId').equals(workoutId).toArray();
+
+  if (userId) {
+    await queuePendingDeletion('workouts', workoutId, userId);
+    for (const s of sets) {
+      await queuePendingDeletion('workout_sets', s.id, userId);
+    }
+  }
+
   return db.transaction('rw', [db.workouts, db.workoutSets], async () => {
     await db.workoutSets.where('workoutId').equals(workoutId).delete();
     await db.workouts.delete(workoutId);

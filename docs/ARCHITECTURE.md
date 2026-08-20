@@ -21,25 +21,28 @@ O **Registro de Treinos** segue uma arquitetura **Offline-First Absoluta**, gara
 
 ### Regras Mandatórias de Sincronização:
 1. **Gravação Local com Flag**: Toda operação do usuário (treinos, protocolos, séries, pesagens) é gravada diretamente no Dexie.js com `isSynced: false`.
-2. **Ciclo PUSH -> PULL**:
-   - `syncData()`: Executa o PUSH de itens com `isSynced === false` para o Supabase e, após confirmação com status `200`, marca `isSynced: true` localmente.
-   - `pullData()`: Realiza o PULL de dados remotos para o IndexedDB sem sobrescrever modificações locais não sincronizadas (`!local || local.isSynced`).
-3. **Escopo por Usuário (`userId`)**: Todas as queries e mutations no Dexie e no Supabase são isoladas por `userId` do usuário autenticado no `useAuthStore`.
-4. **Resiliência a Falhas de Rede**: Em caso de falha de conexão ou CORS, a sincronização é abortada de forma não-bloqueante (`console.warn`), mantendo a integridade da UI.
+2. **Fila de Tombstones de Exclusão**: Exclusões offline geram um registro em `pendingDeletions` (`table, recordId, userId`), expurgado no Supabase antes do PULL para evitar que itens excluídos ressuscitem.
+3. **Ciclo PUSH -> PULL com Web Locks & Chunking**:
+   - `fullSync()` solicita a trava de sistema `'workout_sync_mutex'` (Web Locks API) com fallback em memória, garantindo isolamento entre múltiplas abas abertas.
+   - `syncData()`: Despacha tombstones, particiona payloads massivos em lotes de até 100 registros (`batchUpsert`) e marca `isSynced: true` atomicamente.
+   - `pullData()`: Realiza o PULL de dados remotos para o IndexedDB sem sobrescrever modificações locais não sincronizadas (`!local || local.isSynced`) e filtrando registros marcados para exclusão.
+4. **Auto-Retry com Exponential Backoff & Jitter**: Tolerância a micro-quedas de sinal com até 3 retentativas progressivas automáticas.
+5. **Background Heartbeat Sync**: Temporizador em segundo plano ativo a cada 3 minutos para salvaguarda contínua de treinos longos.
 
 ---
 
 ## 2. Estrutura do Esquema IndexedDB (Dexie `WorkoutDB`)
 
-O banco local `WorkoutDB` versão 7 possui as seguintes tabelas e índices:
+O banco local `WorkoutDB` versão 8 possui as seguintes tabelas e índices:
 
 ```ts
-db.version(7).stores({
+db.version(8).stores({
   protocols: 'id, userId, name, isEnabled, isSynced, [userId+isEnabled], [userId+isSynced]',
   exercises: 'id, userId, protocolId, name, order, isSynced, [protocolId+isSynced]',
   workouts: 'id, userId, protocolId, date, status, isSynced, [userId+protocolId+status], [userId+status], [userId+isSynced]',
   workoutSets: 'id, userId, workoutId, exerciseId, setIndex, isSynced, [workoutId+exerciseId], [workoutId+exerciseId+setIndex], [workoutId+isSynced]',
   bodyWeights: 'id, userId, date, isSynced, [userId+date], [userId+isSynced]',
+  pendingDeletions: 'id, userId, table, recordId, timestamp, [userId+table]'
 });
 ```
 

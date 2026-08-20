@@ -61,10 +61,18 @@ function App() {
         fullSync().catch((err) => console.warn('[Sync] Falha na sincronização ao retornar online:', err));
       };
 
+      // Heartbeat periódico em segundo plano (a cada 3 minutos) durante treinos
+      const heartbeatInterval = setInterval(() => {
+        if (document.visibilityState === 'visible' && navigator.onLine) {
+          fullSync().catch((err) => console.warn('[Sync] Heartbeat sync falhou silenciosamente:', err));
+        }
+      }, 3 * 60 * 1000);
+
       document.addEventListener('visibilitychange', handleVisibilityChange);
       window.addEventListener('online', handleOnline);
 
       return () => {
+        clearInterval(heartbeatInterval);
         document.removeEventListener('visibilitychange', handleVisibilityChange);
         window.removeEventListener('online', handleOnline);
       };

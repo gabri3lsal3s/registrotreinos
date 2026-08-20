@@ -12,3 +12,12 @@ export interface SyncPayload<T = Record<string, unknown>> {
   action: 'insert' | 'update' | 'delete';
   data: T;
 }
+
+export interface PendingDeletion {
+  id: string;
+  userId: string;
+  table: SyncableEntity;
+  recordId: string;
+  timestamp: number;
+}
+

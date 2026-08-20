@@ -20,6 +20,7 @@ Este documento registra a evolução do **Registro de Treinos**, cobrindo todas 
 | **Nível 10** | 🔄 Gestão Ágil de Rotinas & Intercâmbio | Substituição inteligente de exercícios ocupados (*Swap Exercise*), compartilhamento de protocolos via Link/QR Code descentralizado, templates consagrados (*Starter Packs*) e importação em 1 clique. | **CONCLUÍDO** ✅ |
 | **Nível 11** | 🌟 Tema Escuro OLED & Visual Harmony | Fundo Pitch-Black `#000000` (desligamento real de pixels OLED), superfícies carvão `#09090b`, bordas nítidas `#1e1e24`, alto contraste WCAG AAA e PWA status bar unificado. | **CONCLUÍDO** ✅ |
 | **Nível 12** | 🛡️ Blindagem de Sincronização, Resiliência Offline & Integridade de Protocolos | Whitelisting estrito por entidade no `syncService.ts`, preservação de metadados locais no PULL (`pinnedNotes`/`supersetGroupId`), correção de índices compostos no Dexie (`version(7)`), chamadas de UI 100% não-bloqueantes no `ProtocolsPage`, `HistoryPage` e `Dashboard`. | **CONCLUÍDO** ✅ |
+| **Nível 13** | 🔒 Arquitetura de Sincronização Definitiva & Resiliência Avançada | Fila de Tombstones (`pendingDeletions` no Dexie `v8`) para expurgo garantido de itens deletados offline sem ressuscitação, exclusão mútua multi-aba com Web Locks API (`navigator.locks`), retentativas automáticas com exponential backoff & jitter, upserts em lotes (*batch chunking* de 100 itens) e background heartbeat sync (3min). | **CONCLUÍDO** ✅ |
 
 ---
 
@@ -110,4 +111,24 @@ Este documento registra a evolução do **Registro de Treinos**, cobrindo todas 
    - Operações locais gravam instantaneamente no Dexie e disparam `fullSync().catch(...)` em segundo plano de forma 100% não-bloqueante.
    - Exclusões remotas (`deleteRemoteItem`) tolerantes a falhas offline.
    - Higienização automática de sufixos de dias da semana no montador para evitar duplicações (`Supino (Seg) (Seg)`).
+
+---
+
+### 🔒 Nível 13: Arquitetura de Sincronização Definitiva & Resiliência Avançada
+*Objetivo: Eliminar 100% dos riscos de perda ou ressuscitação de dados offline, proteger contra concorrência entre abas e tolerar instabilidades de rede móvel (4G/5G/Wi-Fi).*
+
+1. **Fila de Tombstones de Exclusão Offline (`pendingDeletions` no Dexie `v8`)**:
+   - Toda exclusão realizada sem internet (protocolos, exercícios, treinos, séries, pesagens) é gravada na tabela `pendingDeletions`.
+   - Antes de efetuar o PULL ou PUSH, o `syncService` despacha e expurga os registros no Supabase (`flushPendingDeletions`).
+   - O `pullData()` filtra remotamente qualquer registro contido na lista de tombstones locais, impedindo completamente que itens excluídos reapareçam na interface ao reconectar.
+2. **Exclusão Mútua Multi-Aba via Web Locks API (`navigator.locks`)**:
+   - O ciclo completo de sincronização solicita a trava de sistema `'workout_sync_mutex'` com `{ ifAvailable: true }`.
+   - Evita sobreposição de requisições e concorrência de escrita no IndexedDB quando múltiplas abas ou janelas do app estão abertas no mesmo dispositivo.
+3. **Auto-Retry Inteligente com Exponential Backoff & Jitter**:
+   - Função `withRetry` com até 3 retentativas progressivas (800ms, 1600ms, 3200ms + ruído aleatório) para mitigar micro-quedas de sinal em academias e elevadores.
+4. **Particionamento em Lotes (*Batch Chunking*)**:
+   - Divisão de payloads massivos (ex: importação de centenas de séries) em lotes de até 100 itens por requisição, evitando limites de tamanho de payload HTTP (413 Payload Too Large) no PostgREST.
+5. **Background Heartbeat Sync**:
+   - Temporizador em segundo plano ativo a cada 3 minutos quando a aba está visível e conectada, garantindo salvaguarda em tempo real de treinos longos sem depender de cliques manuais.
+
 
