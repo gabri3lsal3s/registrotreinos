@@ -62,3 +62,15 @@ A soberania dos dados do usuário é garantida por meio de duas ferramentas nati
 - **Backup Completo JSON (`exportBackupJSON`)**: Exporta snapshot criptograficamente consistente com metadados de versão (`version`, `exportedAt`, `totalRecords`).
 - **Planilha CSV UTF-8 com BOM (`exportWorkoutHistoryCSV`)**: Exporta todas as sessões, séries, cargas, repetições e volumes em formato universal para Excel / Google Sheets.
 - **Restauração Inteligente (`importBackupJSON`)**: Permite importar backups nos modos *Mesclar* (preserva dados locais existentes) ou *Substituir* (recria a base a partir do snapshot).
+
+---
+
+## 5. Transferência e Parsing Universal de Protocolos (`src/services/`)
+
+1. **`protocolTransferService.ts`**:
+   - **Exportação Granular (`exportProtocolJSON`)**: Gera arquivo JSON estruturado (`format: 'registrotreinos-protocol'`) contendo o protocolo e seus exercícios ativos, higienizando IDs e dados de usuário.
+   - **Gravação Atômica (`saveImportedProtocol`)**: Persiste novo protocolo e exercícios no Dexie com transação `db.transaction`, gerando novos UUIDs e disparando sincronização em background.
+2. **`universalProtocolParser.ts`**:
+   - Analisador tolerante e adaptativo que suporta **JSON nativo/backups**, **planilhas CSV/TSV**, **tabelas Markdown** e **texto livre de IA** (ChatGPT/Claude/Gemini).
+   - Auto-detecta delimitadores (`,`, `;`, `\t`, `|`), converte faixas numéricas (`4x8-12`), mapeia dias da semana (`mon`, `tue`, etc.) e categoriza exercícios via `exerciseDictionary.ts`.
+

@@ -9,7 +9,8 @@ import {
   Copy, 
   Trash2, 
   Dumbbell, 
-  CalendarDays
+  CalendarDays,
+  Download
 } from 'lucide-react';
 import type { Protocol } from '../../types';
 
@@ -20,6 +21,7 @@ interface ProtocolCardProps {
   onStartWorkout: (protocolId: string) => void;
   onEditProtocol: (protocolId: string) => void;
   onDuplicateProtocol: (protocolId: string) => void;
+  onExportProtocol: (protocolId: string) => void;
   onDeleteProtocol: (protocolId: string) => void;
   onToggleEnabled: (protocolId: string, enabled: boolean) => void;
 }
@@ -31,6 +33,7 @@ export function ProtocolCard({
   onStartWorkout,
   onEditProtocol,
   onDuplicateProtocol,
+  onExportProtocol,
   onDeleteProtocol,
   onToggleEnabled
 }: ProtocolCardProps) {
@@ -105,6 +108,17 @@ export function ProtocolCard({
               >
                 <Copy className="w-3.5 h-3.5 mr-1" />
                 Clonar
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => onExportProtocol(protocol.id)}
+                className="h-9 w-9 text-muted-foreground/70 hover:text-primary hover:bg-primary/10 rounded-xl"
+                title="Exportar Protocolo (JSON)"
+              >
+                <Download className="w-4 h-4" />
               </Button>
 
               <Button

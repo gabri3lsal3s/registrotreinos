@@ -18,12 +18,14 @@ import { parseLocaleNumber } from '../utils/workoutMath';
 import { fullSync, deleteRemoteItem } from '../services/syncService';
 import type { Protocol, Exercise, ExerciseCategory } from '../types';
 import { Button } from "@/components/ui/button";
-import { Plus, ClipboardList } from "lucide-react";
+import { Plus, ClipboardList, Upload } from "lucide-react";
 import { 
   ProtocolCard, 
   ProtocolBuilder, 
+  ImportProtocolModal,
   type BuilderExerciseItem 
 } from '../components/protocols';
+import { exportProtocolJSON } from '../services/protocolTransferService';
 
 export default function ProtocolsPage() {
   const { user, syncStatus } = useAuth();
@@ -43,6 +45,9 @@ export default function ProtocolsPage() {
   const [workouts, setWorkouts] = useState<Record<string, BuilderExerciseItem[]>>({});
   const [saving, setSaving] = useState(false);
   const [editingProtocolId, setEditingProtocolId] = useState<string | null>(null);
+
+  // Import State
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   const loadProtocols = useCallback(async () => {
     if (!user) return;
@@ -169,6 +174,21 @@ export default function ProtocolsPage() {
       console.error(err);
       toast.error('Erro ao duplicar protocolo.');
     }
+  };
+
+  const handleExportProtocol = async (protocolId: string) => {
+    try {
+      await exportProtocolJSON(protocolId);
+      toast.success('Protocolo exportado com sucesso!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao exportar protocolo.');
+    }
+  };
+
+  const handleImportSuccess = async () => {
+    setIsImportModalOpen(false);
+    await loadProtocols();
   };
 
   const handleDeleteProtocol = async (protocolId: string) => {
@@ -389,13 +409,24 @@ export default function ProtocolsPage() {
           title="Planilhas e Protocolos" 
           description="Gerencie seus planos de treino e rotinas semanais."
           action={
-            <Button 
-              onClick={handleOpenNewBuilder}
-              className="w-full sm:w-auto h-11 px-5 rounded-xl font-bold text-xs uppercase tracking-wider bg-primary text-primary-foreground shadow-md shadow-primary/20 flex items-center justify-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              Novo Protocolo
-            </Button>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+              <Button 
+                type="button"
+                variant="outline"
+                onClick={() => setIsImportModalOpen(true)}
+                className="w-full sm:w-auto h-11 px-4 rounded-xl font-bold text-xs uppercase tracking-wider border-border/60 flex items-center justify-center gap-2"
+              >
+                <Upload className="w-4 h-4 text-primary" />
+                Importar
+              </Button>
+              <Button 
+                onClick={handleOpenNewBuilder}
+                className="w-full sm:w-auto h-11 px-5 rounded-xl font-bold text-xs uppercase tracking-wider bg-primary text-primary-foreground shadow-md shadow-primary/20 flex items-center justify-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Novo Protocolo
+              </Button>
+            </div>
           }
         />
 
@@ -410,12 +441,22 @@ export default function ProtocolsPage() {
           <EmptyState
             icon={<ClipboardList className="w-8 h-8" />}
             title="Nenhum protocolo cadastrado"
-            description="Crie seu primeiro plano de treino para começar a registrar suas sessões."
+            description="Crie seu primeiro plano de treino ou importe uma planilha para começar a registrar suas sessões."
             action={
-              <Button onClick={handleOpenNewBuilder} className="rounded-xl h-11 px-5">
-                <Plus className="w-4 h-4 mr-2" />
-                Criar Primeiro Protocolo
-              </Button>
+              <div className="flex flex-col sm:flex-row items-center gap-2">
+                <Button onClick={handleOpenNewBuilder} className="rounded-xl h-11 px-5">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Criar Primeiro Protocolo
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="rounded-xl h-11 px-5 border-border/60"
+                >
+                  <Upload className="w-4 h-4 mr-2 text-primary" />
+                  Importar Planilha
+                </Button>
+              </div>
             }
           />
         ) : (
@@ -429,11 +470,23 @@ export default function ProtocolsPage() {
                 onStartWorkout={(id) => navigate(`/workout/${id}`)}
                 onEditProtocol={handleEditProtocol}
                 onDuplicateProtocol={handleDuplicateProtocol}
+                onExportProtocol={handleExportProtocol}
                 onDeleteProtocol={handleDeleteProtocol}
                 onToggleEnabled={(id, enabled) => handleToggleEnabled(id, enabled)}
               />
             ))}
           </div>
+        )}
+
+        {/* Modal de Importação Universal */}
+        {user && (
+          <ImportProtocolModal
+            isOpen={isImportModalOpen}
+            onClose={() => setIsImportModalOpen(false)}
+            onSuccess={handleImportSuccess}
+            userId={user.id}
+            existingProtocolNames={protocols.map(p => p.name)}
+          />
         )}
       </div>
     </Layout>

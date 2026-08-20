@@ -24,7 +24,8 @@ Este documento descreve os componentes da aplicação, seus contratos de props e
 | :--- | :--- | :--- |
 | **`WorkoutSetRow`** | `{ setIdx, setData, isCompleted, category?, onToggleSet, onUpdateSetData, onUpdateSetType? }` | **Componente DRY desacoplado** para linha de série. Layout responsivo com badge clicável de tipo de série (**N/W/F/T/D**), inputs de carga/reps `h-11`, botões de micro-incremento `-1/+1/+2` e botão de confirmação 44px. |
 | **`WorkoutExerciseCard`** | `{ exercise, exIdx, isExpanded, onToggleExpand, onToggleSet, onUpdateSetData, onUpdateSetType?, onDeleteExtraExercise?, truePR? }` | Card expansível de exercício em treino ativo, com header clicável, progresso de séries, badge de PR e listagem de `WorkoutSetRow`. |
-| **`FloatingRestTimer`** | `{ isOpen, initialSeconds, onClose }` | Timer flutuante de descanso com Web Audio API offline e vibração háptica ao término. |
+| **`WorkoutBottomDock`** | `{ totalCompletedSets, onOpenFinishModal, defaultSeconds?, timerTrigger?, onTimerComplete? }` | **Dock de Ação Inferior Unificado**: integra o descanso permanente no rodapé (com botões de ajuste `-15s/+30s`, `Iniciar/Pausar/Reiniciar`, Web Audio API e disparo automático ao concluir séries) e a barra de finalização com contador de séries. |
+| **`FloatingRestTimer`** | `{ isOpen, initialSeconds, onClose }` | Timer flutuante avulso com Web Audio API offline e vibração háptica ao término. |
 | **`WorkoutDayTabs`** | `{ availableDays, currentDay, onSelectDay }` | Abas de alternância de dias da semana em treinos divididos. |
 | **`ExerciseLibraryModal`** | `{ isOpen, onClose, library, onSelectExercise }` | Modal com catálogo de exercícios organizados por grupo muscular e busca em tempo real. |
 | **`ConfigExtraExerciseModal`**| `{ isOpen, onClose, configEx, onChangeSets, onConfirm }` | Modal de ajuste de número de séries para exercício extra adicionado durante o treino ativo. |
@@ -36,8 +37,9 @@ Este documento descreve os componentes da aplicação, seus contratos de props e
 
 | Componente | Props Principais | Descrição |
 | :--- | :--- | :--- |
-| **`ProtocolCard`** | `{ protocol, exerciseCount, activeDaysCount, onStartWorkout, onEditProtocol, onDuplicateProtocol, onDeleteProtocol, onToggleEnabled }` | Card do protocolo com switch de ativação no dashboard, resumo de dias e ações rápidas com confirmação. |
+| **`ProtocolCard`** | `{ protocol, exerciseCount, activeDaysCount, onStartWorkout, onEditProtocol, onDuplicateProtocol, onExportProtocol, onDeleteProtocol, onToggleEnabled }` | Card do protocolo com switch de ativação no dashboard, resumo de dias e ações rápidas (Iniciar, Editar, Clonar, Exportar JSON, Excluir). |
 | **`ProtocolBuilder`** | `{ protocolName, onChangeName, isEnabled, onToggleEnabled, activeDays, onToggleDay, selectedDay, onSelectDay, exercisesByDay, onUpdateExercise, onRemoveExercise, onAddExercise, onReorderExercises, onSave, onCancel, isSaving }` | Construtor de protocolos semanal com drag-and-drop (`@dnd-kit/sortable`), gestão de dias ativos e catálogo integrado. |
+| **`ImportProtocolModal`** | `{ isOpen, onClose, onSuccess, userId, existingProtocolNames? }` | Modal com abas de upload de arquivos (`.json`, `.csv`, `.tsv`, `.txt`) e colar texto/tabela de IA, permitindo pré-visualização, edição inline de exercícios e confirmação de importação atômica. |
 | **`DraggableExerciseCard`** | `{ ex, idx, day, onUpdate, onRemove }` | Card arrastável com alça touch `GripVertical`, selects de categoria/músculo e inputs de séries/reps/carga base. |
 | **`ExercisePickerModal`** | `{ isOpen, onClose, onSelect }` | Catálogo de seleção de exercícios por grupo muscular. |
 

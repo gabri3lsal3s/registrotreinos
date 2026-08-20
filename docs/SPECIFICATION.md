@@ -29,7 +29,10 @@ O **Registro de Treinos** é uma Progressive Web App (PWA) de alto desempenho fo
      - `multiplier` ($K$): Proporção do peso corporal utilizada no exercício (ex: Barra Fixa = 1.0, Flexão = 0.65, Paralelas = 1.0, Prancha = 0.5).
 3. **Dicionário Canônico e Normalização**:
    - O sistema conta com um dicionário inteligente (`exerciseDictionary.ts`) que normaliza variações ortográficas, remove acentos/parênteses e categoriza automaticamente o grupamento muscular e parâmetros $K$.
-4. **Soft-Delete vs Hard-Delete**:
+4. **Exportação e Importação Universal de Protocolos**:
+   - **Exportação JSON**: Gera arquivo padronizado (`registrotreinos-protocol` v1) contendo a divisão de dias e lista de exercícios para backup individual ou compartilhamento com outros usuários.
+   - **Importação Universal**: O assistente (`universalProtocolParser.ts` e `ImportProtocolModal.tsx`) aceita arquivos (`.json`, `.csv`, `.tsv`, `.txt`) e texto colado de tabelas (Markdown, CSV ou texto livre de IAs como ChatGPT/Gemini), convertendo automaticamente séries, repetições, dias da semana e grupos musculares antes de salvar de forma atômica no IndexedDB.
+5. **Soft-Delete vs Hard-Delete**:
    - Se um exercício ou protocolo possui séries ou treinos históricos vinculados, a exclusão é convertida em **soft-delete** (`isArchived: true`), preservando a integridade das estatísticas históricas.
    - Se não houver vínculos históricos, é executada a remoção física (hard-delete).
 

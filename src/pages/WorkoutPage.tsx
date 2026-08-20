@@ -23,13 +23,11 @@ import { WEEK_DAYS } from '../utils/constants';
 import { Button } from "@/components/ui/button";
 import { 
   ArrowLeft, 
-  Save, 
-  PlusCircle, 
-  Timer as TimerIcon
+  PlusCircle
 } from "lucide-react";
 
 import { 
-  FloatingRestTimer,
+  WorkoutBottomDock,
   WorkoutDayTabs,
   WorkoutExerciseCard,
   ExerciseLibraryModal,
@@ -63,8 +61,7 @@ export default function WorkoutPage() {
   const [configEx, setConfigEx] = useState<ConfigExerciseState | null>(null);
 
   // Rest Timer State
-  const [isTimerOpen, setIsTimerOpen] = useState(false);
-  const [timerSeconds] = useState(90);
+  const [timerTrigger, setTimerTrigger] = useState(0);
 
   // Finish Modal State
   const [isFinishModalOpen, setIsFinishModalOpen] = useState(false);
@@ -290,8 +287,8 @@ export default function WorkoutPage() {
           completed: true
         });
 
-        // Dispara o Rest Timer flutuante automaticamente
-        setIsTimerOpen(true);
+        // Dispara o Rest Timer na dock automaticamente
+        setTimerTrigger(Date.now());
       } else {
         const existingSet = await db.workoutSets
           .where({ 
@@ -604,7 +601,7 @@ export default function WorkoutPage() {
 
   return (
     <Layout>
-      <div className="w-full max-w-3xl mx-auto space-y-6">
+      <div className="w-full max-w-3xl mx-auto space-y-6 pb-36 sm:pb-40">
         {/* Header da Sessão */}
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -632,18 +629,6 @@ export default function WorkoutPage() {
           </div>
 
           <div className="flex items-center gap-2 ml-auto sm:ml-0 shrink-0">
-            {/* Botão rápido para abrir Rest Timer */}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsTimerOpen(true)}
-              className="h-10 px-3 rounded-xl border-border/50 bg-card/60 text-muted-foreground hover:text-foreground font-mono text-xs font-bold flex items-center gap-1.5"
-            >
-              <TimerIcon className="w-4 h-4 text-primary" />
-              <span>Descanso</span>
-            </Button>
-
             {/* Cancelar Treino */}
             <Button
               type="button"
@@ -693,34 +678,11 @@ export default function WorkoutPage() {
           Adicionar Exercício à Sessão
         </Button>
 
-        {/* Barra Fixa Inferior de Finalização */}
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-md">
-          <div className="p-2 rounded-2xl bg-card/90 border border-border/60 shadow-2xl backdrop-blur-xl flex items-center justify-between gap-3">
-            <div className="px-3 min-w-0">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block leading-none">
-                Concluídas
-              </span>
-              <span className="text-base font-black font-mono text-foreground leading-tight">
-                {totalCompletedSets} séries
-              </span>
-            </div>
-
-            <Button
-              type="button"
-              onClick={handleOpenFinishModal}
-              className="h-12 px-6 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-xs uppercase tracking-wider shadow-lg shadow-primary/25 flex items-center gap-2 active:scale-95 transition-all"
-            >
-              <Save className="w-4 h-4" />
-              Finalizar Treino
-            </Button>
-          </div>
-        </div>
-
-        {/* Rest Timer Flutuante */}
-        <FloatingRestTimer
-          isOpen={isTimerOpen}
-          initialSeconds={timerSeconds}
-          onClose={() => setIsTimerOpen(false)}
+        {/* Barra Inferior Unificada (Timer de Descanso Fixo + Finalização) */}
+        <WorkoutBottomDock
+          totalCompletedSets={totalCompletedSets}
+          onOpenFinishModal={handleOpenFinishModal}
+          timerTrigger={timerTrigger}
         />
 
         {/* Modais Desacoplados */}
