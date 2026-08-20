@@ -27,7 +27,9 @@ const toSnake = (obj: Record<string, unknown>): Record<string, unknown> => {
     isArchived: 'is_archived',
     category: 'category',
     multiplier: 'multiplier',
-    isSessionOnly: 'is_session_only'
+    isSessionOnly: 'is_session_only',
+    timeInSeconds: 'time_in_seconds',
+    dateKey: 'date_key'
   };
   const newObj: Record<string, unknown> = {};
   for (const key in obj) {
@@ -75,7 +77,9 @@ const toCamel = <T = Record<string, unknown>>(obj: Record<string, unknown>): T =
     is_archived: 'isArchived',
     category: 'category',
     multiplier: 'multiplier',
-    is_session_only: 'isSessionOnly'
+    is_session_only: 'isSessionOnly',
+    time_in_seconds: 'timeInSeconds',
+    date_key: 'dateKey'
   };
   const newObj: Record<string, unknown> = {};
   for (const key in obj) {
