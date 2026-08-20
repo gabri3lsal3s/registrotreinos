@@ -2,6 +2,7 @@ export type ExerciseCategory = 'weight' | 'bodyweight' | 'time';
 
 export interface Exercise {
   id: string;
+  userId?: string;
   protocolId: string;
   name: string;
   muscleGroup?: string;
@@ -18,6 +19,10 @@ export interface Exercise {
   isSynced?: boolean;
   isArchived?: boolean;
   isSessionOnly?: boolean;
+  isDeleted?: boolean;
+  deletedAt?: number;
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export type WorkoutStatus = 'active' | 'completed' | 'cancelled';
@@ -35,12 +40,17 @@ export interface Workout {
   recovery?: string;
   notes?: string;
   isSynced?: boolean;
+  isDeleted?: boolean;
+  deletedAt?: number;
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export type WorkoutSetType = 'normal' | 'warmup' | 'feeder' | 'top' | 'drop';
 
 export interface WorkoutSet {
   id: string;
+  userId?: string;
   workoutId: string;
   exerciseId: string;
   setIndex: number;
@@ -53,6 +63,10 @@ export interface WorkoutSet {
   completed: boolean;
   timestamp: number;
   isSynced?: boolean;
+  isDeleted?: boolean;
+  deletedAt?: number;
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export interface BodyWeight {
@@ -61,6 +75,10 @@ export interface BodyWeight {
   weight: number;
   date: number;
   isSynced?: boolean;
+  isDeleted?: boolean;
+  deletedAt?: number;
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export interface UniqueExercise {

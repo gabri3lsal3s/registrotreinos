@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { useDataReactivity } from '../hooks/useDataReactivity';
 import { Layout, PageHeader, EmptyState } from '../components/common';
 import { 
   getWorkoutHistory, 
@@ -11,9 +12,11 @@ import {
   updateExercise, 
   getBodyWeightsByUser, 
   updateBodyWeight, 
-  deleteBodyWeight 
+  deleteBodyWeight,
+  getProtocolsByUser
 } from '../services/workoutDB';
 import { fullSync } from '../services/syncService';
+import { syncEventBus } from '../services/eventBus';
 import type { Workout, BodyWeight, WorkoutSet, Exercise, Protocol } from '../types';
 import { ClipboardList } from "lucide-react";
 import { toast } from 'sonner';
@@ -32,6 +35,7 @@ type HistoryItem = WorkoutHistoryItem | WeightHistoryItem;
 
 export default function HistoryPage() {
   const { user } = useAuth();
+  const dataVersion = useDataReactivity();
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [protocols, setProtocols] = useState<Protocol[]>([]);
   const [protocolsMap, setProtocolsMap] = useState<Record<string, string>>({});
@@ -43,7 +47,7 @@ export default function HistoryPage() {
   // Filters State
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'workout' | 'weight'>('all');
-  const [selectedProtocolId, setSelectedProtocolId] = useState('all');
+  const [selectedProtocolId, setSelectedProtocolId] = useState<string>('all');
 
   // Modals State
   const [editingSet, setEditingSet] = useState<{ set: WorkoutSet; exerciseName: string } | null>(null);
@@ -52,23 +56,25 @@ export default function HistoryPage() {
   const loadData = useCallback(async () => {
     if (!user) return;
     try {
-      const histories = await getWorkoutHistory(user.id);
-      const weights = await getBodyWeightsByUser(user.id);
-      
-      const mixed: HistoryItem[] = [
-        ...histories.map(h => ({ ...h, type: 'workout' as const })),
-        ...weights.map(w => ({ ...w, type: 'weight' as const }))
-      ].sort((a, b) => b.date - a.date);
+      const [workouts, weights, userProtocols, exercises] = await Promise.all([
+        getWorkoutHistory(user.id),
+        getBodyWeightsByUser(user.id),
+        getProtocolsByUser(user.id),
+        db.exercises.where('userId').equals(user.id).filter(e => !e.isDeleted).toArray()
+      ]);
 
-      const userProtocols = await db.protocols.where('userId').equals(user.id).toArray();
+      const formattedWorkouts: WorkoutHistoryItem[] = workouts.map((w: Workout) => ({ ...w, type: 'workout' }));
+      const formattedWeights: WeightHistoryItem[] = weights.map((w: BodyWeight) => ({ ...w, type: 'weight' }));
+
+      const mixed: HistoryItem[] = [...formattedWorkouts, ...formattedWeights].sort((a, b) => b.date - a.date);
+      
       const pMap: Record<string, string> = {};
-      userProtocols.forEach(p => {
+      userProtocols.forEach((p: Protocol) => {
         pMap[p.id] = p.name;
       });
 
-      const exercises = await db.exercises.toArray();
       const exMap: Record<string, Exercise> = {};
-      exercises.forEach(ex => {
+      exercises.forEach((ex: Exercise) => {
         exMap[ex.id] = ex;
       });
       
@@ -87,16 +93,7 @@ export default function HistoryPage() {
     if (user) {
       loadData();
     }
-    const handleRefresh = () => {
-      loadData();
-    };
-    window.addEventListener('refresh-workout-data', handleRefresh);
-    window.addEventListener('refresh-analysis', handleRefresh);
-    return () => {
-      window.removeEventListener('refresh-workout-data', handleRefresh);
-      window.removeEventListener('refresh-analysis', handleRefresh);
-    };
-  }, [user, loadData]);
+  }, [user, dataVersion, loadData]);
 
   const toggleExpand = async (workoutId: string) => {
     if (expandedId === workoutId) {
@@ -133,8 +130,8 @@ export default function HistoryPage() {
     try {
       await deleteWorkout(workoutId);
       setHistory(prev => prev.filter(w => w.id !== workoutId));
+      syncEventBus.emitDataMutated({ table: 'workouts', action: 'delete', recordId: workoutId });
       toast.success('Treino removido com sucesso.');
-      window.dispatchEvent(new Event('refresh-analysis'));
       fullSync().catch(console.error);
     } catch (err) {
       console.error(err);
@@ -146,8 +143,8 @@ export default function HistoryPage() {
     try {
       await updateBodyWeight(id, { weight: newWeight });
       setHistory(prev => prev.map(w => w.id === id ? { ...w, weight: newWeight } : w));
+      syncEventBus.emitDataMutated({ table: 'body_weights', action: 'update', recordId: id });
       toast.success('Peso atualizado com sucesso!');
-      window.dispatchEvent(new Event('refresh-analysis'));
       fullSync().catch(console.error);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -159,8 +156,8 @@ export default function HistoryPage() {
     try {
       await deleteBodyWeight(id);
       setHistory(prev => prev.filter(w => w.id !== id));
+      syncEventBus.emitDataMutated({ table: 'body_weights', action: 'delete', recordId: id });
       toast.success('Registro de peso removido.');
-      window.dispatchEvent(new Event('refresh-analysis'));
       fullSync().catch(console.error);
     } catch (err) {
       console.error(err);

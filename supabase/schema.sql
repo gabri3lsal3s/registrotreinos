@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS public.protocols (
   is_enabled BOOLEAN NOT NULL DEFAULT true,
   days_of_week JSONB NOT NULL DEFAULT '[]'::jsonb,
   is_archived BOOLEAN NOT NULL DEFAULT false,
+  is_deleted BOOLEAN NOT NULL DEFAULT false,
+  deleted_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -62,6 +64,8 @@ CREATE TABLE IF NOT EXISTS public.exercises (
   last_reps INT DEFAULT 0,
   is_session_only BOOLEAN DEFAULT false,
   is_archived BOOLEAN NOT NULL DEFAULT false,
+  is_deleted BOOLEAN NOT NULL DEFAULT false,
+  deleted_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -92,6 +96,8 @@ CREATE TABLE IF NOT EXISTS public.workouts (
   recovery TEXT,
   rpe NUMERIC,
   notes TEXT,
+  is_deleted BOOLEAN NOT NULL DEFAULT false,
+  deleted_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -122,6 +128,8 @@ CREATE TABLE IF NOT EXISTS public.workout_sets (
   date_key TEXT,
   completed BOOLEAN NOT NULL DEFAULT true,
   timestamp TIMESTAMPTZ DEFAULT now(),
+  is_deleted BOOLEAN NOT NULL DEFAULT false,
+  deleted_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -144,6 +152,8 @@ CREATE TABLE IF NOT EXISTS public.body_weights (
   date TIMESTAMPTZ NOT NULL DEFAULT now(),
   date_key TEXT,
   notes TEXT,
+  is_deleted BOOLEAN NOT NULL DEFAULT false,
+  deleted_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -157,7 +167,6 @@ CREATE TRIGGER tr_body_weights_updated_at
   EXECUTE FUNCTION handle_updated_at();
 
 -- ==============================================================================
--- ==============================================================================
 -- 7.1. Tabela: DELETED_RECORDS (Tombstones Remotos para Sincronização Multi-Dispositivo)
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.deleted_records (
@@ -168,25 +177,35 @@ CREATE TABLE IF NOT EXISTS public.deleted_records (
   deleted_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
--- Índices de Alta Performance (B-Tree) para Consultas Rápidas
+-- Índices de Alta Performance (B-Tree) para Consultas Rápidas e Delta Sync
 -- ==============================================================================
 CREATE INDEX IF NOT EXISTS idx_protocols_user ON public.protocols(user_id);
 CREATE INDEX IF NOT EXISTS idx_protocols_user_enabled ON public.protocols(user_id, is_enabled);
+CREATE INDEX IF NOT EXISTS idx_protocols_user_updated ON public.protocols(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_protocols_user_deleted ON public.protocols(user_id, is_deleted);
 
 CREATE INDEX IF NOT EXISTS idx_exercises_user ON public.exercises(user_id);
 CREATE INDEX IF NOT EXISTS idx_exercises_protocol ON public.exercises(protocol_id);
 CREATE INDEX IF NOT EXISTS idx_exercises_user_protocol ON public.exercises(user_id, protocol_id);
 CREATE INDEX IF NOT EXISTS idx_exercises_muscle ON public.exercises(muscle_group);
+CREATE INDEX IF NOT EXISTS idx_exercises_user_updated ON public.exercises(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_exercises_user_deleted ON public.exercises(user_id, is_deleted);
 
 CREATE INDEX IF NOT EXISTS idx_workouts_user ON public.workouts(user_id);
 CREATE INDEX IF NOT EXISTS idx_workouts_user_date ON public.workouts(user_id, date DESC);
+CREATE INDEX IF NOT EXISTS idx_workouts_user_updated ON public.workouts(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_workouts_user_deleted ON public.workouts(user_id, is_deleted);
 
 CREATE INDEX IF NOT EXISTS idx_workout_sets_user ON public.workout_sets(user_id);
 CREATE INDEX IF NOT EXISTS idx_workout_sets_workout ON public.workout_sets(workout_id);
 CREATE INDEX IF NOT EXISTS idx_workout_sets_exercise ON public.workout_sets(exercise_id);
+CREATE INDEX IF NOT EXISTS idx_workout_sets_user_updated ON public.workout_sets(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_workout_sets_user_deleted ON public.workout_sets(user_id, is_deleted);
 
 CREATE INDEX IF NOT EXISTS idx_body_weights_user ON public.body_weights(user_id);
 CREATE INDEX IF NOT EXISTS idx_body_weights_user_date ON public.body_weights(user_id, date DESC);
+CREATE INDEX IF NOT EXISTS idx_body_weights_user_updated ON public.body_weights(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_body_weights_user_deleted ON public.body_weights(user_id, is_deleted);
 
 CREATE INDEX IF NOT EXISTS idx_deleted_records_user_date ON public.deleted_records(user_id, deleted_at DESC);
 

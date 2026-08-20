@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
+import { useDataReactivity } from '../hooks/useDataReactivity';
 import { Layout, PageHeader, MetricCard } from '../components/common';
 import { 
   db, 
@@ -10,6 +11,7 @@ import {
   getBodyWeightsByUser 
 } from '../services/workoutDB';
 import { fullSync } from '../services/syncService';
+import { syncEventBus } from '../services/eventBus';
 import { WEEK_DAYS, getDayKey, getDayLabel } from '../utils/constants';
 import { Calendar, TrendingUp, LayoutDashboard } from "lucide-react";
 
@@ -25,6 +27,7 @@ import {
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const dataVersion = useDataReactivity();
 
   const [todayWorkout, setTodayWorkout] = useState<TodayWorkoutInfo | null>(null);
   const [activeWorkout, setActiveWorkout] = useState<ActiveWorkoutInfo | null>(null);
@@ -48,6 +51,7 @@ export default function Dashboard() {
       const allProtocols = (await db.protocols
         .where('userId')
         .equals(user.id)
+        .filter(p => !p.isDeleted)
         .toArray()).filter(p => !p.isArchived);
 
       const enabledProtocols = allProtocols.filter(p => p.isEnabled);
@@ -71,6 +75,36 @@ export default function Dashboard() {
         }
       }
 
+      // Treino ativo em andamento
+      const currentActive = await db.workouts
+        .where({ userId: user.id, status: 'active' })
+        .filter(w => !w.isDeleted)
+        .first();
+
+      if (currentActive) {
+        let protocolName = 'Treino';
+
+        if (currentActive.protocolId) {
+          const prot = await db.protocols.get(currentActive.protocolId);
+          if (prot) protocolName = prot.name;
+        }
+
+        const sets = await db.workoutSets
+          .where('workoutId')
+          .equals(currentActive.id)
+          .filter(s => !s.isDeleted)
+          .toArray();
+
+        setActiveWorkout({
+          ...currentActive,
+          protocolName,
+          completedSets: sets.length
+        });
+      } else {
+        setActiveWorkout(null);
+      }
+
+      // Informações para o card "Treino de Hoje"
       if (activeProtocol) {
         const exercises = await getExercisesByProtocol(activeProtocol.id);
         const filtered = exercises.filter(ex => ex.name.includes(`(${todayLabel})`));
@@ -88,55 +122,40 @@ export default function Dashboard() {
         setTodayWorkout(null);
       }
 
-      // Treino ativo em andamento
-      const active = await db.workouts
-        .where({ userId: user.id, status: 'active' })
-        .first();
-      
-      if (active) {
-        const protocol = await db.protocols.get(active.protocolId);
-        const sets = await db.workoutSets.where('workoutId').equals(active.id).toArray();
-        setActiveWorkout({
-          ...active,
-          protocolName: protocol?.name || 'Treino em Andamento',
-          completedSets: sets.length
-        });
-      } else {
-        setActiveWorkout(null);
-      }
-
-      // Cálculo de consistência e metas
-      const startOfWeek = new Date(now);
-      startOfWeek.setHours(0, 0, 0, 0);
-      startOfWeek.setDate(now.getDate() - (now.getDay() === 0 ? 6 : now.getDay() - 1)); // Início na segunda
-      const startOfWeekTs = startOfWeek.getTime();
-
-      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-      const completedWorkouts = await db.workouts
-        .where('userId').equals(user.id)
-        .and(w => w.status === 'completed')
+      // Buscar histórico para mapa de consistência e métricas
+      const allWorkouts = await db.workouts
+        .where('userId')
+        .equals(user.id)
+        .filter(w => !w.isDeleted && (w.status === 'completed' || !w.status))
         .toArray();
 
-      const thisWeekWorkouts = completedWorkouts.filter(w => w.date >= startOfWeekTs);
-      const monthlyWorkouts = completedWorkouts.filter(w => w.date >= firstDayOfMonth).length;
-
-      // Dias da semana completados
-      const daysDone = thisWeekWorkouts.map(w => {
+      const completedKeys = allWorkouts.map(w => {
         const d = new Date(w.date);
-        return WEEK_DAYS[d.getDay() === 0 ? 6 : d.getDay() - 1]?.key;
-      }).filter(Boolean);
-      setCompletedDayKeys(Array.from(new Set(daysDone)));
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      });
+      setCompletedDayKeys(completedKeys);
 
-      const activeProtocols = allProtocols.filter(p => p.isEnabled);
-      const weeklyGoal = activeProtocols.reduce((sum, p) => sum + (p.daysOfWeek?.length || 0), 0);
+      // Calcular frequência semanal e mensal
+      const startOfWeek = new Date();
+      const day = startOfWeek.getDay();
+      const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
+      startOfWeek.setDate(diff);
+      startOfWeek.setHours(0, 0, 0, 0);
 
-      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      const thisWeekWorkouts = allWorkouts.filter(w => new Date(w.date) >= startOfWeek);
+      const monthlyWorkouts = allWorkouts.filter(w => new Date(w.date) >= startOfMonth).length;
+
+      let weeklyGoal = 0;
       let monthlyGoal = 0;
-      
-      activeProtocols.forEach(p => {
+      enabledProtocols.forEach(p => {
         const pDays = p.daysOfWeek || [];
-        for (let d = 1; d <= daysInMonth; d++) {
+        weeklyGoal += pDays.length;
+        
+        for (let d = 1; d <= 30; d++) {
           const date = new Date(now.getFullYear(), now.getMonth(), d);
+          if (date.getMonth() !== now.getMonth()) break;
           const dayK = WEEK_DAYS[date.getDay() === 0 ? 6 : date.getDay() - 1]?.key;
           if (pDays.includes(dayK)) {
             monthlyGoal++;
@@ -167,19 +186,19 @@ export default function Dashboard() {
     if (user) {
       loadDashboardData();
     }
-  }, [user, loadDashboardData]);
+  }, [user, dataVersion, loadDashboardData]);
 
   const handleSaveWeight = async (weight: number) => {
     if (!user) return;
     try {
-      await addBodyWeight({
+      const id = await addBodyWeight({
         userId: user.id,
         weight,
         date: Date.now()
       });
       setLatestWeight(weight);
+      syncEventBus.emitDataMutated({ table: 'body_weights', action: 'create', recordId: id });
       toast.success('Peso registrado com sucesso!');
-      window.dispatchEvent(new Event('refresh-analysis'));
       fullSync().catch(console.error);
     } catch (err) {
       console.error(err);

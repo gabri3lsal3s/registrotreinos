@@ -9,6 +9,8 @@ export interface Protocol {
   daysOfWeek: string[];
   isSynced?: boolean;
   isArchived?: boolean;
+  isDeleted?: boolean;
+  deletedAt?: number;
   createdAt: number;
   updatedAt: number;
 }

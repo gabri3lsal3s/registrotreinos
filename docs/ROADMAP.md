@@ -21,6 +21,7 @@ Este documento registra a evolução do **Registro de Treinos**, cobrindo todas 
 | **Nível 11** | 🌟 Tema Escuro OLED & Visual Harmony | Fundo Pitch-Black `#000000` (desligamento real de pixels OLED), superfícies carvão `#09090b`, bordas nítidas `#1e1e24`, alto contraste WCAG AAA e PWA status bar unificado. | **CONCLUÍDO** ✅ |
 | **Nível 12** | 🛡️ Blindagem de Sincronização, Resiliência Offline & Integridade de Protocolos | Whitelisting estrito por entidade no `syncService.ts`, preservação de metadados locais no PULL (`pinnedNotes`/`supersetGroupId`), correção de índices compostos no Dexie (`version(7)`), chamadas de UI 100% não-bloqueantes no `ProtocolsPage`, `HistoryPage` e `Dashboard`. | **CONCLUÍDO** ✅ |
 | **Nível 13** | 🔒 Arquitetura de Sincronização Definitiva & Resiliência Avançada | Fila de Tombstones (`pendingDeletions` no Dexie `v8`) para expurgo garantido de itens deletados offline sem ressuscitação, exclusão mútua multi-aba com Web Locks API (`navigator.locks`), retentativas automáticas com exponential backoff & jitter, upserts em lotes (*batch chunking* de 100 itens) e background heartbeat sync (3min). | **CONCLUÍDO** ✅ |
+| **Nível 14** | ⚡ Sincronização Delta Bidirecional, Tombstones Nativos & Reatividade Total (Sync Engine v3.0) | Migração Supabase v13 com `is_deleted`/`deleted_at` nativos, Dexie v9 com soft-delete em cascata, push topológico ordenado (`protocols` $\rightarrow$ `exercises` $\rightarrow$ `workouts` $\rightarrow$ `workout_sets` $\rightarrow$ `body_weights`), delta pull incremental com cursor de clock skew, Last-Write-Wins (LWW) determinístico e Barramento Reativo de Eventos (`syncEventBus` + `useDataReactivity`) integrando Análises, Histórico e Dashboard sem reload de página. | **CONCLUÍDO** ✅ |
 
 ---
 
@@ -136,4 +137,24 @@ Este documento registra a evolução do **Registro de Treinos**, cobrindo todas 
 7. **Sincronização Progressiva com Persistência Imediata**:
    - Atualização imediata do status `isSynced: true` no Dexie para cada tabela bem-sucedida (`protocols` -> `exercises` -> `workouts` -> `workout_sets` -> `body_weights`), eliminando perda de progresso durante uploads incrementais.
 
+---
 
+### ⚡ Nível 14: Sincronização Delta Bidirecional, Tombstones Nativos & Reatividade Total (Sync Engine v3.0)
+*Objetivo: Eliminar 100% dos gargalos de propagação de treinos, ressuscitação de dados deletados e dessincronia das análises/histórico através de uma arquitetura delta bidirecional com tombstones de primeira classe e reatividade unificada.*
+
+1. **Migração SQL Supabase v13 (`supabase_migration_v13_tombstones_sync.sql`)**:
+   - Adicionadas colunas `is_deleted` (BOOLEAN DEFAULT false) e `deleted_at` (TIMESTAMPTZ) em todas as tabelas (`protocols`, `exercises`, `workouts`, `workout_sets`, `body_weights`).
+   - Triggers `handle_updated_at` garantidos em todas as tabelas para atualização automática de `updated_at = now()` em mutações e soft-deletes.
+   - Índices B-Tree compostos criados para `(user_id, updated_at DESC)` e `(user_id, is_deleted)` para delta queries ultrarrápidas.
+2. **Evolução do Esquema Local Dexie v9 (`workoutDB.ts`)**:
+   - Índices compostos atualizados com suporte a `isDeleted` e `updatedAt`.
+   - Injeção obrigatória e estrita de `userId` em todas as criações (`workoutSets`, `exercises`, etc.).
+   - Refatoração dos métodos CRUD para aplicar **Soft-Delete em Cascata** (`deleteWorkout` marca treino e séries com `isDeleted: true`, `isSynced: false`).
+   - Todas as queries de leitura (`getWorkoutHistory`, `getProtocolsByUser`, `getExercisesByProtocol`, etc.) filtram automaticamente registros com `isDeleted === true`.
+3. **Engine de Sincronização Delta Bidirecional (`syncService.ts`)**:
+   - **Push Topológico (Outbox Pattern)**: Sequência estrita garantida (`protocols` $\rightarrow$ `exercises` $\rightarrow$ `workouts` $\rightarrow$ `workout_sets` $\rightarrow$ `body_weights`), eliminando erros de Foreign Key no PostgreSQL ao criar exercícios e séries dinâmicos na sessão.
+   - **Pull Delta Incremental**: Consulta `gt('updated_at', cursor - 5000ms)` reduzindo transferências e eliminando o antigo expurgo acidental por diferença.
+   - **Reconciliação Last-Write-Wins (LWW)**: Resolução de conflitos determinística comparando timestamps UTC e preservando modificações locais pendentes.
+4. **Barramento Reativo de Eventos & Invalidação Instantânea (`eventBus.ts` + `useDataReactivity.ts`)**:
+   - Emissão de eventos tipados (`DATA_MUTATED`, `SYNC_COMPLETED`) em qualquer mutação ou sync.
+   - `AnalysisPage.tsx`, `HistoryPage.tsx` e `Dashboard.tsx` auto-recalculam métricas, gráficos de volume, 1RM e linha do tempo de forma reativa e fluida, sem necessidade de refresh manual.

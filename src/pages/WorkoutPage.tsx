@@ -19,6 +19,7 @@ import {
   deleteExercise
 } from '../services/workoutDB';
 import { deleteWorkoutFromCloud, fullSync } from '../services/syncService';
+import { syncEventBus } from '../services/eventBus';
 import type { ExerciseCategory, UniqueExercise, WorkoutSet, WorkoutSetType } from '../types';
 import { parseLocaleNumber, calculateVolume } from '../utils/workoutMath';
 import { WEEK_DAYS } from '../utils/constants';
@@ -649,6 +650,7 @@ export default function WorkoutPage() {
       }
 
       // Sincronização em segundo plano não-bloqueante
+      syncEventBus.emitDataMutated({ table: 'workouts', action: 'update', recordId: activeWorkoutId });
       fullSync().catch((err) => {
         console.warn('[Sync] Sincronização em background adiada:', err);
       });

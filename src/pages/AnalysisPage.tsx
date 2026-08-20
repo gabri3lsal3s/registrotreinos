@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { useDataReactivity } from '../hooks/useDataReactivity';
 import { Layout, PageHeader, InfoTooltip } from '../components/common';
 import { ConsistencyHeatmap, AgonistAntagonistBalanceCard } from '../components/analysis';
 import { Card, CardContent } from "@/components/ui/card";
@@ -62,6 +63,7 @@ const COLORS = ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0', '#059669', '#047857'
 
 export default function AnalysisPage() {
   const { user } = useAuth();
+  const dataVersion = useDataReactivity();
   const [data, setData] = useState<AnalysisSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedExerciseName, setSelectedExerciseName] = useState<string | null>(null);
@@ -95,7 +97,7 @@ export default function AnalysisPage() {
     if (user) {
       loadData(period);
     }
-  }, [user, period, loadData]);
+  }, [user, period, dataVersion, loadData]);
 
   const selectedExercise = data?.exerciseProgression?.find(ex => ex.name === selectedExerciseName);
   const lastPoint = selectedExercise && selectedExercise.data.length > 0

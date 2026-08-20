@@ -10,49 +10,57 @@ O **Registro de Treinos** segue uma arquitetura **Offline-First Absoluta**, gara
 [ Usuário ] 
      │
      ▼ (Leitura e Gravação Instantânea)
-[ Dexie.js (IndexedDB) ]  <─── Fonte Primária da Verdade (Offline-First)
-     │
-     ▼ (Sincronização em Background não-bloqueante)
-[ SyncService (syncService.ts) ]
+[ Dexie.js (IndexedDB) v9 ]  <─── Fonte Primária da Verdade (Offline-First)
+     │                     ▲
+     ▼ (Notificação)       │ (Reconciliação Delta LWW)
+[ EventBus (syncEventBus) ]│
+     │                     │
+     ▼ (Auto-Atualização)  │
+[ UI (Análises, Histórico) ]│
+     │                     │
+     ▼ (Push Topológico / Pull Incremental)
+[ Sync Engine v3.0 (syncService.ts) ]
      │
      ▼ (Isolamento estrito por user_id via RLS)
-[ Supabase PostgreSQL ]
+[ Supabase PostgreSQL (Tombstones + Triggers updated_at) ]
 ```
 
-### Regras Mandatórias de Sincronização:
-1. **Gravação Local com Flag**: Toda operação do usuário (treinos, protocolos, séries, pesagens) é gravada diretamente no Dexie.js com `isSynced: false`.
-2. **Fila de Tombstones com Hierarquia Reversa de Integridade**:
-   - Exclusões geram um registro em `pendingDeletions` (`table, recordId, userId`).
-   - O processamento de tombstones (`flushPendingDeletions`) segue rigorosamente a ordem inversa de dependência de chaves estrangeiras:
-     1. `workout_sets` (filho de workouts e exercises)
-     2. `workouts` (filho de protocols)
-     3. `exercises` (filho de protocols)
-     4. `protocols` (pai)
+### Regras Mandatórias de Sincronização (Sync Engine v3.0):
+1. **Gravação Local com Soft-Delete & Flag**: Toda operação do usuário (treinos, protocolos, séries, pesagens) grava primeiro no Dexie com `isSynced: false`, `updatedAt: Date.now()`. Exclusões aplicam **Soft-Delete** (`isDeleted: true`, `deletedAt: Date.now()`, `isSynced: false`).
+2. **Push Topológico em Cascata (Outbox Pattern)**:
+   - O envio ao Supabase segue obrigatoriamente a ordem hierárquica das tabelas:
+     1. `protocols` (pai)
+     2. `exercises` (filho de protocols)
+     3. `workouts` (filho de protocols)
+     4. `workout_sets` (filho de workouts e exercises)
      5. `body_weights` (independente)
-   - Ao deletar remotamente, registra o tombstone na tabela Supabase `deleted_records (user_id, table_name, record_id, deleted_at)` para propagação entre dispositivos.
-3. **Ciclo PUSH -> PULL com Web Locks & Chunking**:
-   - `fullSync()` valida/renova a sessão Supabase e solicita a trava de sistema `'workout_sync_mutex'` (Web Locks API) com fallback em memória.
-   - `syncData()`: Despacha tombstones, particiona payloads massivos em lotes de até 100 registros (`batchUpsert`), pré-valida e envia entidades ancestrais (protocolos e treinos pais) e marca `isSynced: true` progressivamente tabela por tabela conforme cada lote é confirmado pelo servidor.
-   - `pullData()`: Realiza o PULL de dados remotos para o IndexedDB sem sobrescrever modificações locais não sincronizadas (`!local || local.isSynced`), lê a tabela remota `deleted_records` para expurgar exclusões confirmadas no Dexie local e filtra registros marcados para exclusão.
-4. **Auto-Healing de Esquema & Resiliência a Desvios de Schema Remoto**:
-   - Em caso de incompatibilidades de colunas no PostgREST (ex: colunas ausentes em instâncias com migrações parciais), o `batchUpsert` detecta os erros em tempo real, expurga dinamicamente as colunas incompatíveis do lote na memória e retenta o envio sem abortar a sincronização.
-   - Preenchimento canônico obrigatório de `date_key` (`YYYY-MM-DD`) e fallbacks inteligentes de integridade referencial para `protocol_id` e `exercise_id`.
-5. **Auto-Retry com Exponential Backoff & Jitter**: Tolerância a micro-quedas de sinal com até 3 retentativas progressivas automáticas.
-6. **Background Heartbeat Sync**: Temporizador em segundo plano ativo a cada 3 minutos para salvaguarda contínua de treinos longos.
+   - Exercícios avulsos ou recém-criados são garantidos antes das séries filhas, eliminando violações de Foreign Key no PostgreSQL.
+3. **Pull Incremental (Delta Fetch com Cursor & Clock Skew Buffer)**:
+   - O PULL consulta apenas registros onde `updated_at > (last_pulled_at - 5000ms)`, eliminando dumps completos e mitigando discrepâncias de relógio entre cliente e nuvem.
+   - Aplica reconciliação determinística **Last-Write-Wins (LWW)** preservando edições locais não sincronizadas (`!local || local.isSynced || remoteUpdated >= localUpdated`).
+4. **Tombstones Nativos em Todas as Camadas**:
+   - Todas as 5 tabelas no Supabase e no Dexie possuem `is_deleted: boolean` e `deleted_at: timestamptz/numeric`.
+   - As exclusões se propagam deterministicamente sem o risco de ressurreição em outros dispositivos.
+5. **Barramento Reativo de Eventos (`syncEventBus` + `useDataReactivity`)**:
+   - Mutações locais e conclusões de sincronização disparam eventos tipados que invalidam o cache e recalcula imediatamente gráficos, volume, 1RM e histórico sem necessidade de recarregar a página.
+6. **Controle de Concorrência Multi-Aba (Web Locks API)**:
+   - O ciclo completo de sincronização obtém a trava `'workout_sync_mutex'` com `{ ifAvailable: true }`, evitando execuções redundantes entre abas abertas simultaneamente.
+7. **Auto-Retry com Exponential Backoff & Jitter**: Tolerância a micro-quedas de sinal com até 3 retentativas progressivas automáticas.
+8. **Background Heartbeat Sync**: Temporizador em segundo plano ativo a cada 3 minutos para salvaguarda contínua de treinos longos.
 
 ---
 
-## 2. Estrutura do Esquema IndexedDB (Dexie `WorkoutDB`)
+## 2. Estrutura do Esquema IndexedDB (Dexie `WorkoutDB` v9)
 
-O banco local `WorkoutDB` versão 8 possui as seguintes tabelas e índices:
+O banco local `WorkoutDB` versão 9 possui as seguintes tabelas e índices:
 
 ```ts
-db.version(8).stores({
-  protocols: 'id, userId, name, isEnabled, isSynced, [userId+isEnabled], [userId+isSynced]',
-  exercises: 'id, userId, protocolId, name, order, isSynced, [protocolId+isSynced]',
-  workouts: 'id, userId, protocolId, date, status, isSynced, [userId+protocolId+status], [userId+status], [userId+isSynced]',
-  workoutSets: 'id, userId, workoutId, exerciseId, setIndex, isSynced, [workoutId+exerciseId], [workoutId+exerciseId+setIndex], [workoutId+isSynced]',
-  bodyWeights: 'id, userId, date, isSynced, [userId+date], [userId+isSynced]',
+db.version(9).stores({
+  protocols: 'id, userId, name, isEnabled, isSynced, isDeleted, updatedAt, [userId+isEnabled], [userId+isSynced], [userId+isDeleted]',
+  exercises: 'id, userId, protocolId, name, order, isSynced, isDeleted, updatedAt, [protocolId+isSynced], [protocolId+isDeleted], [userId+isDeleted]',
+  workouts: 'id, userId, protocolId, date, status, isSynced, isDeleted, updatedAt, [userId+status], [userId+isSynced], [userId+isDeleted], [userId+date]',
+  workoutSets: 'id, userId, workoutId, exerciseId, setIndex, isSynced, isDeleted, updatedAt, [workoutId+exerciseId], [workoutId+exerciseId+setIndex], [workoutId+isSynced], [workoutId+isDeleted], [userId+isDeleted]',
+  bodyWeights: 'id, userId, date, isSynced, isDeleted, updatedAt, [userId+date], [userId+isSynced], [userId+isDeleted]',
   pendingDeletions: 'id, userId, table, recordId, timestamp, [userId+table]'
 });
 ```

@@ -32,9 +32,10 @@ O **Registro de Treinos** é uma Progressive Web App (PWA) de alto desempenho fo
 4. **Exportação e Importação Universal de Protocolos**:
    - **Exportação JSON**: Gera arquivo padronizado (`registrotreinos-protocol` v1) contendo a divisão de dias e lista de exercícios para backup individual ou compartilhamento com outros usuários.
    - **Importação Universal**: O assistente (`universalProtocolParser.ts` e `ImportProtocolModal.tsx`) aceita arquivos (`.json`, `.csv`, `.tsv`, `.txt`) e texto colado de tabelas (Markdown, CSV ou texto livre de IAs como ChatGPT/Gemini), convertendo automaticamente séries, repetições, dias da semana e grupos musculares antes de salvar de forma atômica no IndexedDB.
-5. **Soft-Delete vs Hard-Delete**:
-   - Se um exercício ou protocolo possui séries ou treinos históricos vinculados, a exclusão é convertida em **soft-delete** (`isArchived: true`), preservando a integridade das estatísticas históricas.
-   - Se não houver vínculos históricos, é executada a remoção física (hard-delete).
+5. **Tombstones & Soft-Deletes Nativos**:
+   - Toda exclusão de treinos, séries, protocolos, exercícios e registros de peso corporal aplica **Soft-Delete** (`isDeleted: true`, `deletedAt: Date.now()`, `updatedAt: Date.now()`, `isSynced: false`).
+   - Isso garante propagação atômica e idempotente entre múltiplos dispositivos e clientes offline, eliminando qualquer risco de ressurreição de dados no PULL.
+   - Consultas regulares no app filtram automaticamente registros marcados com `isDeleted === true`.
 
 ### 2.3. Execução de Treinos e Registro de Séries
 1. **Sessão Ativa (`status: 'active'`)**:

@@ -55,13 +55,26 @@ class WorkoutDB extends Dexie {
     this.version(8).stores({
       pendingDeletions: 'id, userId, table, recordId, timestamp, [userId+table]',
     });
+
+    this.version(9).stores({
+      protocols: 'id, userId, name, isEnabled, isSynced, isDeleted, updatedAt, [userId+isEnabled], [userId+isSynced], [userId+isDeleted]',
+      exercises: 'id, userId, protocolId, name, order, isSynced, isDeleted, updatedAt, [protocolId+isSynced], [protocolId+isDeleted], [userId+isDeleted]',
+      workouts: 'id, userId, protocolId, date, status, isSynced, isDeleted, updatedAt, [userId+status], [userId+isSynced], [userId+isDeleted], [userId+date]',
+      workoutSets: 'id, userId, workoutId, exerciseId, setIndex, isSynced, isDeleted, updatedAt, [workoutId+exerciseId], [workoutId+exerciseId+setIndex], [workoutId+isSynced], [workoutId+isDeleted], [userId+isDeleted]',
+      bodyWeights: 'id, userId, date, isSynced, isDeleted, updatedAt, [userId+date], [userId+isSynced], [userId+isDeleted]',
+      pendingDeletions: 'id, userId, table, recordId, timestamp, [userId+table]'
+    });
   }
 }
 
 export const db = new WorkoutDB();
 
+function getActiveUserId(): string {
+  return useAuthStore.getState().user?.id || '';
+}
+
 /**
- * Enfileira uma deleção pendente (Tombstone) para envio garantido ao Supabase
+ * Enfileira uma deleção pendente (Tombstone) para retrocompatibilidade
  */
 export async function queuePendingDeletion(
   table: PendingDeletion['table'],
@@ -83,44 +96,67 @@ export async function queuePendingDeletion(
   }
 }
 
-// Protocol Services
+// ============================================================================
+// PROTOCOL SERVICES
+// ============================================================================
+
 export async function createProtocol(protocol: Omit<Protocol, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
   const id = crypto.randomUUID();
   const now = Date.now();
-  await db.protocols.add({ ...protocol, id, createdAt: now, updatedAt: now, isSynced: false });
+  await db.protocols.add({
+    ...protocol,
+    id,
+    createdAt: now,
+    updatedAt: now,
+    isSynced: false,
+    isDeleted: false
+  });
   return id;
 }
 
 export async function getProtocolsByUser(userId: string): Promise<Protocol[]> {
-  return db.protocols.where('userId').equals(userId).toArray();
+  return db.protocols
+    .where('userId')
+    .equals(userId)
+    .filter(p => !p.isDeleted)
+    .toArray();
 }
 
 export async function updateProtocol(id: string, updates: Partial<Protocol>): Promise<void> {
-  await db.protocols.update(id, { ...updates, updatedAt: Date.now(), isSynced: false });
+  await db.protocols.update(id, {
+    ...updates,
+    updatedAt: Date.now(),
+    isSynced: false
+  });
 }
 
 export async function deleteProtocol(id: string): Promise<void> {
   const protocol = await db.protocols.get(id);
-  const userId = protocol?.userId || useAuthStore.getState().user?.id || '';
-  const workoutsCount = await db.workouts.where('protocolId').equals(id).count();
+  const userId = protocol?.userId || getActiveUserId();
+  const now = Date.now();
   
-  if (workoutsCount > 0) {
-    // Soft-delete: manter no banco mas ocultar
-    await db.protocols.update(id, { isArchived: true, isEnabled: false, isSynced: false });
-    // Soft-delete exercícios também
-    await db.exercises.where('protocolId').equals(id).modify({ isArchived: true, isSynced: false });
-  } else {
-    // Deleção física: enfileirar tombstone para sincronização
-    const exercises = await db.exercises.where('protocolId').equals(id).toArray();
-    if (userId) {
-      await queuePendingDeletion('protocols', id, userId);
-      for (const ex of exercises) {
-        await queuePendingDeletion('exercises', ex.id, userId);
-      }
-    }
-    await db.exercises.where('protocolId').equals(id).delete();
-    await db.protocols.delete(id);
+  if (userId) {
+    await queuePendingDeletion('protocols', id, userId);
   }
+
+  await db.transaction('rw', [db.protocols, db.exercises], async () => {
+    // Soft-delete: marca tombstone no protocolo
+    await db.protocols.update(id, {
+      isDeleted: true,
+      deletedAt: now,
+      updatedAt: now,
+      isEnabled: false,
+      isSynced: false
+    });
+
+    // Soft-delete em cascata para todos os exercícios vinculados
+    await db.exercises.where('protocolId').equals(id).modify({
+      isDeleted: true,
+      deletedAt: now,
+      updatedAt: now,
+      isSynced: false
+    });
+  });
 }
 
 export async function duplicateProtocol(protocolId: string, userId: string, customName?: string): Promise<string> {
@@ -131,8 +167,12 @@ export async function duplicateProtocol(protocolId: string, userId: string, cust
   const now = Date.now();
   const newName = customName || `${original.name} (Cópia)`;
 
-  // Obter todos os exercícios do protocolo original
-  const exercises = await db.exercises.where('protocolId').equals(protocolId).toArray();
+  // Obter todos os exercícios ativos do protocolo original
+  const exercises = await db.exercises
+    .where('protocolId')
+    .equals(protocolId)
+    .filter(ex => !ex.isDeleted)
+    .toArray();
 
   await db.transaction('rw', [db.protocols, db.exercises], async () => {
     await db.protocols.add({
@@ -142,17 +182,22 @@ export async function duplicateProtocol(protocolId: string, userId: string, cust
       name: newName,
       createdAt: now,
       updatedAt: now,
-      isSynced: false
+      isSynced: false,
+      isDeleted: false
     });
 
     for (const ex of exercises) {
-      if (ex.isArchived || ex.isSessionOnly) continue;
+      if (ex.isArchived || ex.isSessionOnly || ex.isDeleted) continue;
       const newExId = crypto.randomUUID();
       await db.exercises.add({
         ...ex,
         id: newExId,
         protocolId: newProtocolId,
-        isSynced: false
+        userId,
+        createdAt: now,
+        updatedAt: now,
+        isSynced: false,
+        isDeleted: false
       });
     }
   });
@@ -160,39 +205,85 @@ export async function duplicateProtocol(protocolId: string, userId: string, cust
   return newProtocolId;
 }
 
-// Body Weight Services
+// ============================================================================
+// BODY WEIGHT SERVICES
+// ============================================================================
+
 export async function addBodyWeight(entry: Omit<BodyWeight, 'id' | 'isSynced'>): Promise<string> {
   const id = crypto.randomUUID();
-  await db.bodyWeights.put({ ...entry, id, isSynced: false });
+  const now = Date.now();
+  await db.bodyWeights.put({
+    ...entry,
+    id,
+    createdAt: entry.createdAt || now,
+    updatedAt: now,
+    isSynced: false,
+    isDeleted: false
+  });
   return id;
 }
 
 export async function getBodyWeightsByUser(userId: string): Promise<BodyWeight[]> {
-  return db.bodyWeights.where('userId').equals(userId).sortBy('date');
+  const list = await db.bodyWeights
+    .where('userId')
+    .equals(userId)
+    .filter(b => !b.isDeleted)
+    .sortBy('date');
+  return list;
 }
 
 export async function updateBodyWeight(id: string, updates: Partial<BodyWeight>): Promise<void> {
-  await db.bodyWeights.update(id, { ...updates, isSynced: false });
+  await db.bodyWeights.update(id, {
+    ...updates,
+    updatedAt: Date.now(),
+    isSynced: false
+  });
 }
 
 export async function deleteBodyWeight(id: string): Promise<void> {
   const item = await db.bodyWeights.get(id);
-  const userId = item?.userId || useAuthStore.getState().user?.id || '';
+  const userId = item?.userId || getActiveUserId();
+  const now = Date.now();
+
   if (userId) {
     await queuePendingDeletion('body_weights', id, userId);
   }
-  await db.bodyWeights.delete(id);
+
+  await db.bodyWeights.update(id, {
+    isDeleted: true,
+    deletedAt: now,
+    updatedAt: now,
+    isSynced: false
+  });
 }
 
-// Exercise Services
+// ============================================================================
+// EXERCISE SERVICES
+// ============================================================================
+
 export async function addExercise(exercise: Omit<Exercise, 'id'>): Promise<string> {
   const id = crypto.randomUUID();
-  await db.exercises.add({ ...exercise, id, isSynced: false });
+  const now = Date.now();
+  const userId = exercise.userId || getActiveUserId();
+
+  await db.exercises.add({
+    ...exercise,
+    id,
+    userId,
+    createdAt: now,
+    updatedAt: now,
+    isSynced: false,
+    isDeleted: false
+  });
   return id;
 }
 
 export async function updateExercise(id: string, updates: Partial<Exercise>): Promise<void> {
-  await db.exercises.update(id, { ...updates, isSynced: false });
+  await db.exercises.update(id, {
+    ...updates,
+    updatedAt: Date.now(),
+    isSynced: false
+  });
 }
 
 export async function getExercisesByProtocol(
@@ -201,16 +292,19 @@ export async function getExercisesByProtocol(
   activeWorkoutId?: string
 ): Promise<Exercise[]> {
   const collection = db.exercises.where('protocolId').equals(protocolId);
-  const data = await collection.toArray();
+  const data = await collection.filter(ex => !ex.isDeleted).toArray();
   
   let results = data;
 
   if (activeWorkoutId) {
-    // Pegar IDs de exercícios que têm séries NESTE treino ativo
-    const sets = await db.workoutSets.where('workoutId').equals(activeWorkoutId).toArray();
+    // Pegar IDs de exercícios que têm séries ativas neste treino
+    const sets = await db.workoutSets
+      .where('workoutId')
+      .equals(activeWorkoutId)
+      .filter(s => !s.isDeleted)
+      .toArray();
     const sessionExerciseIds = new Set(sets.map(s => s.exerciseId));
     
-    // Filtro: manter se não arquivado OU se for parte deste treino ativo
     results = data.filter(ex => {
       const isPartOfSession = sessionExerciseIds.has(ex.id);
       if (includeArchived) return true;
@@ -228,33 +322,52 @@ export async function getExercisesByProtocol(
 export async function deleteExercise(id: string): Promise<void> {
   const exercise = await db.exercises.get(id);
   const protocol = exercise?.protocolId ? await db.protocols.get(exercise.protocolId) : undefined;
-  const rawEx = exercise as unknown as Record<string, unknown> | undefined;
-  const userId = (rawEx?.userId as string | undefined) || protocol?.userId || useAuthStore.getState().user?.id || '';
+  const userId = exercise?.userId || protocol?.userId || getActiveUserId();
+  const now = Date.now();
 
-  const setsCount = await db.workoutSets.where('exerciseId').equals(id).count();
-  
-  if (setsCount > 0) {
-    // Soft-delete: arquivar para preservar histórico
-    await db.exercises.update(id, { isArchived: true, isSynced: false });
-  } else {
-    if (userId) {
-      await queuePendingDeletion('exercises', id, userId);
-    }
-    await db.exercises.delete(id);
+  if (userId) {
+    await queuePendingDeletion('exercises', id, userId);
   }
+
+  // Soft-delete sempre para integridade histórica de treinos passados
+  await db.exercises.update(id, {
+    isDeleted: true,
+    deletedAt: now,
+    updatedAt: now,
+    isArchived: true,
+    isSynced: false
+  });
 }
 
-// Workout Services
+// ============================================================================
+// WORKOUT SERVICES
+// ============================================================================
+
 export async function startWorkout(workout: Omit<Workout, 'id' | 'date' | 'status'>): Promise<string> {
   const id = crypto.randomUUID();
-  const date = Date.now();
-  await db.workouts.add({ ...workout, id, date, status: 'active', isSynced: false });
+  const now = Date.now();
+  await db.workouts.add({
+    ...workout,
+    id,
+    date: now,
+    status: 'active',
+    createdAt: now,
+    updatedAt: now,
+    isSynced: false,
+    isDeleted: false
+  });
   return id;
 }
 
 export async function finishActiveWorkout(id: string, updates: Partial<Workout> = {}): Promise<void> {
   const finishedAt = Date.now();
-  await db.workouts.update(id, { ...updates, status: 'completed', finishedAt, isSynced: false });
+  await db.workouts.update(id, {
+    ...updates,
+    status: 'completed',
+    finishedAt,
+    updatedAt: finishedAt,
+    isSynced: false
+  });
 }
 
 export async function cancelActiveWorkout(id: string): Promise<void> {
@@ -265,68 +378,104 @@ export async function getActiveWorkout(userId: string, protocolId?: string): Pro
   if (protocolId) {
     return db.workouts
       .where({ userId, protocolId, status: 'active' })
+      .filter(w => !w.isDeleted)
       .first();
   }
   return db.workouts
     .where({ userId, status: 'active' })
+    .filter(w => !w.isDeleted)
     .first();
 }
 
 export async function addWorkoutSet(set: Omit<WorkoutSet, 'id' | 'timestamp'>): Promise<string> {
   const id = crypto.randomUUID();
   const timestamp = Date.now();
-  await db.workoutSets.add({ ...set, id, timestamp, isSynced: false });
+  const userId = set.userId || getActiveUserId();
+
+  await db.workoutSets.add({
+    ...set,
+    id,
+    userId,
+    timestamp,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    isSynced: false,
+    isDeleted: false
+  });
   return id;
 }
 
 export async function updateWorkoutSet(id: string, updates: Partial<WorkoutSet>): Promise<void> {
-  await db.workoutSets.update(id, { ...updates, isSynced: false });
+  await db.workoutSets.update(id, {
+    ...updates,
+    updatedAt: Date.now(),
+    isSynced: false
+  });
 }
 
 export async function deleteWorkoutSet(id: string): Promise<void> {
   const set = await db.workoutSets.get(id);
   const workout = set?.workoutId ? await db.workouts.get(set.workoutId) : undefined;
-  const rawSet = set as unknown as Record<string, unknown> | undefined;
-  const userId = (rawSet?.userId as string | undefined) || workout?.userId || useAuthStore.getState().user?.id || '';
+  const userId = set?.userId || workout?.userId || getActiveUserId();
+  const now = Date.now();
 
   if (userId) {
     await queuePendingDeletion('workout_sets', id, userId);
   }
-  await db.workoutSets.delete(id);
+
+  await db.workoutSets.update(id, {
+    isDeleted: true,
+    deletedAt: now,
+    updatedAt: now,
+    isSynced: false
+  });
 }
 
 export async function upsertWorkoutSet(set: Omit<WorkoutSet, 'id' | 'timestamp'>): Promise<string> {
+  const userId = set.userId || getActiveUserId();
   const existing = await db.workoutSets
     .where({ workoutId: set.workoutId, exerciseId: set.exerciseId, setIndex: set.setIndex })
     .first();
   
   if (existing) {
-    await db.workoutSets.update(existing.id, { ...set, isSynced: false });
+    await db.workoutSets.update(existing.id, {
+      ...set,
+      userId: existing.userId || userId,
+      isDeleted: false,
+      deletedAt: undefined,
+      updatedAt: Date.now(),
+      isSynced: false
+    });
     return existing.id;
   } else {
-    return addWorkoutSet(set);
+    return addWorkoutSet({ ...set, userId });
   }
 }
 
 export async function getWorkoutSets(workoutId: string): Promise<WorkoutSet[]> {
-  return db.workoutSets.where('workoutId').equals(workoutId).toArray();
+  return db.workoutSets
+    .where('workoutId')
+    .equals(workoutId)
+    .filter(s => !s.isDeleted)
+    .toArray();
 }
 
 export async function getWorkoutHistory(userId: string): Promise<Workout[]> {
   const list = await db.workouts
     .where('userId')
     .equals(userId)
-    .filter(w => w.status === 'completed' || !w.status)
+    .filter(w => !w.isDeleted && (w.status === 'completed' || !w.status))
     .toArray();
   return list.sort((a, b) => (Number(b.date) || 0) - (Number(a.date) || 0));
 }
 
 export async function deleteWorkout(workoutId: string): Promise<void> {
   const workout = await db.workouts.get(workoutId);
-  const userId = workout?.userId || useAuthStore.getState().user?.id || '';
-  const sets = await db.workoutSets.where('workoutId').equals(workoutId).toArray();
+  const userId = workout?.userId || getActiveUserId();
+  const now = Date.now();
 
   if (userId) {
+    const sets = await db.workoutSets.where('workoutId').equals(workoutId).toArray();
     for (const s of sets) {
       await queuePendingDeletion('workout_sets', s.id, userId);
     }
@@ -334,61 +483,104 @@ export async function deleteWorkout(workoutId: string): Promise<void> {
   }
 
   return db.transaction('rw', [db.workouts, db.workoutSets], async () => {
-    await db.workoutSets.where('workoutId').equals(workoutId).delete();
-    await db.workouts.delete(workoutId);
+    // Soft delete do treino
+    await db.workouts.update(workoutId, {
+      isDeleted: true,
+      deletedAt: now,
+      updatedAt: now,
+      isSynced: false
+    });
+
+    // Soft delete em cascata de todas as séries
+    await db.workoutSets.where('workoutId').equals(workoutId).modify({
+      isDeleted: true,
+      deletedAt: now,
+      updatedAt: now,
+      isSynced: false
+    });
   });
 }
 
 export async function clearAllData(userId: string): Promise<void> {
+  const now = Date.now();
   await db.transaction('rw', [db.protocols, db.exercises, db.workouts, db.workoutSets, db.bodyWeights], async () => {
-    // 1. Obter todos os protocolos do usuário
     const protocols = await db.protocols.where('userId').equals(userId).toArray();
     const protocolIds = protocols.map(p => p.id);
 
-    // 2. Obter todos os treinos do usuário
     const workouts = await db.workouts.where('userId').equals(userId).toArray();
     const workoutIds = workouts.map(w => w.id);
 
-    // 3. Deletar com integridade referencial atômica
     if (workoutIds.length > 0) {
-      await db.workoutSets.where('workoutId').anyOf(workoutIds).delete();
+      await db.workoutSets.where('workoutId').anyOf(workoutIds).modify({
+        isDeleted: true,
+        deletedAt: now,
+        updatedAt: now,
+        isSynced: false
+      });
     }
-    await db.workouts.where('userId').equals(userId).delete();
+
+    await db.workouts.where('userId').equals(userId).modify({
+      isDeleted: true,
+      deletedAt: now,
+      updatedAt: now,
+      isSynced: false
+    });
+
     if (protocolIds.length > 0) {
-      await db.exercises.where('protocolId').anyOf(protocolIds).delete();
+      await db.exercises.where('protocolId').anyOf(protocolIds).modify({
+        isDeleted: true,
+        deletedAt: now,
+        updatedAt: now,
+        isSynced: false
+      });
     }
-    await db.protocols.where('userId').equals(userId).delete();
-    await db.bodyWeights.where('userId').equals(userId).delete();
+
+    await db.protocols.where('userId').equals(userId).modify({
+      isDeleted: true,
+      deletedAt: now,
+      updatedAt: now,
+      isSynced: false
+    });
+
+    await db.bodyWeights.where('userId').equals(userId).modify({
+      isDeleted: true,
+      deletedAt: now,
+      updatedAt: now,
+      isSynced: false
+    });
   });
 }
 
 export async function getExercisePR(exerciseId: string, userId?: string): Promise<WorkoutSet | null> {
-  // 1. Pegar IDs de treinos concluídos (filtrando por userId se fornecido)
-  let completedWorkoutsQuery = db.workouts.where('status').equals('completed');
-  if (userId) {
-    completedWorkoutsQuery = completedWorkoutsQuery.and(w => w.userId === userId);
+  const currentUserId = userId || getActiveUserId();
+  
+  // 1. Pegar IDs de treinos concluídos e não deletados
+  let completedWorkoutsQuery = db.workouts
+    .where('status')
+    .equals('completed')
+    .filter(w => !w.isDeleted);
+
+  if (currentUserId) {
+    completedWorkoutsQuery = completedWorkoutsQuery.and(w => w.userId === currentUserId);
   }
   const completedWorkouts = await completedWorkoutsQuery.toArray();
-  
   const workoutIds = new Set(completedWorkouts.map(w => w.id));
 
-  // 2. Pegar todas as séries deste exercício e filtrar apenas treinos concluídos
+  // 2. Pegar todas as séries deste exercício que não estejam deletadas
   const sets = await db.workoutSets
     .where('exerciseId')
     .equals(exerciseId)
+    .filter(s => !s.isDeleted && s.completed && workoutIds.has(s.workoutId))
     .toArray();
 
-  const completedSets = sets.filter(s => workoutIds.has(s.workoutId));
-
-  if (completedSets.length === 0) return null;
+  if (sets.length === 0) return null;
 
   const exercise = await db.exercises.get(exerciseId);
   const category = exercise?.category || 'weight';
 
-  // 3. Encontrar a melhor série considerando a categoria do exercício
-  return completedSets.reduce((best, current) => {
+  // 3. Encontrar a melhor série considerando a categoria
+  return sets.reduce((best, current) => {
     if (category === 'time') {
-      // Para exercícios de tempo: maior tempo de execução (reps) e maior peso adicional
       if (current.reps > best.reps || (current.reps === best.reps && current.weight > best.weight)) {
         return current;
       }
@@ -396,7 +588,6 @@ export async function getExercisePR(exerciseId: string, userId?: string): Promis
     }
 
     if (category === 'bodyweight') {
-      // Para exercícios de peso corporal: avaliar 1RM equivalente
       const scoreCurrent = (75 + current.weight) * (1 + current.reps / 30);
       const scoreBest = (75 + best.weight) * (1 + best.reps / 30);
       if (scoreCurrent > scoreBest) {
@@ -405,7 +596,6 @@ export async function getExercisePR(exerciseId: string, userId?: string): Promis
       return best;
     }
 
-    // Para pesos livres convencionais: maior carga ou maiores repetições na mesma carga
     if (current.weight > best.weight || (current.weight === best.weight && current.reps > best.reps)) {
       return current;
     }
@@ -422,6 +612,7 @@ export async function getUniqueExercisesLibrary(userId: string): Promise<UniqueE
   const exercises = await db.exercises
     .where('protocolId')
     .anyOf(protocolIds)
+    .filter(ex => !ex.isDeleted)
     .toArray();
 
   const unique = new Map<string, UniqueExercise>();
@@ -462,11 +653,13 @@ export async function getExerciseSessionHistory(
   exerciseName: string,
   limit = 5
 ): Promise<ExerciseSessionHistoryItem[]> {
-  // 1. Obter nome canônico
   const canonicalName = getExerciseInfo(exerciseName).canonicalName.toLowerCase();
 
-  // 2. Buscar todos os exercícios com mesmo nome canônico do usuário
-  const userProtocols = await db.protocols.where('userId').equals(userId).toArray();
+  const userProtocols = await db.protocols
+    .where('userId')
+    .equals(userId)
+    .filter(p => !p.isDeleted)
+    .toArray();
   const protocolMap = new Map<string, string>();
   userProtocols.forEach(p => protocolMap.set(p.id, p.name));
   const protocolIds = Array.from(protocolMap.keys());
@@ -476,21 +669,17 @@ export async function getExerciseSessionHistory(
   const matchingExercises = await db.exercises
     .where('protocolId')
     .anyOf(protocolIds)
+    .filter(ex => !ex.isDeleted && getExerciseInfo(ex.name).canonicalName.toLowerCase() === canonicalName)
     .toArray();
 
-  const matchingExerciseIds = new Set(
-    matchingExercises
-      .filter(ex => getExerciseInfo(ex.name).canonicalName.toLowerCase() === canonicalName)
-      .map(ex => ex.id)
-  );
+  const matchingExerciseIds = new Set(matchingExercises.map(ex => ex.id));
 
   if (matchingExerciseIds.size === 0) return [];
 
-  // 3. Buscar todos os treinos concluídos do usuário ordenados por data decrescente
   const completedWorkouts = await db.workouts
     .where('userId')
     .equals(userId)
-    .filter(w => w.status === 'completed')
+    .filter(w => !w.isDeleted && w.status === 'completed')
     .reverse()
     .sortBy('date');
 
@@ -502,7 +691,7 @@ export async function getExerciseSessionHistory(
     const sets = await db.workoutSets
       .where('workoutId')
       .equals(workout.id)
-      .filter(s => matchingExerciseIds.has(s.exerciseId) && s.completed)
+      .filter(s => !s.isDeleted && matchingExerciseIds.has(s.exerciseId) && s.completed)
       .toArray();
 
     if (sets.length > 0) {

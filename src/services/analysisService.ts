@@ -63,15 +63,15 @@ export async function getAnalysisSummary(
     return label.charAt(0).toUpperCase() + label.slice(1);
   };
 
-  const userProtocols = await db.protocols.where('userId').equals(userId).toArray();
+  const userProtocols = (await db.protocols.where('userId').equals(userId).toArray()).filter(p => !p.isDeleted);
   const workouts = await db.workouts.where('userId').equals(userId)
-    .filter(w => w.status === 'completed' && w.date >= (period === 'all' ? 0 : baselineStartDate))
+    .filter(w => !w.isDeleted && w.status === 'completed' && w.date >= (period === 'all' ? 0 : baselineStartDate))
     .toArray();
 
   const workoutIds = workouts.map(w => w.id);
-  const allSets = await db.workoutSets.where('workoutId').anyOf(workoutIds).toArray();
+  const allSets = (await db.workoutSets.where('workoutId').anyOf(workoutIds).toArray()).filter(s => !s.isDeleted);
   const exerciseIds = [...new Set(allSets.map(s => s.exerciseId))];
-  const allExercises = await db.exercises.where('id').anyOf(exerciseIds).toArray();
+  const allExercises = (await db.exercises.where('id').anyOf(exerciseIds).toArray()).filter(e => !e.isDeleted);
   const exerciseMap = new Map(allExercises.map(e => [e.id, e]));
   const bwHistory = await getBodyWeightsByUser(userId);
 
