@@ -1,5 +1,13 @@
 // Registro do Service Worker para PWA offline com auto-update
 if ('serviceWorker' in navigator) {
+  let isReloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!isReloading) {
+      isReloading = true;
+      window.location.reload();
+    }
+  });
+
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').then((reg) => {
       // Verificar se há atualização do Service Worker a cada carregamento

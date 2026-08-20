@@ -376,45 +376,41 @@ export async function syncData(): Promise<{ success: boolean }> {
     const workoutSetsPayload = workoutSetsLocal.map(s => sanitizeWorkoutSetForRemote(s, user.id, validExerciseIds));
     const bodyWeightsPayload = bodyWeightsLocal.map(b => sanitizeBodyWeightForRemote(b, user.id));
 
-    // 4. PUSH sequencial hierárquico em lotes com auto-retry e auto-healing
+    // 4. PUSH sequencial progressivo: cada tabela que sobe é marcada imediatamente como sincronizada
     if (protocolsPayload.length > 0) {
       await batchUpsert('protocols', protocolsPayload);
+      if (protocolsLocal.length > 0) {
+        await db.protocols.where('id').anyOf(protocolsLocal.map(p => p.id)).modify({ isSynced: true });
+      }
     }
     
     if (exercisesPayload.length > 0) {
       await batchUpsert('exercises', exercisesPayload);
+      if (exercisesLocal.length > 0) {
+        await db.exercises.where('id').anyOf(exercisesLocal.map(e => e.id)).modify({ isSynced: true });
+      }
     }
     
     if (workoutsPayload.length > 0) {
       await batchUpsert('workouts', workoutsPayload);
+      if (workoutsLocal.length > 0) {
+        await db.workouts.where('id').anyOf(workoutsLocal.map(w => w.id)).modify({ isSynced: true });
+      }
     }
     
     if (workoutSetsPayload.length > 0) {
       await batchUpsert('workout_sets', workoutSetsPayload);
+      if (workoutSetsLocal.length > 0) {
+        await db.workoutSets.where('id').anyOf(workoutSetsLocal.map(s => s.id)).modify({ isSynced: true });
+      }
     }
 
     if (bodyWeightsPayload.length > 0) {
       await batchUpsert('body_weights', bodyWeightsPayload);
-    }
-
-    // 5. Marcar localmente como sincronizado com transação atômica
-    await db.transaction('rw', [db.protocols, db.exercises, db.workouts, db.workoutSets, db.bodyWeights], async () => {
-      if (protocolsLocal.length > 0) {
-        await db.protocols.where('id').anyOf(protocolsLocal.map(p => p.id)).modify({ isSynced: true });
-      }
-      if (exercisesLocal.length > 0) {
-        await db.exercises.where('id').anyOf(exercisesLocal.map(e => e.id)).modify({ isSynced: true });
-      }
-      if (workoutsLocal.length > 0) {
-        await db.workouts.where('id').anyOf(workoutsLocal.map(w => w.id)).modify({ isSynced: true });
-      }
-      if (workoutSetsLocal.length > 0) {
-        await db.workoutSets.where('id').anyOf(workoutSetsLocal.map(s => s.id)).modify({ isSynced: true });
-      }
       if (bodyWeightsLocal.length > 0) {
         await db.bodyWeights.where('id').anyOf(bodyWeightsLocal.map(b => b.id)).modify({ isSynced: true });
       }
-    });
+    }
 
     setSyncStatus('synced');
     return { success: true };
