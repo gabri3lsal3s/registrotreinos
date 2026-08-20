@@ -16,6 +16,9 @@ $$ LANGUAGE plpgsql;
 -- 2. Tabela: PROTOCOLS
 DO $$
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='protocols' AND column_name='description') THEN
+    ALTER TABLE public.protocols ADD COLUMN description TEXT;
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='protocols' AND column_name='is_deleted') THEN
     ALTER TABLE public.protocols ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT false;
   END IF;

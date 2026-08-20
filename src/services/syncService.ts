@@ -194,7 +194,7 @@ export function sanitizeBodyWeightForRemote(bw: BodyWeight, userId: string): Rec
 }
 
 // ============================================================================
-// UPSERT EM CHUNKS COM RETENTATIVAS
+// UPSERT EM CHUNKS COM AUTO-HEALING DE SCHEMA E RETENTATIVAS
 // ============================================================================
 
 async function batchUpsert(
@@ -205,12 +205,38 @@ async function batchUpsert(
   if (items.length === 0) return;
 
   for (let i = 0; i < items.length; i += chunkSize) {
-    const chunk = items.slice(i, i + chunkSize);
+    let chunk = items.slice(i, i + chunkSize);
     
     await withRetry(async () => {
-      const res = await supabase.from(table).upsert(chunk, { onConflict: 'id' });
-      if (res.error) {
-        throw new Error(`[Sync] Falha no upsert em ${table}: ${res.error.message}`);
+      let attempts = 15;
+      while (attempts > 0) {
+        attempts--;
+        const res = await supabase.from(table).upsert(chunk, { onConflict: 'id' });
+        
+        if (!res.error) {
+          return; // Sucesso
+        }
+
+        const msg = res.error.message || '';
+
+        // Auto-reparação: intercepta colunas ausentes no schema remoto
+        const missingColumnMatch = 
+          msg.match(/Could not find the '([^']+)' column/) ||
+          msg.match(/column "([^"]+)" of relation "[^"]+" does not exist/) ||
+          msg.match(/column ([^ ]+) does not exist/);
+
+        if (missingColumnMatch && missingColumnMatch[1]) {
+          const badCol = missingColumnMatch[1];
+          console.warn(`[Sync] Coluna '${badCol}' não existe no Supabase para '${table}'. Auto-reparando e tentando novamente...`);
+          chunk = chunk.map(item => {
+            const copy = { ...item };
+            delete copy[badCol];
+            return copy;
+          });
+          continue; // Retenta o lote imediatamente sem a coluna incompatível
+        }
+
+        throw new Error(`[Sync] Falha no upsert em ${table}: ${msg}`);
       }
     });
   }
@@ -408,16 +434,27 @@ async function fetchDeltaRows<T = Record<string, unknown>>(
   userId: string,
   sinceISO: string
 ): Promise<T[]> {
-  const { data, error } = await supabase
-    .from(table)
-    .select('*')
-    .eq('user_id', userId)
-    .gt('updated_at', sinceISO);
+  try {
+    const { data, error } = await supabase
+      .from(table)
+      .select('*')
+      .eq('user_id', userId)
+      .gt('updated_at', sinceISO);
 
-  if (error) {
-    throw new Error(`[Sync] PULL Delta ${table}: ${error.message}`);
+    if (error) {
+      if (error.message.includes('updated_at') || error.message.includes('column')) {
+        console.warn(`[Sync] Tabela '${table}' sem coluna 'updated_at' remota. Realizando consulta completa...`);
+        const fallbackRes = await supabase.from(table).select('*').eq('user_id', userId);
+        if (fallbackRes.error) throw fallbackRes.error;
+        return (fallbackRes.data || []) as T[];
+      }
+      throw new Error(`[Sync] PULL Delta ${table}: ${error.message}`);
+    }
+    return (data || []) as T[];
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`[Sync] PULL Delta ${table}: ${msg}`);
   }
-  return (data || []) as T[];
 }
 
 /**
@@ -592,16 +629,20 @@ async function executeFullSync(): Promise<{ success: boolean } | undefined> {
   if (isSyncing) return;
   isSyncing = true;
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) {
-      const { data: refreshData } = await supabase.auth.refreshSession();
-      if (refreshData.session?.user && refreshData.session.access_token) {
-        const u = refreshData.session.user;
-        useAuthStore.getState().login({
-          id: u.id,
-          email: u.email || ''
-        }, refreshData.session.access_token);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session) {
+        const { data: refreshData } = await supabase.auth.refreshSession();
+        if (refreshData?.session?.user && refreshData.session.access_token) {
+          const u = refreshData.session.user;
+          useAuthStore.getState().login({
+            id: u.id,
+            email: u.email || ''
+          }, refreshData.session.access_token);
+        }
       }
+    } catch (authErr) {
+      console.warn('[Sync] Sessão verificada via cache local:', authErr);
     }
 
     await syncData();
