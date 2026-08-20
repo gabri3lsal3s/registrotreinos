@@ -13,7 +13,7 @@ import {
   updateBodyWeight, 
   deleteBodyWeight 
 } from '../services/workoutDB';
-import { fullSync, deleteRemoteItem } from '../services/syncService';
+import { fullSync } from '../services/syncService';
 import type { Workout, BodyWeight, WorkoutSet, Exercise, Protocol } from '../types';
 import { ClipboardList } from "lucide-react";
 import { toast } from 'sonner';
@@ -122,7 +122,6 @@ export default function HistoryPage() {
 
   const handleDeleteWorkout = async (workoutId: string) => {
     try {
-      deleteRemoteItem('workouts', workoutId).catch(console.warn);
       await deleteWorkout(workoutId);
       setHistory(prev => prev.filter(w => w.id !== workoutId));
       toast.success('Treino removido com sucesso.');
@@ -149,7 +148,6 @@ export default function HistoryPage() {
 
   const handleDeleteWeight = async (id: string) => {
     try {
-      deleteRemoteItem('body_weights', id).catch(console.warn);
       await deleteBodyWeight(id);
       setHistory(prev => prev.filter(w => w.id !== id));
       toast.success('Registro de peso removido.');
@@ -200,7 +198,6 @@ export default function HistoryPage() {
 
   const handleDeleteSet = async (setId: string) => {
     try {
-      deleteRemoteItem('workout_sets', setId).catch(console.warn);
       await deleteWorkoutSet(setId);
       
       setSessionDetails(prev => {

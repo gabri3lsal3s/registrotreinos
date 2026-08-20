@@ -21,11 +21,19 @@ O **Registro de Treinos** segue uma arquitetura **Offline-First Absoluta**, gara
 
 ### Regras Mandatórias de Sincronização:
 1. **Gravação Local com Flag**: Toda operação do usuário (treinos, protocolos, séries, pesagens) é gravada diretamente no Dexie.js com `isSynced: false`.
-2. **Fila de Tombstones de Exclusão**: Exclusões offline geram um registro em `pendingDeletions` (`table, recordId, userId`), expurgado no Supabase antes do PULL para evitar que itens excluídos ressuscitem.
+2. **Fila de Tombstones com Hierarquia Reversa de Integridade**:
+   - Exclusões geram um registro em `pendingDeletions` (`table, recordId, userId`).
+   - O processamento de tombstones (`flushPendingDeletions`) segue rigorosamente a ordem inversa de dependência de chaves estrangeiras:
+     1. `workout_sets` (filho de workouts e exercises)
+     2. `workouts` (filho de protocols)
+     3. `exercises` (filho de protocols)
+     4. `protocols` (pai)
+     5. `body_weights` (independente)
+   - Ao deletar remotamente, registra o tombstone na tabela Supabase `deleted_records (user_id, table_name, record_id, deleted_at)` para propagação entre dispositivos.
 3. **Ciclo PUSH -> PULL com Web Locks & Chunking**:
-   - `fullSync()` solicita a trava de sistema `'workout_sync_mutex'` (Web Locks API) com fallback em memória, garantindo isolamento entre múltiplas abas abertas.
+   - `fullSync()` valida/renova a sessão Supabase e solicita a trava de sistema `'workout_sync_mutex'` (Web Locks API) com fallback em memória.
    - `syncData()`: Despacha tombstones, particiona payloads massivos em lotes de até 100 registros (`batchUpsert`), pré-valida e envia entidades ancestrais (protocolos e treinos pais) e marca `isSynced: true` progressivamente tabela por tabela conforme cada lote é confirmado pelo servidor.
-   - `pullData()`: Realiza o PULL de dados remotos para o IndexedDB sem sobrescrever modificações locais não sincronizadas (`!local || local.isSynced`) e filtrando registros marcados para exclusão.
+   - `pullData()`: Realiza o PULL de dados remotos para o IndexedDB sem sobrescrever modificações locais não sincronizadas (`!local || local.isSynced`), lê a tabela remota `deleted_records` para expurgar exclusões confirmadas no Dexie local e filtra registros marcados para exclusão.
 4. **Auto-Healing de Esquema & Resiliência a Desvios de Schema Remoto**:
    - Em caso de incompatibilidades de colunas no PostgREST (ex: colunas ausentes em instâncias com migrações parciais), o `batchUpsert` detecta os erros em tempo real, expurga dinamicamente as colunas incompatíveis do lote na memória e retenta o envio sem abortar a sincronização.
    - Preenchimento canônico obrigatório de `date_key` (`YYYY-MM-DD`) e fallbacks inteligentes de integridade referencial para `protocol_id` e `exercise_id`.

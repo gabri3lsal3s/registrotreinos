@@ -157,7 +157,18 @@ CREATE TRIGGER tr_body_weights_updated_at
   EXECUTE FUNCTION handle_updated_at();
 
 -- ==============================================================================
--- 8. Índices de Alta Performance (B-Tree) para Consultas Rápidas
+-- ==============================================================================
+-- 7.1. Tabela: DELETED_RECORDS (Tombstones Remotos para Sincronização Multi-Dispositivo)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.deleted_records (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  table_name TEXT NOT NULL,
+  record_id UUID NOT NULL,
+  deleted_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+-- Índices de Alta Performance (B-Tree) para Consultas Rápidas
 -- ==============================================================================
 CREATE INDEX IF NOT EXISTS idx_protocols_user ON public.protocols(user_id);
 CREATE INDEX IF NOT EXISTS idx_protocols_user_enabled ON public.protocols(user_id, is_enabled);
@@ -177,6 +188,8 @@ CREATE INDEX IF NOT EXISTS idx_workout_sets_exercise ON public.workout_sets(exer
 CREATE INDEX IF NOT EXISTS idx_body_weights_user ON public.body_weights(user_id);
 CREATE INDEX IF NOT EXISTS idx_body_weights_user_date ON public.body_weights(user_id, date DESC);
 
+CREATE INDEX IF NOT EXISTS idx_deleted_records_user_date ON public.deleted_records(user_id, deleted_at DESC);
+
 -- ==============================================================================
 -- 9. Row Level Security (RLS) - Isolamento Estrito Multi-Usuário
 -- ==============================================================================
@@ -185,6 +198,7 @@ ALTER TABLE public.exercises ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workouts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workout_sets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.body_weights ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.deleted_records ENABLE ROW LEVEL SECURITY;
 
 -- Políticas para: PROTOCOLS
 CREATE POLICY "protocols_user_isolation"
@@ -221,6 +235,14 @@ CREATE POLICY "workout_sets_user_isolation"
 -- Políticas para: BODY_WEIGHTS
 CREATE POLICY "body_weights_user_isolation"
   ON public.body_weights
+  FOR ALL
+  TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- Políticas para: DELETED_RECORDS
+CREATE POLICY "deleted_records_user_isolation"
+  ON public.deleted_records
   FOR ALL
   TO authenticated
   USING (auth.uid() = user_id)

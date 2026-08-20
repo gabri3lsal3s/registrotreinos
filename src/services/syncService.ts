@@ -279,17 +279,72 @@ async function batchUpsert(
 }
 
 // ============================================================================
-// PROCESSADOR DE FILA DE DELEÇÕES PENDENTES (TOMBSTONES)
+// PROCESSADOR DE FILA DE DELEÇÕES PENDENTES (TOMBSTONES COM HIERARQUIA REVERSA)
 // ============================================================================
+
+const TABLE_DELETE_ORDER: Record<string, number> = {
+  workout_sets: 1,
+  workouts: 2,
+  exercises: 3,
+  protocols: 4,
+  body_weights: 5
+};
+
+async function recordRemoteTombstone(userId: string, table: string, recordId: string): Promise<void> {
+  try {
+    await supabase.from('deleted_records').upsert({
+      user_id: userId,
+      table_name: table,
+      record_id: recordId,
+      deleted_at: new Date().toISOString()
+    });
+  } catch {
+    // Ignora silenciosamente se tabela não existir
+  }
+}
+
+async function fetchDeletedRecords(userId: string): Promise<{ table_name: string; record_id: string }[]> {
+  try {
+    const res = await supabase
+      .from('deleted_records')
+      .select('table_name, record_id')
+      .eq('user_id', userId)
+      .gte('deleted_at', new Date(Date.now() - 30 * 86400000).toISOString());
+    return (res.data || []) as { table_name: string; record_id: string }[];
+  } catch {
+    return [];
+  }
+}
 
 async function flushPendingDeletions(userId: string): Promise<void> {
   const pending = await db.pendingDeletions.where('userId').equals(userId).toArray();
   if (pending.length === 0) return;
 
+  // Ordenar exclusões na ordem inversa de FK para nunca violar integridade relacional
+  pending.sort((a, b) => (TABLE_DELETE_ORDER[a.table] || 99) - (TABLE_DELETE_ORDER[b.table] || 99));
+
   const successfulIds: string[] = [];
 
   for (const item of pending) {
     try {
+      // Se for workout, garantir que as séries vinculadas sejam deletadas primeiro
+      if (item.table === 'workouts') {
+        await supabase
+          .from('workout_sets')
+          .delete()
+          .eq('workout_id', item.recordId)
+          .eq('user_id', userId);
+      }
+
+      // Se for protocol, deletar exercícios vinculados antes
+      if (item.table === 'protocols') {
+        await supabase
+          .from('exercises')
+          .delete()
+          .eq('protocol_id', item.recordId)
+          .eq('user_id', userId);
+      }
+
       const { error } = await supabase
         .from(item.table)
         .delete()
@@ -298,6 +353,9 @@ async function flushPendingDeletions(userId: string): Promise<void> {
 
       if (!error || error.code === 'PGRST116' || error.message.includes('not found')) {
         successfulIds.push(item.id);
+
+        // Registrar na tabela de tombstones remotos para propagação multi-dispositivo
+        recordRemoteTombstone(userId, item.table, item.recordId);
       }
     } catch (err) {
       console.warn(`[Sync] Falha ao processar deleção remota (${item.table}:${item.recordId}):`, err);
@@ -483,12 +541,13 @@ export async function pullData(): Promise<{ success: boolean }> {
   setSyncStatus('syncing');
 
   try {
-    const [pRes, eRes, wRes, sRes, bwRes, pendingDeletions] = await Promise.all([
+    const [pRes, eRes, wRes, sRes, bwRes, remoteDeletedList, pendingDeletions] = await Promise.all([
       withRetry(async () => await supabase.from('protocols').select('*').eq('user_id', user.id)),
       withRetry(async () => await supabase.from('exercises').select('*').eq('user_id', user.id)),
       withRetry(async () => await supabase.from('workouts').select('*').eq('user_id', user.id)),
       withRetry(async () => await supabase.from('workout_sets').select('*').eq('user_id', user.id)),
       withRetry(async () => await supabase.from('body_weights').select('*').eq('user_id', user.id)),
+      fetchDeletedRecords(user.id),
       db.pendingDeletions.where('userId').equals(user.id).toArray()
     ]);
 
@@ -498,8 +557,32 @@ export async function pullData(): Promise<{ success: boolean }> {
     if (sRes.error) throw new Error(`PULL WorkoutSets: ${sRes.error.message}`);
     if (bwRes.error) throw new Error(`PULL BodyWeights: ${bwRes.error.message}`);
 
-    // Cria conjunto de chaves de itens que foram deletados offline e não devem ser recriados
-    const pendingDeletionKeys = new Set(pendingDeletions.map(d => `${d.table}_${d.recordId}`));
+    // Processar deleções remotas propagadas de outros dispositivos
+    const remoteDeletedKeys = new Set(remoteDeletedList.map(d => `${d.table_name}_${d.record_id}`));
+
+    // Cria conjunto de chaves de itens que foram deletados localmente
+    const pendingDeletionKeys = new Set(pendingDeletions.map((d: { table: string; recordId: string }) => `${d.table}_${d.recordId}`));
+
+    // Aplicar exclusões remotas confirmadas no banco local
+    if (remoteDeletedList.length > 0) {
+      await db.transaction('rw', [db.protocols, db.exercises, db.workouts, db.workoutSets, db.bodyWeights], async () => {
+        for (const item of remoteDeletedList) {
+          if (item.table_name === 'protocols') {
+            await db.protocols.delete(item.record_id);
+            await db.exercises.where('protocolId').equals(item.record_id).delete();
+          } else if (item.table_name === 'exercises') {
+            await db.exercises.delete(item.record_id);
+          } else if (item.table_name === 'workouts') {
+            await db.workouts.delete(item.record_id);
+            await db.workoutSets.where('workoutId').equals(item.record_id).delete();
+          } else if (item.table_name === 'workout_sets') {
+            await db.workoutSets.delete(item.record_id);
+          } else if (item.table_name === 'body_weights') {
+            await db.bodyWeights.delete(item.record_id);
+          }
+        }
+      });
+    }
 
     const rawRemoteP = (pRes.data || []) as Record<string, unknown>[];
     const rawRemoteE = (eRes.data || []) as Record<string, unknown>[];
@@ -507,11 +590,14 @@ export async function pullData(): Promise<{ success: boolean }> {
     const rawRemoteS = (sRes.data || []) as Record<string, unknown>[];
     const rawRemoteBW = (bwRes.data || []) as Record<string, unknown>[];
 
-    const remoteP = rawRemoteP.filter(item => !pendingDeletionKeys.has(`protocols_${item.id}`));
-    const remoteE = rawRemoteE.filter(item => !pendingDeletionKeys.has(`exercises_${item.id}`));
-    const remoteW = rawRemoteW.filter(item => !pendingDeletionKeys.has(`workouts_${item.id}`));
-    const remoteS = rawRemoteS.filter(item => !pendingDeletionKeys.has(`workout_sets_${item.id}`));
-    const remoteBW = rawRemoteBW.filter(item => !pendingDeletionKeys.has(`body_weights_${item.id}`));
+    const isExcluded = (table: string, id: string) => 
+      pendingDeletionKeys.has(`${table}_${id}`) || remoteDeletedKeys.has(`${table}_${id}`);
+
+    const remoteP = rawRemoteP.filter(item => !isExcluded('protocols', item.id as string));
+    const remoteE = rawRemoteE.filter(item => !isExcluded('exercises', item.id as string));
+    const remoteW = rawRemoteW.filter(item => !isExcluded('workouts', item.id as string));
+    const remoteS = rawRemoteS.filter(item => !isExcluded('workout_sets', item.id as string));
+    const remoteBW = rawRemoteBW.filter(item => !isExcluded('body_weights', item.id as string));
 
     await db.transaction('rw', [db.protocols, db.exercises, db.workouts, db.workoutSets, db.bodyWeights], async () => {
       // Mapeamento e Persistência Não-Destrutiva preservando metadados locais
@@ -574,13 +660,19 @@ export async function pullData(): Promise<{ success: boolean }> {
 }
 
 /**
- * Exclui registro no Supabase de forma resiliente e não-bloqueante.
+ * Exclui registro no Supabase com integridade referencial em cascata.
  */
 export async function deleteRemoteItem(table: string, id: string): Promise<void> {
   const { user } = useAuthStore.getState();
   if (!user) return;
 
   try {
+    if (table === 'workouts') {
+      await supabase.from('workout_sets').delete().eq('workout_id', id).eq('user_id', user.id);
+    } else if (table === 'protocols') {
+      await supabase.from('exercises').delete().eq('protocol_id', id).eq('user_id', user.id);
+    }
+
     const { error } = await supabase
       .from(table)
       .delete()
@@ -589,6 +681,8 @@ export async function deleteRemoteItem(table: string, id: string): Promise<void>
 
     if (error) {
       console.warn(`[Sync] Aviso ao deletar remoto (${table}:${id}):`, error.message);
+    } else {
+      recordRemoteTombstone(user.id, table, id);
     }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -623,6 +717,7 @@ export async function deleteWorkoutFromCloud(workoutId: string): Promise<void> {
   try {
     await supabase.from('workout_sets').delete().eq('workout_id', workoutId).eq('user_id', user.id);
     await supabase.from('workouts').delete().eq('id', workoutId).eq('user_id', user.id);
+    recordRemoteTombstone(user.id, 'workouts', workoutId);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.warn(`[Sync] Falha não bloqueante ao deletar treino (${workoutId}):`, message);
@@ -633,6 +728,19 @@ async function executeFullSync(): Promise<{ success: boolean } | undefined> {
   if (isSyncing) return;
   isSyncing = true;
   try {
+    // Validação e renovação preventiva de sessão Supabase
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      const { data: refreshData } = await supabase.auth.refreshSession();
+      if (refreshData.session?.user && refreshData.session.access_token) {
+        const u = refreshData.session.user;
+        useAuthStore.getState().login({
+          id: u.id,
+          email: u.email || ''
+        }, refreshData.session.access_token);
+      }
+    }
+
     await syncData();
     await pullData();
     return { success: true };

@@ -11,11 +11,12 @@ import {
   deleteProtocol, 
   duplicateProtocol,
   addExercise, 
-  updateExercise 
+  updateExercise,
+  deleteExercise
 } from '../services/workoutDB';
 import { WEEK_DAYS } from '../utils/constants';
 import { parseLocaleNumber } from '../utils/workoutMath';
-import { fullSync, deleteRemoteItem } from '../services/syncService';
+import { fullSync } from '../services/syncService';
 import type { Protocol, Exercise, ExerciseCategory } from '../types';
 import { Button } from "@/components/ui/button";
 import { Plus, ClipboardList, Upload, Dumbbell, Sparkles } from "lucide-react";
@@ -232,7 +233,6 @@ export default function ProtocolsPage() {
   const handleDeleteProtocol = async (protocolId: string) => {
     if (!user) return;
     try {
-      deleteRemoteItem('protocols', protocolId).catch(console.warn);
       await deleteProtocol(protocolId);
       toast.success('Protocolo removido.');
       await loadProtocols();
@@ -397,13 +397,7 @@ export default function ProtocolsPage() {
       // Remover exercícios excluídos
       const removedExercises = oldExercises.filter(ex => !activeExerciseIds.has(ex.id));
       for (const removedEx of removedExercises) {
-        const historyCount = await db.workoutSets.where('exerciseId').equals(removedEx.id).count();
-        if (historyCount === 0) {
-          deleteRemoteItem('exercises', removedEx.id).catch(console.warn);
-          await db.exercises.delete(removedEx.id);
-        } else {
-          await updateExercise(removedEx.id, { isArchived: true });
-        }
+        await deleteExercise(removedEx.id);
       }
 
       toast.success(editingProtocolId ? 'Protocolo atualizado com sucesso!' : 'Protocolo criado com sucesso!');

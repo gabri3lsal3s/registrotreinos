@@ -14,9 +14,11 @@ import {
   updateExercise,
   getExercisePR,
   addExercise,
-  getUniqueExercisesLibrary
+  getUniqueExercisesLibrary,
+  deleteWorkoutSet,
+  deleteExercise
 } from '../services/workoutDB';
-import { deleteRemoteItem, deleteWorkoutFromCloud, fullSync } from '../services/syncService';
+import { deleteWorkoutFromCloud, fullSync } from '../services/syncService';
 import type { ExerciseCategory, UniqueExercise, WorkoutSet, WorkoutSetType } from '../types';
 import { parseLocaleNumber, calculateVolume } from '../utils/workoutMath';
 import { WEEK_DAYS } from '../utils/constants';
@@ -368,10 +370,8 @@ export default function WorkoutPage() {
           .first();
 
         if (existingSet) {
-          await db.workoutSets.delete(existingSet.id);
-          deleteRemoteItem('workout_sets', existingSet.id).catch(err => {
-            console.warn('[Sync] Erro ao deletar set remoto:', err);
-          });
+          await deleteWorkoutSet(existingSet.id);
+          fullSync().catch(console.error);
         }
       }
 
@@ -502,19 +502,17 @@ export default function WorkoutPage() {
     if (!activeWorkoutId) return;
     
     try {
-      await deleteRemoteItem('exercises', exId).catch(err => {
-        console.warn('[Delete] Erro ao remover do cloud:', err);
-      });
-
-      await db.transaction('rw', [db.exercises, db.workoutSets], async () => {
-        await db.workoutSets.where({ workoutId: activeWorkoutId, exerciseId: exId }).delete();
-        await db.exercises.delete(exId);
-      });
+      const sets = await db.workoutSets.where({ workoutId: activeWorkoutId, exerciseId: exId }).toArray();
+      for (const s of sets) {
+        await deleteWorkoutSet(s.id);
+      }
+      await deleteExercise(exId);
 
       setExercises(prev => prev.filter(ex => ex.id !== exId));
       if (expandedExercise === exId) updateExpandedExercise(null);
       
       toast.success('Exercício removido.');
+      fullSync().catch(console.error);
     } catch (err) {
       console.error('[Delete] Erro:', err);
       toast.error('Erro ao remover exercício.');
