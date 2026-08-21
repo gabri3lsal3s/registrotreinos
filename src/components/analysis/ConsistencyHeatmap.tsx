@@ -441,15 +441,8 @@ export function ConsistencyHeatmap({ workoutDays, year: initialYear }: Consisten
             {monthGrid.map((cell) => {
               const hasWorkout = Boolean(cell.data && cell.data.workoutsCount > 0);
               return (
-                <button
+                <div
                   key={cell.dateStr}
-                  type="button"
-                  disabled={!cell.isCurrentMonth}
-                  onClick={() => {
-                    if (cell.data) {
-                      setHoveredDay(cell.data);
-                    }
-                  }}
                   className={cn(
                     "aspect-square rounded-xl p-1 flex flex-col items-center justify-between border transition-all text-left relative",
                     !cell.isCurrentMonth && "opacity-15 pointer-events-none bg-muted/10 border-transparent",
@@ -469,7 +462,7 @@ export function ConsistencyHeatmap({ workoutDays, year: initialYear }: Consisten
                       {cell.data!.volume >= 1000 ? `${(cell.data!.volume / 1000).toFixed(0)}k` : Math.round(cell.data!.volume)}
                     </span>
                   )}
-                </button>
+                </div>
               );
             })}
           </div>
@@ -487,7 +480,7 @@ export function ConsistencyHeatmap({ workoutDays, year: initialYear }: Consisten
           </div>
 
           {hoveredDay && (
-            <div className="font-mono text-foreground font-bold truncate max-w-[200px]">
+            <div className="hidden sm:block font-mono text-foreground font-bold truncate max-w-[200px]">
               {dayjs(hoveredDay.date).format('DD/MM')}: {Math.round(hoveredDay.volume)}kg ({hoveredDay.workoutsCount} treino)
             </div>
           )}
