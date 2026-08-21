@@ -94,29 +94,29 @@ export function AgonistAntagonistBalanceCard({ muscleBreakdown }: AgonistAntagon
         </div>
 
         {/* Lista de Pares Comparativos */}
-        <div className="space-y-4 pt-1">
+        <div className="space-y-3.5 pt-1">
           {pairMetrics.map((pair, idx) => (
-            <div key={idx} className="p-3.5 rounded-xl bg-muted/20 border border-border/40 space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-foreground">
+            <div key={idx} className="p-3 sm:p-4 rounded-xl bg-muted/20 border border-border/40 space-y-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                <span className="font-bold text-xs sm:text-sm text-foreground leading-snug">
                   {pair.name}
                 </span>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center shrink-0">
                   {pair.isBalanced ? (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-primary font-mono">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Equilibrado
+                    <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-primary font-mono bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
+                      <CheckCircle2 className="w-3 h-3" /> Equilibrado
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-500 font-mono">
-                      <AlertTriangle className="w-3.5 h-3.5" /> Desbalanço sutil
+                    <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-amber-500 font-mono bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                      <AlertTriangle className="w-3 h-3" /> Desbalanço sutil
                     </span>
                   )}
                 </div>
               </div>
 
               {/* Barra de Distribuição de Volume */}
-              <div className="space-y-1">
-                <div className="h-3 w-full bg-muted/60 rounded-full overflow-hidden flex">
+              <div className="space-y-1.5">
+                <div className="h-2.5 sm:h-3 w-full bg-muted/60 rounded-full overflow-hidden flex">
                   <div
                     className="h-full bg-primary transition-all duration-500"
                     style={{ width: `${pair.pctA}%` }}
@@ -129,14 +129,19 @@ export function AgonistAntagonistBalanceCard({ muscleBreakdown }: AgonistAntagon
                   />
                 </div>
 
-                <div className="flex items-center justify-between text-[11px] font-mono text-muted-foreground pt-0.5">
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-primary inline-block" />
-                    {pair.groupA.name.split(' (')[0]}: <strong className="text-foreground">{pair.pctA}%</strong> ({Math.round(pair.volA)}kg)
+                <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-1 text-[10px] sm:text-[11px] font-mono text-muted-foreground pt-0.5">
+                  <span className="flex items-center gap-1.5 min-w-0 truncate">
+                    <span className="w-2 h-2 rounded-full bg-primary shrink-0 inline-block" />
+                    <span className="truncate">{pair.groupA.name.split(' (')[0]}:</span>
+                    <strong className="text-foreground shrink-0">{pair.pctA}%</strong>
+                    <span className="text-muted-foreground/70 shrink-0">({Math.round(pair.volA)}kg)</span>
                   </span>
-                  <span className="flex items-center gap-1">
-                    <strong className="text-foreground">{pair.pctB}%</strong> ({Math.round(pair.volB)}kg)
-                    <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
+                  <span className="flex items-center xs:justify-end gap-1.5 min-w-0 truncate">
+                    <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0 inline-block xs:hidden" />
+                    <span className="truncate">{pair.groupB.name.split(' (')[0]}:</span>
+                    <strong className="text-foreground shrink-0">{pair.pctB}%</strong>
+                    <span className="text-muted-foreground/70 shrink-0">({Math.round(pair.volB)}kg)</span>
+                    <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0 hidden xs:inline-block" />
                   </span>
                 </div>
               </div>
@@ -147,3 +152,4 @@ export function AgonistAntagonistBalanceCard({ muscleBreakdown }: AgonistAntagon
     </Card>
   );
 }
+

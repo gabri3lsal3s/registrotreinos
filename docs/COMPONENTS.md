@@ -75,9 +75,11 @@ Este documento descreve os componentes da aplicação, seus contratos de props e
 
 ---
 
-## 6. Módulo de Análises (`src/components/analysis/`)
+## 6. Módulo de Análises (`src/components/analysis/` e `src/pages/AnalysisPage.tsx`)
 
-| Componente | Props Principais | Descrição |
+| Componente / Página | Props Principais | Descrição |
 | :--- | :--- | :--- |
+| **`AnalysisPage`** | N/A | Página analítica organizada em **3 abas temáticas responsivas**: **Frequência** (Heatmap, Volume total e Peso corporal), **Músculos** (Radar Holístico Spider, Donut de séries e Balanço) e **Cargas & 1RM** (Seletor de exercício, mini cards de PRs/1RM e gráfico de evolução). |
 | **`ConsistencyHeatmap`** | `{ workoutDays, year? }` | Mapa de calor responsivo com **Visão Mensal em grade 7 colunas no mobile** e **Visão Anual de 52 semanas no desktop**, exibindo intensidade em tons de esmeralda, métricas agregadas e streak. |
-| **`AgonistAntagonistBalanceCard`** | `{ balanceData }` | Gráfico de radar e proporção de séries semanais entre grupos musculares antagônicos com diagnósticos posturais. |
+| **`AgonistAntagonistBalanceCard`** | `{ muscleBreakdown }` | Card de equilíbrio e proporção de volume (kg) entre grupos musculares antagônicos (Push/Pull, Anterior/Posterior, Bíceps/Tríceps) com layout fluido vertical/horizontal anti-colisão e badges de status. |
+
