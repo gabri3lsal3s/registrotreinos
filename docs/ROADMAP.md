@@ -177,3 +177,17 @@ Este documento registra a evolução do **Registro de Treinos**, cobrindo todas 
    - Bypass customizado de travamento de token (`auth: { lock: ... }`) evitando `LockAcquireTimeoutError` no carregamento concorrente.
 6. **Detecção de Dispositivo Novo / Base Local Vazia**:
    - PULL inteligente que força download completo histórico caso o cliente local não possua dados ou tenha cursor defasado.
+
+---
+
+### 📊 Nível 14.2: Responsividade Dinâmica de Gráficos e Grade Calendário Mensal Mobile
+*Objetivo: Otimizar a visualização analítica em dispositivos móveis e desktops através de layouts fluidos e containers de gráficos adaptativos.*
+
+1. **Responsividade Total de Gráficos (`ChartContainer` & `AnalysisPage.tsx`)**:
+   - Removida restrição de aspect-ratio rígido (`aspect-video`) do `ChartContainer` base, permitindo que gráficos ocupem 100% da largura do card.
+   - Eliminação de duplos wrappers de `ResponsiveContainer` que geravam conflitos de dimensionamento no Recharts.
+   - Grade adaptativa para gráficos de Volume e Peso Corporal: ocupa largura completa (1 coluna) quando não há pesagens cadastradas e 2 colunas no desktop (`lg:grid-cols-2`) quando ambos coexistem.
+2. **Grade de Consistência Mensal Mobile (`ConsistencyHeatmap.tsx`)**:
+   - Introdução de visualização mobile com grade calendário de 7 colunas (`Dom` a `Sáb`) e navegação intuitiva por meses (`< Mês/Ano >`), substituindo a matriz horizontal pesada de 52 semanas em telas pequenas.
+   - Badges de resumo com métricas focadas no mês selecionado (Treinos, Volume e Streak).
+   - Preservação da visualização anual completa de 52 semanas no desktop (`sm:` e superior).

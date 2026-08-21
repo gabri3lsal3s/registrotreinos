@@ -79,5 +79,5 @@ Este documento descreve os componentes da aplicação, seus contratos de props e
 
 | Componente | Props Principais | Descrição |
 | :--- | :--- | :--- |
-| **`ConsistencyHeatmap`** | `{ data, currentStreak, longestStreak }` | Mapa de calor anual de 52 semanas no padrão GitHub commits com tons de esmeralda e contadores de sequência de treinos. |
+| **`ConsistencyHeatmap`** | `{ workoutDays, year? }` | Mapa de calor responsivo com **Visão Mensal em grade 7 colunas no mobile** e **Visão Anual de 52 semanas no desktop**, exibindo intensidade em tons de esmeralda, métricas agregadas e streak. |
 | **`AgonistAntagonistBalanceCard`** | `{ balanceData }` | Gráfico de radar e proporção de séries semanais entre grupos musculares antagônicos com diagnósticos posturais. |

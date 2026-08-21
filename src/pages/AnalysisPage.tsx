@@ -21,6 +21,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import { 
   Bar,
   BarChart,
@@ -36,8 +37,7 @@ import {
   RadarChart,
   PolarGrid,
   PolarAngleAxis,
-  PolarRadiusAxis,
-  ResponsiveContainer
+  PolarRadiusAxis
 } from "recharts";
 
 const chartConfig: ChartConfig = {
@@ -162,34 +162,32 @@ export default function AnalysisPage() {
                     <div className="flex flex-col lg:flex-row items-center justify-center gap-8">
                       <div className="w-full lg:w-1/2 flex justify-center">
                         <ChartContainer config={chartConfig} className="h-[250px] w-full max-w-[300px]">
-                          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                            <RadarChart cx="50%" cy="50%" outerRadius="80%" data={data.radarData}>
-                              <PolarGrid strokeOpacity={0.1} />
-                              <PolarAngleAxis 
-                                dataKey="axis" 
-                                tick={{ fill: 'currentColor', fontSize: 10, fontWeight: 700, opacity: 0.7 }}
-                              />
-                              <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-                              <Radar
-                                name="Início"
-                                dataKey="start"
-                                stroke="#f59e0b"
-                                fill="#f59e0b"
-                                fillOpacity={0.05}
-                                strokeWidth={2}
-                                strokeDasharray="4 4"
-                              />
-                              <Radar
-                                name="Atual"
-                                dataKey="atual"
-                                stroke="var(--primary)"
-                                fill="var(--primary)"
-                                fillOpacity={0.2}
-                                strokeWidth={3}
-                              />
-                              <ChartTooltip content={<ChartTooltipContent />} />
-                            </RadarChart>
-                          </ResponsiveContainer>
+                          <RadarChart cx="50%" cy="50%" outerRadius="80%" data={data.radarData}>
+                            <PolarGrid strokeOpacity={0.1} />
+                            <PolarAngleAxis 
+                              dataKey="axis" 
+                              tick={{ fill: 'currentColor', fontSize: 10, fontWeight: 700, opacity: 0.7 }}
+                            />
+                            <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
+                            <Radar
+                              name="Início"
+                              dataKey="start"
+                              stroke="#f59e0b"
+                              fill="#f59e0b"
+                              fillOpacity={0.05}
+                              strokeWidth={2}
+                              strokeDasharray="4 4"
+                            />
+                            <Radar
+                              name="Atual"
+                              dataKey="atual"
+                              stroke="var(--primary)"
+                              fill="var(--primary)"
+                              fillOpacity={0.2}
+                              strokeWidth={3}
+                            />
+                            <ChartTooltip content={<ChartTooltipContent />} />
+                          </RadarChart>
                         </ChartContainer>
                       </div>
 
@@ -239,24 +237,22 @@ export default function AnalysisPage() {
                     <div className="flex flex-col lg:flex-row items-center justify-center gap-8">
                       <div className="w-full lg:w-1/2 flex justify-center">
                         <ChartContainer config={chartConfig} className="h-[250px] w-full max-w-[300px]">
-                          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                            <PieChart>
-                              <Pie
-                                data={data.muscleBreakdown}
-                                dataKey="value"
-                                nameKey="name"
-                                innerRadius={60}
-                                outerRadius={80}
-                                paddingAngle={5}
-                                stroke="none"
-                              >
-                                {data.muscleBreakdown.map((_, index) => (
-                                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                ))}
-                              </Pie>
-                              <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-                            </PieChart>
-                          </ResponsiveContainer>
+                          <PieChart>
+                            <Pie
+                              data={data.muscleBreakdown}
+                              dataKey="value"
+                              nameKey="name"
+                              innerRadius={60}
+                              outerRadius={80}
+                              paddingAngle={5}
+                              stroke="none"
+                            >
+                              {data.muscleBreakdown.map((_, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                          </PieChart>
                         </ChartContainer>
                       </div>
 
@@ -281,7 +277,7 @@ export default function AnalysisPage() {
             )}
 
             {/* 3. Progressão de Carga e Peso */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className={cn("grid grid-cols-1 gap-4", data?.bodyWeightProgression && data.bodyWeightProgression.length > 0 && "lg:grid-cols-2")}>
               {/* Volume de Treino */}
               <section className="space-y-3">
                 <header className="px-1 flex items-center justify-between">
@@ -293,28 +289,26 @@ export default function AnalysisPage() {
                 <Card className="bg-card border border-border/50 rounded-2xl shadow-sm overflow-hidden">
                   <CardContent className="p-6">
                     <ChartContainer config={chartConfig} className="h-[220px] w-full">
-                      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                        <BarChart data={data?.progressData} margin={{ left: 16, right: 16 }}>
-                          <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.1} />
-                          <XAxis 
-                            dataKey="date" 
-                            stroke="currentColor" 
-                            fontSize={11} 
-                            tickLine={false} 
-                            axisLine={false}
-                            tick={{ fontWeight: 700, fontSize: 10, opacity: 0.6 }}
-                            interval="preserveStartEnd"
-                            minTickGap={5}
-                          />
-                          <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-                          <Bar 
-                            dataKey="volume" 
-                            fill="var(--primary)" 
-                            radius={[6, 6, 0, 0]} 
-                            opacity={0.85}
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
+                      <BarChart data={data?.progressData} margin={{ left: 16, right: 16 }}>
+                        <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.1} />
+                        <XAxis 
+                          dataKey="date" 
+                          stroke="currentColor" 
+                          fontSize={11} 
+                          tickLine={false} 
+                          axisLine={false}
+                          tick={{ fontWeight: 700, fontSize: 10, opacity: 0.6 }}
+                          interval="preserveStartEnd"
+                          minTickGap={5}
+                        />
+                        <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                        <Bar 
+                          dataKey="volume" 
+                          fill="var(--primary)" 
+                          radius={[6, 6, 0, 0]} 
+                          opacity={0.85}
+                        />
+                      </BarChart>
                     </ChartContainer>
                   </CardContent>
                 </Card>
@@ -332,31 +326,29 @@ export default function AnalysisPage() {
                   <Card className="bg-card border border-border/50 rounded-2xl shadow-sm overflow-hidden">
                     <CardContent className="p-6">
                       <ChartContainer config={chartConfig} className="h-[220px] w-full">
-                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                          <LineChart data={data.bodyWeightProgression} margin={{ left: 16, right: 16 }}>
-                            <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.1} />
-                            <XAxis 
-                              dataKey="date" 
-                              fontSize={11} 
-                              tickLine={false} 
-                              axisLine={false}
-                              tick={{ fontWeight: 700, fontSize: 10, opacity: 0.6 }}
-                              interval="preserveStartEnd"
-                              minTickGap={5}
-                            />
-                            <YAxis hide domain={['dataMin - 3', 'dataMax + 3']} />
-                            <ChartTooltip content={<ChartTooltipContent />} />
-                            <Line 
-                              type="monotone" 
-                              dataKey="weight" 
-                              stroke="var(--primary)" 
-                              strokeWidth={3}
-                              dot={{ fill: 'var(--primary)', r: 4 }}
-                              activeDot={{ r: 6, strokeWidth: 0 }}
-                              name="Peso (kg)"
-                            />
-                          </LineChart>
-                        </ResponsiveContainer>
+                        <LineChart data={data.bodyWeightProgression} margin={{ left: 16, right: 16 }}>
+                          <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.1} />
+                          <XAxis 
+                            dataKey="date" 
+                            fontSize={11} 
+                            tickLine={false} 
+                            axisLine={false}
+                            tick={{ fontWeight: 700, fontSize: 10, opacity: 0.6 }}
+                            interval="preserveStartEnd"
+                            minTickGap={5}
+                          />
+                          <YAxis hide domain={['dataMin - 3', 'dataMax + 3']} />
+                          <ChartTooltip content={<ChartTooltipContent />} />
+                          <Line 
+                            type="monotone" 
+                            dataKey="weight" 
+                            stroke="var(--primary)" 
+                            strokeWidth={3}
+                            dot={{ fill: 'var(--primary)', r: 4 }}
+                            activeDot={{ r: 6, strokeWidth: 0 }}
+                            name="Peso (kg)"
+                          />
+                        </LineChart>
                       </ChartContainer>
                     </CardContent>
                   </Card>
@@ -412,40 +404,38 @@ export default function AnalysisPage() {
                       </div>
 
                       <ChartContainer config={chartConfig} className="h-[220px] w-full">
-                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                          <LineChart data={selectedExercise.data} margin={{ left: 16, right: 16 }}>
-                            <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.1} />
-                            <XAxis 
-                              dataKey="date" 
-                              fontSize={11} 
-                              tickLine={false} 
-                              axisLine={false}
-                              tick={{ fontWeight: 700, fontSize: 10, opacity: 0.6 }}
-                              interval="preserveStartEnd"
-                              minTickGap={5}
-                            />
-                            <YAxis hide domain={['dataMin - 5', 'dataMax + 5']} />
-                            <ChartTooltip content={<ChartTooltipContent />} />
-                            <Line 
-                              type="monotone" 
-                              dataKey="weight" 
-                              stroke="var(--primary)" 
-                              strokeWidth={3}
-                              dot={{ fill: 'var(--primary)', r: 4 }}
-                              activeDot={{ r: 6, strokeWidth: 0 }}
-                              name="Carga (kg)"
-                            />
-                            <Line 
-                              type="monotone" 
-                              dataKey="e1rm" 
-                              stroke="#34d399" 
-                              strokeWidth={2}
-                              strokeDasharray="4 4"
-                              dot={false}
-                              name="1RM Estimado (kg)"
-                            />
-                          </LineChart>
-                        </ResponsiveContainer>
+                        <LineChart data={selectedExercise.data} margin={{ left: 16, right: 16 }}>
+                          <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.1} />
+                          <XAxis 
+                            dataKey="date" 
+                            fontSize={11} 
+                            tickLine={false} 
+                            axisLine={false}
+                            tick={{ fontWeight: 700, fontSize: 10, opacity: 0.6 }}
+                            interval="preserveStartEnd"
+                            minTickGap={5}
+                          />
+                          <YAxis hide domain={['dataMin - 5', 'dataMax + 5']} />
+                          <ChartTooltip content={<ChartTooltipContent />} />
+                          <Line 
+                            type="monotone" 
+                            dataKey="weight" 
+                            stroke="var(--primary)" 
+                            strokeWidth={3}
+                            dot={{ fill: 'var(--primary)', r: 4 }}
+                            activeDot={{ r: 6, strokeWidth: 0 }}
+                            name="Carga (kg)"
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="e1rm" 
+                            stroke="#34d399" 
+                            strokeWidth={2}
+                            strokeDasharray="4 4"
+                            dot={false}
+                            name="1RM Estimado (kg)"
+                          />
+                        </LineChart>
                       </ChartContainer>
                     </CardContent>
                   </Card>
