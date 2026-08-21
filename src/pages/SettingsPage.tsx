@@ -370,14 +370,6 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {pendingCounts.pendingDeletions > 0 && (
-                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-amber-400">
-                    🗑️ {pendingCounts.pendingDeletions} exclusões locais aguardando envio à nuvem
-                  </span>
-                  <span className="font-mono text-[10px] font-bold text-amber-500 uppercase">Tombstones ativos</span>
-                </div>
-              )}
 
               <div className="pt-2 border-t border-border/30 flex items-center justify-between">
                 <div>

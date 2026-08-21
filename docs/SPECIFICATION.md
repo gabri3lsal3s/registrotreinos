@@ -81,4 +81,4 @@ O **Registro de Treinos** é uma Progressive Web App (PWA) de alto desempenho fo
 | **Execução de Treino** | `/workout/:protocolId` | Interface de execução ativa com inputs rápidos, histórico de carga anterior, cronômetro e biofeedback. |
 | **Histórico** | `/history` | Linha do tempo de treinos concluídos, detalhamento de séries por exercício e exclusão segura. |
 | **Análise de Performance** | `/analysis` | Gráficos de volume diário, evolução de 1RM por exercício, radar muscular e balanço por grupamento. |
-| **Configurações** | `/settings` | Alternância de tema Dark/Light, preferências de meta e logout seguro. |
+| **Configurações** | `/settings` | Preferências de interface e feedback sonoro, monitoramento de integridade de sincronização, exportação/importação de backups e utilitários de cache PWA. |
