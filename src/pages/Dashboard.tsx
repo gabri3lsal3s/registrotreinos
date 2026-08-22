@@ -8,9 +8,11 @@ import {
   db, 
   getExercisesByProtocol, 
   addBodyWeight, 
-  getBodyWeightsByUser 
+  getBodyWeightsByUser,
+  cancelActiveWorkout,
+  deleteWorkout
 } from '../services/workoutDB';
-import { fullSync } from '../services/syncService';
+import { fullSync, deleteWorkoutFromCloud } from '../services/syncService';
 import { syncEventBus } from '../services/eventBus';
 import { WEEK_DAYS, getDayKey, getDayLabel } from '../utils/constants';
 import { toTimestamp } from '../utils/workoutMath';
@@ -84,24 +86,29 @@ export default function Dashboard() {
         .first();
 
       if (currentActive) {
-        let protocolName = 'Treino';
-
-        if (currentActive.protocolId) {
-          const prot = await db.protocols.get(currentActive.protocolId);
-          if (prot) protocolName = prot.name;
-        }
-
         const sets = await db.workoutSets
           .where('workoutId')
           .equals(currentActive.id)
-          .filter(s => !s.isDeleted)
+          .filter(s => !s.isDeleted && s.completed)
           .toArray();
 
-        setActiveWorkout({
-          ...currentActive,
-          protocolName,
-          completedSets: sets.length
-        });
+        if (sets.length === 0) {
+          await deleteWorkout(currentActive.id);
+          setActiveWorkout(null);
+        } else {
+          let protocolName = 'Treino';
+
+          if (currentActive.protocolId) {
+            const prot = await db.protocols.get(currentActive.protocolId);
+            if (prot) protocolName = prot.name;
+          }
+
+          setActiveWorkout({
+            ...currentActive,
+            protocolName,
+            completedSets: sets.length
+          });
+        }
       } else {
         setActiveWorkout(null);
       }
@@ -219,6 +226,20 @@ export default function Dashboard() {
     }
   };
 
+  const handleDiscardActiveWorkout = async (workoutId: string) => {
+    try {
+      await cancelActiveWorkout(workoutId);
+      await deleteWorkoutFromCloud(workoutId);
+      setActiveWorkout(null);
+      toast.success('Treino em andamento descartado.');
+      loadDashboardData();
+      fullSync().catch(console.error);
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao descartar treino.');
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -242,6 +263,7 @@ export default function Dashboard() {
         <ActiveWorkoutBanner
           activeWorkout={activeWorkout}
           onResume={(protocolId) => navigate(`/workout/${protocolId}`)}
+          onDiscard={handleDiscardActiveWorkout}
         />
 
         {/* Hero Card do Treino de Hoje */}

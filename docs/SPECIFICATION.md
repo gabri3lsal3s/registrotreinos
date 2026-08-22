@@ -37,21 +37,27 @@ O **Registro de Treinos** é uma Progressive Web App (PWA) de alto desempenho fo
    - Isso garante propagação atômica e idempotente entre múltiplos dispositivos e clientes offline, eliminando qualquer risco de ressurreição de dados no PULL.
    - Consultas regulares no app filtram automaticamente registros marcados com `isDeleted === true`.
 
-### 2.3. Execução de Treinos e Registro de Séries
+### 2.3. Execução de Treinos e Ciclo de Vida da Sessão
 1. **Sessão Ativa (`status: 'active'`) & Idempotência Garantida**:
    - O usuário possui uma única sessão de treino ativa por protocolo.
    - `startWorkout` opera de forma **estritamente idempotente**: antes de instanciar um novo UUID, verifica e retorna qualquer sessão ativa existente para o par `(userId, protocolId)`. Isso elimina o risco de treinos duplicados em caso de cliques rápidos ou conexões concorrentes.
-   - Séries (`WorkoutSet`) são persistidas e atualizadas imediatamente a cada preenchimento/toggle de conclusão.
-2. **Persistência de Foco e Resiliência Mobile (`Smart Focus` & In-Memory Preserving)**:
-   - **Preservação de Estado e Imunidade ao Background**: Ao apagar a tela do celular, alternar de aplicativo ou passar por revalidação de tokens no Supabase, o app preserva intactas todas as séries concluídas e os valores de carga/repetições digitados pelo usuário na memória volátil, evitando que re-renderizações destrutivas zerem a tela.
+   - Séries (`WorkoutSet`) são persistidas e atualizadas imediatamente a cada preenchimento/toggle de conclusão com `isSynced = false`.
+2. **Isolamento Absoluto entre Treino em Andamento e Histórico**:
+   - Enquanto o treino estiver em andamento (`status === 'active'`), ele **NUNCA** é exibido na listagem de Histórico (`/history`) nem computado em gráficos de consistência ou volume de sessões concluídas.
+   - Apenas ao clicar em **"Finalizar Treino"** e confirmar no modal de conclusão a sessão recebe `status = 'completed'` e `finishedAt = Date.now()`, tornando-se visível no histórico.
+3. **Regras Estritas de Descarte e Limpeza de Sessões**:
+   - **Descarte Automático por Desmarcação Total**: Se o usuário desmarcar todas as séries de uma sessão ativa (0 séries concluídas) e sair da tela (`WorkoutPage`), o treino ativo vazio é automaticamente excluído do banco local e nuvem via `discardEmptyActiveWorkout`.
+   - **Cancelamento Explícito**: O usuário pode clicar em "Cancelar" na execução ou no Dashboard e confirmar a exclusão sem deixar registros residuais.
+4. **Persistência de Foco e Resiliência Mobile (`Smart Focus` & In-Memory Preserving)**:
+   - **Preservação de Estado e Imunidade ao Background**: Ao apagar a tela do celular, fechar o aplicativo ou alternar entre telas, o app preserva intactas todas as séries marcadas e valores digitados no IndexedDB.
    - **Auto-Foco Inteligente**: Ao abrir ou restaurar um treino em andamento, o app foca automaticamente no primeiro exercício com séries pendentes.
    - **Auto-Avanço Suave**: Ao concluir todas as séries do exercício atual, o card seguinte com séries pendentes é expandido automaticamente.
    - **Limpeza Automática**: O estado do exercício ativo no `localStorage` é liberado ao finalizar ou cancelar o treino.
-3. **Histórico do Último Treino ("Ant: XXkg x YY")**:
+5. **Histórico do Último Treino ("Ant: XXkg x YY")**:
    - A interface exibe a carga e repetições da última execução completada para guiar a progressão de sobrecarga.
-4. **Exercícios de Sessão (`isSessionOnly`)**:
+6. **Exercícios de Sessão (`isSessionOnly`)**:
    - Permite adicionar exercícios avulsos apenas na sessão atual sem alterar a estrutura fixa do protocolo salvo.
-5. **Finalização de Treino**:
+7. **Finalização de Treino**:
    - Ao concluir, o status passa para `'completed'`, o timestamp `finishedAt` é registrado e o estado de prontidão/biofeedback (sono, estresse, humor) é anexado.
 
 ### 2.4. Cálculos de Performance e Métricas de Análise

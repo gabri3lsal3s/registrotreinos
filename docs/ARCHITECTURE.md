@@ -56,6 +56,9 @@ O **Registro de Treinos** segue uma arquitetura **Offline-First Absoluta**, gara
 11. **Idempotência de Treinos Ativos & Preservação em Revalidação de Sessão**:
     - O método `startWorkout` é idempotente no nível de banco local para `(userId, protocolId)`.
     - Componentes de treino utilizam referências de ID de usuário (`user?.id`) e referências síncronas (`useRef`) para isolar o estado de execução ativa de ciclos de renovação de token JWT/Auth ou eventos de retorno de segundo plano (`visibilitychange`), impedindo perda de séries marcadas ou sobrescrita de inputs temporários.
+12. **Isolamento de Status Ativo vs Concluído no Sync & Descarte Limpo**:
+    - Reconciliação no PULL delta preserva estritamente `status: 'active'` se o registro local estiver em andamento, impedindo que respostas remotas sem status rebaixem a sessão ativa para o histórico.
+    - O método `discardEmptyActiveWorkout` garante que treinos ativos abandonados com 0 séries concluídas sejam automaticamente purgados do banco ao sair da tela.
 
 ---
 

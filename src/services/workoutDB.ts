@@ -484,9 +484,30 @@ export async function getWorkoutHistory(userId: string): Promise<Workout[]> {
   const list = await db.workouts
     .where('userId')
     .equals(userId)
-    .filter(w => !w.isDeleted && (w.status === 'completed' || !w.status))
+    .filter(w => !w.isDeleted && w.status !== 'cancelled' && w.status !== 'active' && (w.status === 'completed' || (!w.status && Boolean(w.finishedAt))))
     .toArray();
   return list.sort((a, b) => (Number(b.date) || 0) - (Number(a.date) || 0));
+}
+
+/**
+ * Se o treino estiver com status 'active' e não possuir nenhuma série concluída,
+ * descarta a sessão ativa limpando o registro do banco local e enfileirando deleção.
+ */
+export async function discardEmptyActiveWorkout(workoutId: string): Promise<boolean> {
+  const workout = await db.workouts.get(workoutId);
+  if (!workout || workout.isDeleted || workout.status !== 'active') return false;
+
+  const sets = await db.workoutSets
+    .where('workoutId')
+    .equals(workoutId)
+    .filter(s => !s.isDeleted && s.completed)
+    .toArray();
+
+  if (sets.length === 0) {
+    await deleteWorkout(workoutId);
+    return true;
+  }
+  return false;
 }
 
 export async function deleteWorkout(workoutId: string): Promise<void> {

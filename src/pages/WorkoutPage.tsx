@@ -11,6 +11,7 @@ import {
   startWorkout, 
   upsertWorkoutSet,
   cancelActiveWorkout,
+  discardEmptyActiveWorkout,
   updateExercise,
   getExercisePR,
   addExercise,
@@ -113,6 +114,16 @@ export default function WorkoutPage() {
 
   // Screen Wake Lock ativo enquanto houver treino
   useWakeLock(!!activeWorkoutId);
+
+  // Descarte automático de sessão ativa vazia ao sair da tela
+  useEffect(() => {
+    return () => {
+      const currentId = activeWorkoutIdRef.current;
+      if (currentId) {
+        discardEmptyActiveWorkout(currentId).catch(console.error);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     async function loadWorkoutData() {
@@ -856,7 +867,12 @@ export default function WorkoutPage() {
               type="button"
               variant="ghost" 
               size="icon"
-              onClick={() => navigate('/')}
+              onClick={async () => {
+                if (activeWorkoutIdRef.current) {
+                  await discardEmptyActiveWorkout(activeWorkoutIdRef.current);
+                }
+                navigate('/');
+              }}
               className="h-10 w-10 rounded-xl text-muted-foreground hover:text-foreground shrink-0"
               title="Voltar ao Painel"
             >

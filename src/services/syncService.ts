@@ -126,7 +126,7 @@ export function sanitizeWorkoutForRemote(
     user_id: userId,
     date: isoDate,
     date_key: isoDate.slice(0, 10),
-    status: w.status || 'completed',
+    status: w.status || (w.finishedAt ? 'completed' : 'active'),
     is_deleted: Boolean(w.isDeleted),
     deleted_at: toNullableSafeISOString(w.deletedAt),
     created_at: toSafeISOString(w.createdAt || w.date),
@@ -271,7 +271,8 @@ const toCamel = <T = Record<string, unknown>>(obj: Record<string, unknown>): T =
     is_session_only: 'isSessionOnly',
     time_in_seconds: 'timeInSeconds',
     date_key: 'dateKey',
-    completed: 'completed'
+    completed: 'completed',
+    status: 'status'
   };
   const newObj: Record<string, unknown> = {};
   for (const key in obj) {
@@ -534,9 +535,12 @@ export async function pullData(forceFull = false): Promise<{ success: boolean }>
         const remoteUpdated = Number(camel.updatedAt) || Number(camel.date) || 0;
         const localUpdated = Number(local?.updatedAt) || Number(local?.date) || 0;
 
+        const effectiveStatus = camel.status || local?.status || (camel.finishedAt ? 'completed' : 'active');
+
         if (!local || local.isSynced || remoteUpdated >= localUpdated) {
           await db.workouts.put({
             ...camel,
+            status: effectiveStatus,
             protocolId: camel.protocolId || local?.protocolId || '',
             userId: user.id,
             isSynced: true

@@ -69,7 +69,7 @@ Este documento descreve os componentes da aplicação, seus contratos de props e
 | Componente | Props Principais | Descrição |
 | :--- | :--- | :--- |
 | **`TodayWorkoutHero`** | `{ todayWorkout, todayLabel, onStart, onNavigateProtocols }` | Hero card com botão de 1-toque para iniciar a sessão programada para o dia atual ou estado de descanso. |
-| **`ActiveWorkoutBanner`** | `{ activeWorkout, onResume }` | Banner com pulso esmeralda para retomar sessão de treino em andamento. |
+| **`ActiveWorkoutBanner`** | `{ activeWorkout, onResume, onDiscard? }` | Banner com pulso esmeralda para retomar sessão de treino em andamento, exibindo timestamp humanizado de início e botão com diálogo de confirmação para descarte rápido. |
 | **`ConsistencyGrid`** | `{ completedDayKeys, weeklyGoal }` | Grid visual dos 7 dias da semana mostrando dias cumpridos e meta semanal. |
 | **`BodyWeightQuickCard`** | `{ latestWeight, onWeightLogged }` | Widget para registro rápido de peso corporal com suporte a decimais PT-BR. |
 
