@@ -484,7 +484,7 @@ export async function getWorkoutHistory(userId: string): Promise<Workout[]> {
   const list = await db.workouts
     .where('userId')
     .equals(userId)
-    .filter(w => !w.isDeleted && w.status !== 'cancelled' && w.status !== 'active' && (w.status === 'completed' || (!w.status && Boolean(w.finishedAt))))
+    .filter(w => !w.isDeleted && w.status !== 'cancelled' && w.status !== 'active')
     .toArray();
   return list.sort((a, b) => (Number(b.date) || 0) - (Number(a.date) || 0));
 }

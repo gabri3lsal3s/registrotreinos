@@ -535,7 +535,8 @@ export async function pullData(forceFull = false): Promise<{ success: boolean }>
         const remoteUpdated = Number(camel.updatedAt) || Number(camel.date) || 0;
         const localUpdated = Number(local?.updatedAt) || Number(local?.date) || 0;
 
-        const effectiveStatus = camel.status || local?.status || (camel.finishedAt ? 'completed' : 'active');
+        const isCurrentlyActiveLocally = Boolean(local && local.status === 'active' && !local.isDeleted && (Date.now() - Number(local.date) < 24 * 60 * 60 * 1000));
+        const effectiveStatus = camel.status || (isCurrentlyActiveLocally ? 'active' : 'completed');
 
         if (!local || local.isSynced || remoteUpdated >= localUpdated) {
           await db.workouts.put({

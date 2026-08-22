@@ -4,6 +4,7 @@ import { Toaster } from 'sonner';
 import { ProtectedRoute, LoadingScreen, ErrorBoundary } from './components/common';
 import { useAuthStore } from './services/authStore';
 import { fullSync } from './services/syncService';
+import { runHistoryRecovery } from './services/recoveryService';
 
 // Lazy loading das rotas para otimização de performance e code splitting
 const AuthPage = lazy(() => import('./pages/AuthPage'));
@@ -36,9 +37,10 @@ function App() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      // Sincronismo inicial (Não bloqueante / Offline First)
+      // Sincronismo e auto-recuperação inicial (Não bloqueante / Offline First)
       const initApp = async () => {
         try {
+          await runHistoryRecovery();
           await fullSync();
         } catch (err) {
           console.warn('[Sync] Inicialização em modo offline:', err);
