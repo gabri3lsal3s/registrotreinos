@@ -345,10 +345,25 @@ export async function deleteExercise(id: string): Promise<void> {
 // ============================================================================
 
 export async function startWorkout(workout: Omit<Workout, 'id' | 'date' | 'status'>): Promise<string> {
+  const userId = workout.userId || getActiveUserId();
+  
+  // Idempotência: Se já houver um treino ativo para este usuário e protocolo, reutiliza o ID existente
+  if (workout.protocolId && userId) {
+    const existing = await db.workouts
+      .where('userId')
+      .equals(userId)
+      .filter(w => !w.isDeleted && w.protocolId === workout.protocolId && w.status === 'active')
+      .first();
+    if (existing) {
+      return existing.id;
+    }
+  }
+
   const id = crypto.randomUUID();
   const now = Date.now();
   await db.workouts.add({
     ...workout,
+    userId,
     id,
     date: now,
     status: 'active',
@@ -378,13 +393,15 @@ export async function cancelActiveWorkout(id: string): Promise<void> {
 export async function getActiveWorkout(userId: string, protocolId?: string): Promise<Workout | undefined> {
   if (protocolId) {
     return db.workouts
-      .where({ userId, protocolId, status: 'active' })
-      .filter(w => !w.isDeleted)
+      .where('userId')
+      .equals(userId)
+      .filter(w => !w.isDeleted && w.protocolId === protocolId && w.status === 'active')
       .first();
   }
   return db.workouts
-    .where({ userId, status: 'active' })
-    .filter(w => !w.isDeleted)
+    .where('userId')
+    .equals(userId)
+    .filter(w => !w.isDeleted && w.status === 'active')
     .first();
 }
 
@@ -435,7 +452,9 @@ export async function deleteWorkoutSet(id: string): Promise<void> {
 export async function upsertWorkoutSet(set: Omit<WorkoutSet, 'id' | 'timestamp'>): Promise<string> {
   const userId = set.userId || getActiveUserId();
   const existing = await db.workoutSets
-    .where({ workoutId: set.workoutId, exerciseId: set.exerciseId, setIndex: set.setIndex })
+    .where('workoutId')
+    .equals(set.workoutId)
+    .filter(s => s.exerciseId === set.exerciseId && s.setIndex === set.setIndex)
     .first();
   
   if (existing) {

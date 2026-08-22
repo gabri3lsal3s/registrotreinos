@@ -270,7 +270,8 @@ const toCamel = <T = Record<string, unknown>>(obj: Record<string, unknown>): T =
     multiplier: 'multiplier',
     is_session_only: 'isSessionOnly',
     time_in_seconds: 'timeInSeconds',
-    date_key: 'dateKey'
+    date_key: 'dateKey',
+    completed: 'completed'
   };
   const newObj: Record<string, unknown> = {};
   for (const key in obj) {
@@ -279,6 +280,9 @@ const toCamel = <T = Record<string, unknown>>(obj: Record<string, unknown>): T =
     if (['created_at', 'finished_at', 'timestamp', 'date', 'updated_at', 'deleted_at'].includes(key) && typeof value === 'string') {
       const parsed = new Date(value).getTime();
       if (!isNaN(parsed)) value = parsed;
+    }
+    if (key === 'completed' && value !== undefined && value !== null) {
+      value = Boolean(value);
     }
     newObj[mapping[key] || key] = value;
   }

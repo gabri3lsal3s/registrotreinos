@@ -38,11 +38,12 @@ O **Registro de Treinos** é uma Progressive Web App (PWA) de alto desempenho fo
    - Consultas regulares no app filtram automaticamente registros marcados com `isDeleted === true`.
 
 ### 2.3. Execução de Treinos e Registro de Séries
-1. **Sessão Ativa (`status: 'active'`)**:
-   - O usuário pode ter apenas um treino ativo por protocolo ou globalmente.
+1. **Sessão Ativa (`status: 'active'`) & Idempotência Garantida**:
+   - O usuário possui uma única sessão de treino ativa por protocolo.
+   - `startWorkout` opera de forma **estritamente idempotente**: antes de instanciar um novo UUID, verifica e retorna qualquer sessão ativa existente para o par `(userId, protocolId)`. Isso elimina o risco de treinos duplicados em caso de cliques rápidos ou conexões concorrentes.
    - Séries (`WorkoutSet`) são persistidas e atualizadas imediatamente a cada preenchimento/toggle de conclusão.
-2. **Persistência de Foco e Resiliência Mobile (`Smart Focus`)**:
-   - **Preservação de Estado**: O exercício em execução permanece expandido mesmo após desligamento da tela do celular, suspensão de memória pelo sistema operacional (Android/iOS) ou renovação de token de autenticação.
+2. **Persistência de Foco e Resiliência Mobile (`Smart Focus` & In-Memory Preserving)**:
+   - **Preservação de Estado e Imunidade ao Background**: Ao apagar a tela do celular, alternar de aplicativo ou passar por revalidação de tokens no Supabase, o app preserva intactas todas as séries concluídas e os valores de carga/repetições digitados pelo usuário na memória volátil, evitando que re-renderizações destrutivas zerem a tela.
    - **Auto-Foco Inteligente**: Ao abrir ou restaurar um treino em andamento, o app foca automaticamente no primeiro exercício com séries pendentes.
    - **Auto-Avanço Suave**: Ao concluir todas as séries do exercício atual, o card seguinte com séries pendentes é expandido automaticamente.
    - **Limpeza Automática**: O estado do exercício ativo no `localStorage` é liberado ao finalizar ou cancelar o treino.

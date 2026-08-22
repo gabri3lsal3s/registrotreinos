@@ -53,6 +53,9 @@ O **Registro de Treinos** segue uma arquitetura **Offline-First Absoluta**, gara
    - Reconciliação com salvaguarda local em caso de resposta remota omissa.
 10. **Normalização Universal de Datas (`toTimestamp`)**:
     - Padronização em epoch ms para todas as comparações temporais no motor de análise e grade de consistência, mitigando discrepâncias entre strings ISO do PostgreSQL e números do IndexedDB.
+11. **Idempotência de Treinos Ativos & Preservação em Revalidação de Sessão**:
+    - O método `startWorkout` é idempotente no nível de banco local para `(userId, protocolId)`.
+    - Componentes de treino utilizam referências de ID de usuário (`user?.id`) e referências síncronas (`useRef`) para isolar o estado de execução ativa de ciclos de renovação de token JWT/Auth ou eventos de retorno de segundo plano (`visibilitychange`), impedindo perda de séries marcadas ou sobrescrita de inputs temporários.
 
 ---
 

@@ -78,8 +78,9 @@ export default function Dashboard() {
 
       // Treino ativo em andamento
       const currentActive = await db.workouts
-        .where({ userId: user.id, status: 'active' })
-        .filter(w => !w.isDeleted)
+        .where('userId')
+        .equals(user.id)
+        .filter(w => !w.isDeleted && w.status === 'active')
         .first();
 
       if (currentActive) {

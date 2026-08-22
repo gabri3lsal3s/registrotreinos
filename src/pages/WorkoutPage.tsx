@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
@@ -44,6 +44,7 @@ import {
 export default function WorkoutPage() {
   const { protocolId } = useParams<{ protocolId: string }>();
   const { user } = useAuth();
+  const userId = user?.id;
   const navigate = useNavigate();
   
   const [protocolName, setProtocolName] = useState('');
@@ -59,6 +60,17 @@ export default function WorkoutPage() {
     }
   });
   const [activeWorkoutId, setActiveWorkoutId] = useState<string | null>(null);
+
+  // Referências síncronas para blindagem contra race conditions e re-renderizações de auth
+  const exercisesRef = useRef<WorkoutExerciseData[]>([]);
+  useEffect(() => {
+    exercisesRef.current = exercises;
+  }, [exercises]);
+
+  const activeWorkoutIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    activeWorkoutIdRef.current = activeWorkoutId;
+  }, [activeWorkoutId]);
 
   const updateExpandedExercise = useCallback((exId: string | null) => {
     setExpandedExercise(exId);
@@ -104,7 +116,7 @@ export default function WorkoutPage() {
 
   useEffect(() => {
     async function loadWorkoutData() {
-      if (!user || !protocolId) return;
+      if (!userId || !protocolId) return;
       try {
         const protocol = await db.protocols.get(protocolId);
         if (!protocol) {
@@ -117,18 +129,19 @@ export default function WorkoutPage() {
         // Checar treino ativo
         const active = await db.workouts
           .where('userId')
-          .equals(user.id)
+          .equals(userId)
           .filter(w => !w.isDeleted && w.protocolId === protocolId && w.status === 'active')
           .first();
         
         if (active) {
           setActiveWorkoutId(active.id);
+          activeWorkoutIdRef.current = active.id;
         }
 
         // Buscar último treino concluído deste protocolo
         const allCompletedWorkouts = await db.workouts
           .where('userId')
-          .equals(user.id)
+          .equals(userId)
           .filter(w => !w.isDeleted && w.protocolId === protocolId && w.status !== 'cancelled' && w.status !== 'active')
           .toArray();
         
@@ -169,7 +182,7 @@ export default function WorkoutPage() {
             } else {
               const sameNameExercises = await db.exercises
                 .where('userId')
-                .equals(user.id)
+                .equals(userId)
                 .filter(e => e.name.trim().toLowerCase() === ex.name.trim().toLowerCase() && e.id !== ex.id)
                 .toArray();
               
@@ -194,7 +207,7 @@ export default function WorkoutPage() {
 
         const historicalPRs: Record<string, { weight: number; reps: number }> = {};
         for (const ex of allExercises) {
-          const truePR = await getExercisePR(ex.id, user.id);
+          const truePR = await getExercisePR(ex.id, userId);
           if (truePR) {
             historicalPRs[ex.id] = { weight: truePR.weight, reps: truePR.reps };
           } else {
@@ -203,11 +216,20 @@ export default function WorkoutPage() {
         }
         setTruePRs(historicalPRs);
         
-        // Dias que possuem exercícios agendados
+        // Dias que possuem exercícios agendados (compatibilidade com sufixo e ex.dayOfWeek)
+        const isExOnDay = (ex: { name: string; dayOfWeek?: string }, dayLabel: string, dayKey?: string) => {
+          if (dayKey && ex.dayOfWeek === dayKey) return true;
+          if (ex.dayOfWeek === dayLabel) return true;
+          if (ex.name.includes(`(${dayLabel})`)) return true;
+          return false;
+        };
+
         const weekDayLabels = WEEK_DAYS.map(d => d.label);
-        const daysWithExercises = weekDayLabels.filter(day => 
-          allExercises.some(ex => ex.name.includes(`(${day})`))
-        );
+        const daysWithExercises = weekDayLabels.filter(dayLabel => {
+          const dayObj = WEEK_DAYS.find(d => d.label === dayLabel);
+          const dayKey = dayObj?.key || '';
+          return allExercises.some(ex => isExOnDay(ex, dayLabel, dayKey));
+        });
         setAvailableDays(daysWithExercises);
 
         let dayLabel = selectedDay;
@@ -217,40 +239,63 @@ export default function WorkoutPage() {
           setSelectedDay(dayLabel);
         }
 
+        const currentDayObj = WEEK_DAYS.find(d => d.label === dayLabel);
+        const currentDayKey = currentDayObj?.key || '';
+
+        // Carregar todas as séries do treino ativo de forma atômica
+        let activeWorkoutSets: WorkoutSet[] = [];
+        if (active) {
+          activeWorkoutSets = await db.workoutSets
+            .where('workoutId')
+            .equals(active.id)
+            .filter(s => !s.isDeleted && s.completed)
+            .toArray();
+        }
+
+        const activeSetsByExId: Record<string, Record<number, WorkoutSet>> = {};
+        for (const s of activeWorkoutSets) {
+          if (!activeSetsByExId[s.exerciseId]) activeSetsByExId[s.exerciseId] = {};
+          activeSetsByExId[s.exerciseId][s.setIndex] = s;
+        }
+
+        const currentMemoryMap = new Map(exercisesRef.current.map(e => [e.id, e]));
+
         // Montar exercícios do dia selecionado
-        const dayExercises = await Promise.all((await getExercisesByProtocol(protocolId, false, active?.id))
-          .filter(ex => ex.name.includes(`(${dayLabel})`))
-          .map(async (ex) => {
+        const dayExercises = (await getExercisesByProtocol(protocolId, false, active?.id))
+          .filter(ex => isExOnDay(ex, dayLabel, currentDayKey))
+          .map((ex) => {
             const setNum = ex.sets || 3;
             const prevSets = lastSetsMap[ex.id] || [];
             const completedSets: boolean[] = new Array(setNum).fill(false);
+            const memoryEx = currentMemoryMap.get(ex.id);
+
             const setsData = new Array(setNum).fill(null).map((_, idx) => {
+              const activeSet = activeSetsByExId[ex.id]?.[idx];
+              const memorySet = memoryEx?.setsData?.[idx];
               const prevSet = prevSets[idx];
+
+              if (activeSet) {
+                completedSets[idx] = true;
+                return { 
+                  weight: activeSet.weight.toString(), 
+                  reps: activeSet.reps.toString(),
+                  type: activeSet.type || 'normal',
+                  notes: activeSet.notes || ''
+                };
+              }
+
+              // Preserva séries marcadas em memória durante o ciclo de vida
+              if (memoryEx?.completedSets?.[idx]) {
+                completedSets[idx] = true;
+              }
+
               return { 
-                weight: String(prevSet ? prevSet.weight : (ex.lastWeight || 0)), 
-                reps: String(prevSet ? prevSet.reps : (ex.lastReps || ex.reps || 10)),
-                type: (prevSet?.type || 'normal') as WorkoutSetType,
-                notes: prevSet?.notes || ''
+                weight: memorySet?.weight ?? String(prevSet ? prevSet.weight : (ex.lastWeight || 0)), 
+                reps: memorySet?.reps ?? String(prevSet ? prevSet.reps : (ex.lastReps || ex.reps || 10)),
+                type: (memorySet?.type || prevSet?.type || 'normal') as WorkoutSetType,
+                notes: memorySet?.notes ?? prevSet?.notes ?? ''
               };
             });
-
-            if (active) {
-              const existingSets = await db.workoutSets
-                .where({ workoutId: active.id, exerciseId: ex.id })
-                .toArray();
-              
-              existingSets.forEach(s => {
-                if (s.setIndex < setNum) {
-                  completedSets[s.setIndex] = true;
-                  setsData[s.setIndex] = { 
-                    weight: s.weight.toString(), 
-                    reps: s.reps.toString(),
-                    type: s.type || 'normal',
-                    notes: s.notes || ''
-                  };
-                }
-              });
-            }
 
             const historicalMax = historicalPRs[ex.id] || { weight: 0, reps: 0 };
             let sessionMaxWeight = 0;
@@ -282,7 +327,7 @@ export default function WorkoutPage() {
               pinnedNotes: ex.pinnedNotes,
               supersetGroupId: ex.supersetGroupId,
             };
-          }));
+          });
 
         setExercises(dayExercises);
         if (dayExercises.length > 0) {
@@ -326,13 +371,13 @@ export default function WorkoutPage() {
       }
     }
     loadWorkoutData();
-  }, [user, protocolId, selectedDay, navigate]);
+  }, [userId, protocolId, selectedDay, navigate]);
 
   useEffect(() => {
-    if (isLibraryOpen && user) {
-      getUniqueExercisesLibrary(user.id).then(setLibrary);
+    if (isLibraryOpen && userId) {
+      getUniqueExercisesLibrary(userId).then(setLibrary);
     }
-  }, [isLibraryOpen, user]);
+  }, [isLibraryOpen, userId]);
 
   const checkAndUpdatePR = useCallback((exIdx: number, currentExercises: WorkoutExerciseData[]) => {
     const exercise = currentExercises[exIdx];
@@ -370,13 +415,14 @@ export default function WorkoutPage() {
     setExercises(newExercises);
 
     try {
-      let currentWorkoutId = activeWorkoutId;
+      let currentWorkoutId = activeWorkoutIdRef.current || activeWorkoutId;
       
       if (!currentWorkoutId) {
         currentWorkoutId = await startWorkout({
           userId: user.id,
           protocolId,
         });
+        activeWorkoutIdRef.current = currentWorkoutId;
         setActiveWorkoutId(currentWorkoutId);
       }
 
@@ -408,11 +454,9 @@ export default function WorkoutPage() {
         }
       } else {
         const existingSet = await db.workoutSets
-          .where({ 
-            workoutId: currentWorkoutId, 
-            exerciseId: exercise.id, 
-            setIndex: setIdx 
-          })
+          .where('workoutId')
+          .equals(currentWorkoutId)
+          .filter(s => s.exerciseId === exercise.id && s.setIndex === setIdx && !s.isDeleted)
           .first();
 
         if (existingSet) {
@@ -434,9 +478,10 @@ export default function WorkoutPage() {
     setExercises(newExercises);
     
     const setData = newExercises[exIdx].setsData[setIdx];
-    if (newExercises[exIdx].completedSets[setIdx] && activeWorkoutId) {
+    const currentWorkoutId = activeWorkoutIdRef.current || activeWorkoutId;
+    if (newExercises[exIdx].completedSets[setIdx] && currentWorkoutId) {
       upsertWorkoutSet({
-        workoutId: activeWorkoutId,
+        workoutId: currentWorkoutId,
         exerciseId: newExercises[exIdx].id,
         setIndex: setIdx,
         weight: parseLocaleNumber(setData.weight),
@@ -456,9 +501,10 @@ export default function WorkoutPage() {
     setExercises(newExercises);
 
     const setData = newExercises[exIdx].setsData[setIdx];
-    if (newExercises[exIdx].completedSets[setIdx] && activeWorkoutId) {
+    const currentWorkoutId = activeWorkoutIdRef.current || activeWorkoutId;
+    if (newExercises[exIdx].completedSets[setIdx] && currentWorkoutId) {
       upsertWorkoutSet({
-        workoutId: activeWorkoutId,
+        workoutId: currentWorkoutId,
         exerciseId: newExercises[exIdx].id,
         setIndex: setIdx,
         weight: parseLocaleNumber(setData.weight),
@@ -545,10 +591,15 @@ export default function WorkoutPage() {
   };
 
   const handleDeleteExtraExercise = async (exId: string, _name: string) => {
-    if (!activeWorkoutId) return;
+    const currentWorkoutId = activeWorkoutIdRef.current || activeWorkoutId;
+    if (!currentWorkoutId) return;
     
     try {
-      const sets = await db.workoutSets.where({ workoutId: activeWorkoutId, exerciseId: exId }).toArray();
+      const sets = await db.workoutSets
+        .where('workoutId')
+        .equals(currentWorkoutId)
+        .filter(s => s.exerciseId === exId && !s.isDeleted)
+        .toArray();
       for (const s of sets) {
         await deleteWorkoutSet(s.id);
       }
