@@ -122,17 +122,35 @@
   *::-webkit-scrollbar {
     display: none;
   }
-  html, body {
+  html {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
     background-color: var(--background);
     color: var(--foreground);
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
-    /* Prevent layout shift while hiding scrollbar */
     scrollbar-width: none;
     -ms-overflow-style: none;
-    overflow-x: hidden;
   }
-  html::-webkit-scrollbar, body::-webkit-scrollbar {
+  #root {
+    height: 100%;
+    width: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  #root::-webkit-scrollbar,
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar {
     display: none;
   }
 

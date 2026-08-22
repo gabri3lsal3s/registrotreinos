@@ -22,6 +22,7 @@ Este documento registra a evolução do **Registro de Treinos**, cobrindo todas 
 | **Nível 12** | 🛡️ Blindagem de Sincronização, Resiliência Offline & Integridade de Protocolos | Whitelisting estrito por entidade no `syncService.ts`, preservação de metadados locais no PULL (`pinnedNotes`/`supersetGroupId`), correção de índices compostos no Dexie (`version(7)`), chamadas de UI 100% não-bloqueantes no `ProtocolsPage`, `HistoryPage` e `Dashboard`. | **CONCLUÍDO** ✅ |
 | **Nível 13** | 🔒 Arquitetura de Sincronização Definitiva & Resiliência Avançada | Fila de Tombstones (`pendingDeletions` no Dexie `v8`) para expurgo garantido de itens deletados offline sem ressuscitação, exclusão mútua multi-aba com Web Locks API (`navigator.locks`), retentativas automáticas com exponential backoff & jitter, upserts em lotes (*batch chunking* de 100 itens) e background heartbeat sync (3min). | **CONCLUÍDO** ✅ |
 | **Nível 14** | ⚡ Sincronização Delta Bidirecional, Tombstones Nativos & Reatividade Total (Sync Engine v3.0) | Migração Supabase v13 com `is_deleted`/`deleted_at` nativos, Dexie v9 com soft-delete em cascata, push topológico ordenado (`protocols` $\rightarrow$ `exercises` $\rightarrow$ `workouts` $\rightarrow$ `workout_sets` $\rightarrow$ `body_weights`), delta pull incremental com cursor de clock skew, Last-Write-Wins (LWW) determinístico e Barramento Reativo de Eventos (`syncEventBus` + `useDataReactivity`) integrando Análises, Histórico e Dashboard sem reload de página. | **CONCLUÍDO** ✅ |
+| **Nível 14.3** | 📱 Contenção de Rolagem App-Like & Supressão de Overlays Nativos | Isolamento de rolagem no `#root`, supressão do botão flutuante nativo de retorno ao topo de navegadores móveis (Samsung Internet, MIUI Browser, Opera) e contenção de overscroll. | **CONCLUÍDO** ✅ |
 
 ---
 
@@ -191,3 +192,17 @@ Este documento registra a evolução do **Registro de Treinos**, cobrindo todas 
    - Introdução de visualização mobile com grade calendário de 7 colunas (`Dom` a `Sáb`) e navegação intuitiva por meses (`< Mês/Ano >`), substituindo a matriz horizontal pesada de 52 semanas em telas pequenas.
    - Badges de resumo com métricas focadas no mês selecionado (Treinos, Volume e Streak).
    - Preservação da visualização anual completa de 52 semanas no desktop (`sm:` e superior).
+
+---
+
+### 📱 Nível 14.3: Contenção de Rolagem App-Like & Supressão de Overlays Nativos
+*Objetivo: Proporcionar uma experiência de aplicativo nativo estrita em navegadores móveis (Samsung Internet, Xiaomi Browser, Safari, Opera), eliminando botões nativos sobrepostos indesejados e retenção de overscroll.*
+
+1. **Isolamento de Scroll no Container Raiz (`#root`)**:
+   - `html` e `body` blindados com `height: 100%`, `overflow: hidden` e `overscroll-behavior: none`.
+   - O elemento `#root` atua como a área de rolagem primária (`height: 100%`, `overflow-y: auto`, `-webkit-overflow-scrolling: touch`, `overscroll-behavior-y: contain`).
+2. **Supressão do Botão Nativo de Retorno ao Topo**:
+   - Com o scroll do `window` mantido em `0`, recursos de acessibilidade e overlays intrusivos de navegadores móveis (como o botão flutuante de ir para o topo da Samsung e Xiaomi) não são disparados, protegendo a barra de navegação inferior e o dock de descanso.
+3. **Harmonização de Alturas em Componentes de Layout**:
+   - Adequação de `Layout.tsx`, `AuthPage.tsx`, `LoadingScreen.tsx` e `ErrorBoundary.tsx` para preenchimento de `min-h-full`.
+

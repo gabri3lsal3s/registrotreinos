@@ -84,15 +84,27 @@ O arquivo de manifesto define o comportamento de instalação no sistema operaci
 
 ---
 
-## 5. Guia de Instalação e Testes
+## 5. Arquitetura de Rolagem e Supressão de Botões Nativos do Navegador
 
-### 5.1. Instalação no iOS (Safari)
+Para proporcionar uma experiência fluida de aplicação nativa (App-like PWA) e evitar sobreposições visuais indesejadas:
+1. **Contenção de Rolagem no `#root`**:
+   - `html` e `body` são configurados com `height: 100%; overflow: hidden; overscroll-behavior: none;`.
+   - O elemento `#root` atua como o container de scroll principal (`height: 100%; width: 100%; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain;`).
+2. **Supressão do Botão Nativo "Ir para o topo" (Scroll-to-Top)**:
+   - Navegadores móveis como Samsung Internet, Xiaomi/MIUI Browser e Opera exibem automaticamente botões flutuantes nativos de rolagem para o topo quando `window` / `body` rolam livremente.
+   - Com a rolagem isolada no `#root` e `window.scrollY` mantido em `0`, esses botões nativos do browser deixam de ser disparados, prevenindo colisões visuais com a barra de navegação inferior (`bottom-nav`), docks de treino (`WorkoutBottomDock`) e temporizadores flutuantes.
+
+---
+
+## 6. Guia de Instalação e Testes
+
+### 6.1. Instalação no iOS (Safari)
 1. Abra o aplicativo no navegador Safari.
 2. Toque no botão **Compartilhar** (ícone do quadrado com a seta para cima).
 3. Role para baixo e selecione **Adicionar à Tela de Início**.
 4. Confirme o nome e toque em **Adicionar**.
 
-### 5.2. Instalação no Android (Chrome)
+### 6.2. Instalação no Android (Chrome)
 1. Abra o app no Google Chrome.
 2. Toque no banner automático "Instalar aplicativo" ou no menu de três pontos.
 3. Selecione **Instalar Aplicativo** ou **Adicionar à tela inicial**.

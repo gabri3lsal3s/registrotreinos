@@ -59,7 +59,7 @@ export function Layout({ children }: LayoutProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col md:flex-row">
+    <div className="min-h-full bg-background text-foreground flex flex-col md:flex-row">
       {/* 1. Sidebar Desktop (Fixa na lateral esquerda em md/lg+) */}
       {showNav && (
         <aside className="hidden md:flex flex-col w-64 fixed left-0 top-0 bottom-0 border-r border-border/80 bg-background/95 backdrop-blur-xl z-40 p-5 justify-between select-none">
