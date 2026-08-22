@@ -134,7 +134,7 @@ export async function autoHealWorkoutStatuses(): Promise<void> {
     for (const w of allWorkouts) {
       const sets = await db.workoutSets.where('workoutId').equals(w.id).toArray();
       const hasCompletedSets = sets.some(s => s.completed && !s.isDeleted);
-      const isPastSession = (Date.now() - Number(w.date)) > (2 * 60 * 60 * 1000);
+      const isPastSession = (Date.now() - Number(w.date)) > (4 * 60 * 60 * 1000);
 
       // 1. Reverter soft-delete indevido em treinos que possuem séries
       if (w.isDeleted && sets.length > 0) {
@@ -150,8 +150,8 @@ export async function autoHealWorkoutStatuses(): Promise<void> {
           isSynced: false
         });
       }
-      // 2. Corrigir treinos históricos marcados acidentalmente como 'active'
-      else if (w.status === 'active' && (isPastSession || hasCompletedSets)) {
+      // 2. Corrigir treinos históricos antigos (> 4h) marcados acidentalmente como 'active'
+      else if (w.status === 'active' && isPastSession && hasCompletedSets) {
         await db.workouts.update(w.id, {
           status: 'completed',
           isDeleted: false,
