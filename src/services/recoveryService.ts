@@ -12,10 +12,7 @@ import type { WorkoutSet } from '../types';
 
 export async function runHistoryRecovery(options?: { silent?: boolean }): Promise<void> {
   const silent = options?.silent ?? true;
-  // 1. Restaurar status de treinos e reverter soft-deletes indevidos
-  await autoHealWorkoutStatuses();
-
-  // 2. Fix corrupted protocolIds from previous soft-delete implementation
+  // 1. Fix corrupted protocolIds from previous soft-delete implementation
   await fixArchivedExercises();
 
   // 2. Fix orphaned workoutSets
@@ -125,48 +122,5 @@ async function fixArchivedExercises(): Promise<void> {
         isSynced: false
       });
     }
-  }
-}
-
-export async function autoHealWorkoutStatuses(): Promise<void> {
-  try {
-    const allWorkouts = await db.workouts.toArray();
-    for (const w of allWorkouts) {
-      const sets = await db.workoutSets.where('workoutId').equals(w.id).toArray();
-      const hasCompletedSets = sets.some(s => s.completed && !s.isDeleted);
-      const isPastSession = (Date.now() - Number(w.date)) > (4 * 60 * 60 * 1000);
-
-      // 1. Reverter soft-delete indevido em treinos que possuem séries
-      if (w.isDeleted && sets.length > 0) {
-        await db.workouts.update(w.id, {
-          isDeleted: false,
-          deletedAt: undefined,
-          status: 'completed',
-          isSynced: false
-        });
-        await db.workoutSets.where('workoutId').equals(w.id).modify({
-          isDeleted: false,
-          deletedAt: undefined,
-          isSynced: false
-        });
-      }
-      // 2. Corrigir treinos históricos antigos (> 4h) marcados acidentalmente como 'active'
-      else if (w.status === 'active' && isPastSession && hasCompletedSets) {
-        await db.workouts.update(w.id, {
-          status: 'completed',
-          isDeleted: false,
-          isSynced: false
-        });
-      }
-      // 3. Garantir status 'completed' em treinos legados sem status
-      else if (!w.status && !w.isDeleted) {
-        await db.workouts.update(w.id, {
-          status: 'completed',
-          isSynced: false
-        });
-      }
-    }
-  } catch (err) {
-    console.warn('[Recovery] autoHealWorkoutStatuses aviso:', err);
   }
 }
